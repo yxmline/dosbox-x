@@ -1,4 +1,4 @@
-#include    "np2glue.h"
+Ôªø#include    "np2glue.h"
 //#include	"compiler.h"
 #include	<math.h>
 //#include	"pccore.h"
@@ -119,9 +119,9 @@ void opngen_initialize(UINT rate) {
 	opncfg.envcurve[EVC_ENT*2] = EVC_ENT;
 
 //	opmbaserate = (1L << FREQ_BITS) / (rate * x / 44100) * 55466;
-//	Ç≈Ç‡ç°ÇÕ x == 55466ÇæÇ©ÇÁÅc
+//	„Åß„ÇÇ‰ªä„ÅØ x == 55466„Å†„Åã„Çâ‚Ä¶
 
-//	Ç±Ç±Ç≈ FREQ_BITS >= 16Ç™èåè
+//	„Åì„Åì„Åß FREQ_BITS >= 16„ÅåÊù°‰ª∂
 	if (rate == 44100) {
 		opncfg.ratebit = 0 + (FREQ_BITS - 16);
 	}
@@ -152,7 +152,7 @@ void opngen_initialize(UINT rate) {
 	}
 	for (i=4; i<64; i++) {
 		double freq = (double)(EVC_ENT << ENV_BITS) * FREQBASE4096;
-		if (i < 8) {							// ñYÇÍÇƒÇ‹Ç∑ÅB
+		if (i < 8) {							// Âøò„Çå„Å¶„Åæ„Åô„ÄÇ
 			freq *= 1.0 + (i & 2) * 0.25;
 		}
 		else if (i < 60) {

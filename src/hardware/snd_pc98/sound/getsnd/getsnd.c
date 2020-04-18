@@ -1,4 +1,4 @@
-#include    "np2glue.h"
+ï»¿#include    "np2glue.h"
 //#include	"compiler.h"
 #include	"getsnd.h"
 
@@ -38,7 +38,7 @@ GETSND getsnd_create(void *datptr, UINT datsize) {
 	}
 	ZeroMemory(ret + 1, size);
 
-	// ƒ[ƒN‚Æ‚©İ’èB
+	// ãƒ¯ãƒ¼ã‚¯ã¨ã‹è¨­å®šã€‚
 	snd.buffer = (UINT8 *)(ret + 1);
 	snd.work = snd.buffer + blkwork;
 	*ret = snd;

@@ -1,4 +1,4 @@
-#include    "np2glue.h"
+ï»¿#include    "np2glue.h"
 //#include	"compiler.h"
 //#include	"cpucore.h"
 //#include	"pccore.h"
@@ -7,11 +7,11 @@
 #include	"fmboard.h"
 
 
-// ƒTƒ“ƒvƒŠƒ“ƒOƒŒ[ƒg‚É8Š|‚¯‚½•¨
+// ã‚µãƒ³ãƒ—ãƒªãƒ³ã‚°ãƒ¬ãƒ¼ãƒˆã«8æŽ›ã‘ãŸç‰©
 const UINT pcm86rate8[] = {352800, 264600, 176400, 132300,
 							88200,  66150,  44010,  33075};
 
-// 32,24,16,12, 8, 6, 4, 3 - Å­Œö”{”: 96
+// 32,24,16,12, 8, 6, 4, 3 - æœ€å°‘å…¬å€æ•°: 96
 //  3, 4, 6, 8,12,16,24,32
 
 #if 0
@@ -99,8 +99,8 @@ void pcm86_setnextintr(void) {
 		if (cnt > 0) {
 			cnt += pcm86.stepmask;
 			cnt >>= pcm86.stepbit;
-//			cnt += 4;								// ‚¿‚å‚Á‚Æ‰„‘Ø‚³‚¹‚é
-			// ‚±‚±‚Å clk = pccore.realclock * cnt / 86pcm_rate
+//			cnt += 4;								// ã¡ã‚‡ã£ã¨å»¶æ»žã•ã›ã‚‹
+			// ã“ã“ã§ clk = pccore.realclock * cnt / 86pcm_rate
 			// clk = ((pccore.baseclock / 86pcm_rate) * cnt) * pccore.multiple
 			if (pccore.cpumode & CPUMODE_8MHZ) {
 				clk = clk20_128[pcm86.fifo & 7];
@@ -108,7 +108,7 @@ void pcm86_setnextintr(void) {
 			else {
 				clk = clk25_128[pcm86.fifo & 7];
 			}
-			// cnt‚ÍÅ‘å 8000h ‚Å 32bit‚ÅŽû‚Ü‚é‚æ‚¤‚Éc
+			// cntã¯æœ€å¤§ 8000h ã§ 32bitã§åŽã¾ã‚‹ã‚ˆã†ã«â€¦
 			clk *= cnt;
 			clk >>= 7;
 //			clk++;						// roundup
@@ -134,7 +134,7 @@ void SOUNDCALL pcm86gen_checkbuf(void) {
 	}
 
 	bufs = pcm86.realbuf - pcm86.virbuf;
-	if (bufs < 0) {									// ˆ——Ž‚¿‚Ä‚éc
+	if (bufs < 0) {									// å‡¦ç†è½ã¡ã¦ã‚‹â€¦
 		bufs &= ~3;
 		pcm86.virbuf += bufs;
 		if (pcm86.virbuf <= pcm86.fifosize) {

@@ -5,7 +5,9 @@
 
 /* I don't know when this happened.... but suddenly Microsoft C++ doesn't like these constexpr tests or static_assert >:( */
 #if defined(_MSC_VER)
+#  if _MSC_VER > 1900
 # define DISABLE_SELF_TEST
+#  endif
 #endif
 
 namespace bitop {

@@ -1,4 +1,4 @@
-
+ï»¿
 enum {
 	NORMAL2608	= 0,
 	EXTEND2608	= 1
@@ -9,7 +9,7 @@ enum {
 extern "C" {
 #endif
 
-#if !defined(SUPPORT_S98)		// ƒR[ƒ‹‚·‚ç–Ê“|‚¾I
+#if !defined(SUPPORT_S98)		// ã‚³ãƒ¼ãƒ«ã™ã‚‰é¢å€’ã ï¼
 
 #define	S98_init()
 #define	S98_trash()
