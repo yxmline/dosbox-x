@@ -454,6 +454,12 @@ static void write_latch(Bitu port,Bitu val,Bitu /*iolen*/) {
             else
                 p->set_next_counter(9999/*check this*/);
         }
+        else if (p->write_latch == 1 && p->mode == 3/*square wave, count by 2*/) { /* counter==1 and mode==3 makes a low frequency buzz (Paratrooper) */
+            if (p->bcd == false)
+                p->set_next_counter(0x10001);
+            else
+                p->set_next_counter(10000/*check this*/);
+        }
         else {
             p->set_next_counter(p->write_latch);
         }
@@ -683,9 +689,25 @@ static void write_p43(Bitu /*port*/,Bitu val,Bitu /*iolen*/) {
 //        that either enables the PIT to count or stops it and resets the counter.
 //        Verify this on real hardware (DOSLIB TPCRAPI6.EXE)
 //
+//        Note that on IBM PC/XT hardware, ports 60h-63h are the same PPI used in the
+//        PC-98 systems, though wired differently. It is configured (According to IBM).
+//           - Port A (input)           Keyboard scan code / SW1 dip switches (depends on port 61h bit 7)
+//           - Port B (output)          Timer 2 gate speaker / Speaker data aka output gate / ... / bit 7 set to clear keyboard and read SW1
+//           - Port C (input)           I/O Read/Write Memory SW2 / Cassette Data In / Timer Channel 2 Out / ...
+//           - Command byte             0x99 (IBM Technical Ref listing)
+//
 //        This is the picture I have of the hardware:
 //
-//        IBM PC:
+//        IBM PC/XT:
+//
+//        Port 61h
+//        - bit 0 PIT 2 counter gate (write)
+//        - bit 1 PIT 2 counter output gate (write)
+//        Port 62h
+//        - bit 5 PIT 2 counter output (read). The connection point lies BEFORE the AND gate.
+//            You will see the output toggle even if the speaker was muted by clearing the output gate bit.
+//
+//        IBM PC/AT:
 //
 //        Port 61h
 //        - bit 0 PIT 2 counter gate (write)
@@ -700,7 +722,7 @@ static void write_p43(Bitu /*port*/,Bitu val,Bitu /*iolen*/) {
 //        - On PC-9821, this bit controls the clock gate of PIT 1 and therefore whether the PC speaker makes sound
 //        - On PC-9801, the clock gate of PIT 1 is always on, and this bit controls whether the PC speaker makes sound
 //
-//        IBM PC:
+//        IBM PC/XT/AT:
 //
 //        counter output readback <- --------+
 //                                           |

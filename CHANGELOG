@@ -1,4 +1,8 @@
 0.83.1
+  - PC speaker: Mode 3 (square wave) and a counter value
+    of 1 produces a low frequency square wave. Ulrasonic
+    frequencies do not begin until count == 2. This fixes
+    helicopter noises in Paratrooper.
   - dosbox-x.conf is now recognized as the default config
     file name in addition to dosbox.conf (Wengier)
   - Tandy DAC output fixed to slowly ramp last sample to
@@ -98,12 +102,10 @@
     change the keyboard modifier such as none, alt, ctrl,
     shift, or disable this feature (default). (Wengier)
   - Updated the PasteClipboard feature in SDL1 build
-    to support Unicode text translations. (Wengier)
-  - Fixed the PasteClipboard feature in SDL2 build;
-    a keyboard buffer expansion program like keybuf.com
-    (e.g. "KEYBUF 1024") is recommended to be loaded
-    (just once) before pasting long contents from the
-    Windows clipboard in SDL2 build. (Wengier)
+    to support Unicode text translations; also fixed this
+    feature not working in SDL2 build. The config option
+    "clip_paste_speed" is added to speed up or slow down
+    the pasting speed for different DOS programs (Wengier)
   - Support for DOSLIB2's w95sysrg/w95sysrs utils to
     get/set system registry location in DOS 7+. (Wengier)
   - Long filename support added, adapted from
