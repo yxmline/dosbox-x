@@ -179,7 +179,7 @@ static bool is_filename_8by3w(const wchar_t* fname) {
     while (*fname != 0 && *fname != L'.') { fname++; i++; };
     if (i > 8) return false;
 
-    if (*fname == '.') fname++;
+    if (*fname == L'.') fname++;
 
     /* Is the second part 3 chars or less? A second '.' also makes it a LFN */
     i=0;
@@ -241,8 +241,8 @@ bool read_directory_firstw(dir_information* dirp, wchar_t* entry_name, wchar_t* 
 
 	// TODO: offer a config.h option to opt out of Windows widechar functions
 	wcsncpy(entry_name,dirp->search_data.w.cFileName,(MAX_PATH<CROSS_LEN)?MAX_PATH:CROSS_LEN);
-	if (is_filename_8by3w(entry_name))
-		wcsncpy(entry_sname,dirp->search_data.w.cFileName,(MAX_PATH<CROSS_LEN)?MAX_PATH:CROSS_LEN);
+	if (dirp->search_data.w.cAlternateFileName[0] != 0 && is_filename_8by3w(dirp->search_data.w.cFileName))
+		wcsncpy(entry_sname,dirp->search_data.w.cFileName,13);
 	else
 		wcsncpy(entry_sname,dirp->search_data.w.cAlternateFileName,13);
 
@@ -261,8 +261,8 @@ bool read_directory_nextw(dir_information* dirp, wchar_t* entry_name, wchar_t* e
 
     // TODO: offer a config.h option to opt out of Windows widechar functions
 	wcsncpy(entry_name,dirp->search_data.w.cFileName,(MAX_PATH<CROSS_LEN)?MAX_PATH:CROSS_LEN);
-	if (is_filename_8by3w(entry_name))
-		wcsncpy(entry_sname,dirp->search_data.w.cFileName,(MAX_PATH<CROSS_LEN)?MAX_PATH:CROSS_LEN);
+	if (dirp->search_data.w.cAlternateFileName[0] != 0 && is_filename_8by3w(dirp->search_data.w.cFileName))
+		wcsncpy(entry_sname,dirp->search_data.w.cFileName,13);
 	else
 		wcsncpy(entry_sname,dirp->search_data.w.cAlternateFileName,13);
 
