@@ -591,6 +591,25 @@ dnl LIBRARY TEST: Fluidsynth support
 AC_CHECK_HEADER(fluidsynth.h,have_fluidsynth_h=yes,)
 AC_CHECK_LIB(fluidsynth, fluid_synth_sysex, have_fluidsynth_lib=yes,,)
 
+dnl LIBRARY TEST: FreeType2
+AH_TEMPLATE(C_FREETYPE,[Define to 1 to enable freetype support])
+AC_ARG_ENABLE(freetype,AC_HELP_STRING([--disable-freetype],[Disable freetype support]),enable_freetype=$enableval,enable_freetype=yes)
+AM_CONDITIONAL(C_FREETYPE, test "x$enable_freetype" == "xyes")
+if test x$enable_freetype = xyes; then
+  AC_MSG_CHECKING(for freetype)
+  pkg-config --exists freetype2; RES=$?
+  if test x$RES = x0; then
+	CFLAGS="$CFLAGS "`pkg-config freetype2 --cflags`
+	CPPFLAGS="$CPPFLAGS "`pkg-config freetype2 --cflags`
+	LIBS="$LIBS -lavcodec -lavformat -lavutil -lswscale "`pkg-config freetype2 --libs`
+    AC_DEFINE(C_FREETYPE,1)
+    AC_MSG_RESULT(yes)
+  else
+    enable_freetype=no
+    AC_MSG_RESULT(no)
+  fi
+fi
+
 dnl LIBRARY TEST: FFMPEG support
 AC_CHECK_LIB(avcodec,avcodec_open2,have_ffmpeg=yes,have_ffmpeg=no,)
 AC_CHECK_HEADER(libavcodec/avcodec.h,have_avcodec_h=yes,have_avcodec_h=no,)
@@ -612,6 +631,16 @@ if test x$host = xi386-pc-os2-emx ; then
 	SDLNet_Init ();
   ]])], [AC_MSG_RESULT(yes); have_sdl_net_lib=yes], AC_MSG_RESULT(no))
   LIBS=$LIBS_BACKUP
+fi
+
+dnl FEATURE: PRINTER (requires FreeType2)
+AH_TEMPLATE(C_PRINTER,[Define to 1 to enable printer emulation])
+AC_ARG_ENABLE(printer,AC_HELP_STRING([--disable-printer],[disable printer emulation]),enable_printer=$enableval,enable_printer=yes)
+AM_CONDITIONAL(C_PRINTER, test "x$enable_printer" == "xyes")
+if test x$enable_freetype = xyes; then
+  if test x$enable_printer = xyes; then
+    AC_DEFINE(C_PRINTER,1)
+  fi
 fi
 
 dnl FEATURE: xBRZ
