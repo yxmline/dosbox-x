@@ -174,6 +174,7 @@ static const char* UnmountHelper(char umount) {
 
 #if defined(WIN32)
 void MountHelper(char drive, const char drive2[DOS_PATHLENGTH], std::string drive_type) {
+	std::vector<std::string> options;
 	DOS_Drive * newdrive;
 	std::string temp_line;
 	std::string str_size;
@@ -221,7 +222,7 @@ void MountHelper(char drive, const char drive2[DOS_PATHLENGTH], std::string driv
 		} else {
 			MSCDEX_SetCDInterface(CDROM_USE_IOCTL_DIO, num);
 		}
-		newdrive  = new cdromDrive(drive,temp_line.c_str(),sizes[0],bit8size,sizes[2],0,mediaid,error);
+		newdrive  = new cdromDrive(drive,temp_line.c_str(),sizes[0],bit8size,sizes[2],0,mediaid,error,options);
 		std::string errmsg;
 		switch (error) {
 			case 0  :   errmsg=MSG_Get("MSCDEX_SUCCESS");                break;
@@ -239,7 +240,7 @@ void MountHelper(char drive, const char drive2[DOS_PATHLENGTH], std::string driv
 				return;
 			}
 		}
-	} else newdrive=new localDrive(temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid);
+	} else newdrive=new localDrive(temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid,options);
 
 	if (!newdrive) E_Exit("DOS:Can't create drive");
 	Drives[drive-'A']=newdrive;
@@ -264,6 +265,7 @@ void MountHelper(char drive, const char drive2[DOS_PATHLENGTH], std::string driv
 }
 
 void MenuMountDrive(char drive, const char drive2[DOS_PATHLENGTH]) {
+	std::vector<std::string> options;
 	std::string str(1, drive);
 	std::string drive_warn;
 	if (Drives[drive-'A']) {
@@ -331,7 +333,7 @@ void MenuMountDrive(char drive, const char drive2[DOS_PATHLENGTH]) {
 		} else {
 			MSCDEX_SetCDInterface(CDROM_USE_IOCTL_DIO, num);
 		}
-		newdrive  = new cdromDrive(drive,temp_line.c_str(),sizes[0],bit8size,sizes[2],0,mediaid,error);
+		newdrive  = new cdromDrive(drive,temp_line.c_str(),sizes[0],bit8size,sizes[2],0,mediaid,error,options);
 		std::string errmsg;
 		switch (error) {
 			case 0  :   errmsg=MSG_Get("MSCDEX_SUCCESS");                break;
@@ -349,7 +351,7 @@ void MenuMountDrive(char drive, const char drive2[DOS_PATHLENGTH]) {
 				return;
 			}
 		}
-	} else newdrive=new localDrive(temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid);
+	} else newdrive=new localDrive(temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid,options);
 
 	if (!newdrive) E_Exit("DOS:Can't create drive");
 	if(error && (type==DRIVE_CDROM)) return;
@@ -530,6 +532,7 @@ void MenuBootDrive(char drive) {
 
 class MOUNT : public Program {
 public:
+    std::vector<std::string> options;
     void ListMounts(void) {
         char name[DOS_NAMELENGTH_ASCII],lname[LFN_NAMELENGTH];
         Bit32u size;Bit16u date;Bit16u time;Bit8u attr;
@@ -598,7 +601,15 @@ public:
             WriteOut(UnmountHelper(umount[0]), toupper(umount[0]));
             return;
         }
-        
+
+        //look for -o options
+        {
+            std::string s;
+
+            while (cmd->FindString("-o", s, true))
+                options.push_back(s);
+        }
+
         /* Check for moving Z: */
         /* Only allowing moving it once. It is merely a convenience added for the wine team */
         if (ZDRIVE_NUM == 25 && cmd->FindString("-z", newz,false)) {
@@ -881,7 +892,7 @@ public:
 						WriteOut(MSG_Get("PROGRAM_MOUNT_ALREADY_MOUNTED"),drive,Drives[drive-'A']->GetInfo());
 						return;
 					}
-                    newdrive  = new cdromDrive(drive,temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid,error);
+                    newdrive  = new cdromDrive(drive,temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid,error,options);
                 }
                 // Check Mscdex, if it worked out...
                 switch (error) {
@@ -911,7 +922,7 @@ public:
                     LOG_MSG("ERROR:This build does not support physfs");
 					return;
                 } else {
-                    newdrive=new localDrive(temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid);
+                    newdrive=new localDrive(temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid,options);
                     newdrive->nocachedir = nocachedir;
                     newdrive->readonly = readonly;
                 }
