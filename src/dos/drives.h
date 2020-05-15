@@ -298,6 +298,14 @@ struct direntry {
 	Bit16u modDate;
 	Bit16u loFirstClust;
 	Bit32u entrysize;
+
+	inline Bit32u Cluster32(void) const {
+		return ((Bit32u)hiFirstClust << (Bit32u)16) + loFirstClust;
+	}
+	inline void SetCluster32(const Bit32u v) {
+		loFirstClust = (Bit16u)v;
+		hiFirstClust = (Bit16u)(v >> (Bit32u)16);
+	}
 } GCC_ATTRIBUTE(packed);
 
 #define MAX_DIRENTS_PER_SECTOR (SECTOR_SIZE_MAX / sizeof(direntry))
@@ -369,7 +377,7 @@ public:
 	Bit32u getFirstFreeClust(void);
 	bool directoryBrowse(Bit32u dirClustNumber, direntry *useEntry, Bit32s entNum, Bit32s start=0);
 	bool directoryChange(Bit32u dirClustNumber, const direntry *useEntry, Bit32s entNum);
-	FAT_BootSector GetBootBuffer(void);
+	const FAT_BootSector::bpb_union_t &GetBPB(void);
 	imageDisk *loadedDisk = NULL;
 	bool created_successfully = true;
 private:
@@ -395,7 +403,7 @@ private:
 		Bit8u mediaid;
     } allocation = {};
 	
-	FAT_BootSector bootbuffer = {};
+	FAT_BootSector::bpb_union_t BPB = {}; // BPB in effect (translated from on-disk BPB as needed)
 	bool absolute = false;
 	Bit8u fattype = 0;
 	Bit32u CountOfClusters = 0;
