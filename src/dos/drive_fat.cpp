@@ -524,10 +524,10 @@ void fatDrive::setClusterValue(Bit32u clustNum, Bit32u clustValue) {
 			break;
 	}
 	for(unsigned int fc=0;fc<BPB.v.BPB_NumFATs;fc++) {
-		writeSector(fatsectnum + (fc * BPB.v.BPB_FATSz16), &fatSectBuffer[0]);
+		writeSector(fatsectnum + (fc * (BPB.is_fat32() ? BPB.v32.BPB_FATSz32 : BPB.v.BPB_FATSz16)), &fatSectBuffer[0]);
 		if (fattype==FAT12) {
 			if (fatentoff >= (BPB.v.BPB_BytsPerSec-1U))
-				writeSector(fatsectnum+1u+(fc * BPB.v.BPB_FATSz16), &fatSectBuffer[BPB.v.BPB_BytsPerSec]);
+				writeSector(fatsectnum+1u+(fc * (BPB.is_fat32() ? BPB.v32.BPB_FATSz32 : BPB.v.BPB_FATSz16)), &fatSectBuffer[BPB.v.BPB_BytsPerSec]);
 		}
 	}
 }
@@ -1133,10 +1133,20 @@ void fatDrive::UpdateDPB(unsigned char dos_drive) {
         mem_writeb(ptr+0x08,BPB.v.BPB_NumFATs);                     // +8 = number of FATs (file allocation tables)
         mem_writew(ptr+0x09,BPB.v.BPB_RootEntCnt);                  // +9 = number of root directory entries
         mem_writew(ptr+0x0B,(uint16_t)(firstDataSector-partSectOff));// +11 = number of first sector containing user data
-        mem_writew(ptr+0x0D,(uint16_t)CountOfClusters + 1);         // +13 = highest cluster number
+
+        if (BPB.is_fat32())
+            mem_writew(ptr+0x0D,0);                                 // Windows 98 behavior
+        else
+            mem_writew(ptr+0x0D,(uint16_t)CountOfClusters + 1);     // +13 = highest cluster number
+
         mem_writew(ptr+0x0F,(uint16_t)BPB.v.BPB_FATSz16);           // +15 = sectors per FAT
-        mem_writew(ptr+0x11,(uint16_t)(firstRootDirSect-partSectOff));// +17 = sector number of first directory sector
-        mem_writed(ptr+0x13,0);                                     // +19 = address of device driver header (NOT IMPLEMENTED)
+
+        if (BPB.is_fat32())
+            mem_writew(ptr+0x11,0xFFFF);                            // Windows 98 behavior
+        else
+            mem_writew(ptr+0x11,(uint16_t)(firstRootDirSect-partSectOff));// +17 = sector number of first directory sector
+
+        mem_writed(ptr+0x13,0xFFFFFFFF);                            // +19 = address of device driver header (NOT IMPLEMENTED) Windows 98 behavior
         mem_writeb(ptr+0x17,GetMediaByte());                        // +23 = media ID byte
         mem_writeb(ptr+0x18,0x00);                                  // +24 = disk accessed
         mem_writew(ptr+0x1F,0xFFFF);                                // +31 = number of free clusters or 0xFFFF if unknown
@@ -2280,8 +2290,17 @@ bool fatDrive::MakeDir(const char *dir) {
 	/* [..] entry */
 	memset(&tmpentry,0, sizeof(direntry));
 	memcpy(&tmpentry.entryname, "..         ", 11);
-	tmpentry.loFirstClust = (Bit16u)(dirClust & 0xffff);
-	tmpentry.hiFirstClust = (Bit16u)(dirClust >> 16);
+	if (BPB.is_fat32() && dirClust == BPB.v32.BPB_RootClus) {
+		/* Windows 98 SCANDISK.EXE considers it an error for the '..' entry of a top level
+		 * directory to point at the actual cluster number of the root directory. The
+		 * correct value is 0 apparently. */
+		tmpentry.loFirstClust = (Bit16u)0;
+		tmpentry.hiFirstClust = (Bit16u)0;
+	}
+	else {
+		tmpentry.loFirstClust = (Bit16u)(dirClust & 0xffff);
+		tmpentry.hiFirstClust = (Bit16u)(dirClust >> 16);
+	}
 	tmpentry.attrib = DOS_ATTR_DIRECTORY;
     tmpentry.modTime = ct;
     tmpentry.modDate = cd;
@@ -2329,7 +2348,8 @@ bool fatDrive::RemoveDir(const char *dir) {
 
 	/* Find directory entry in parent directory */
 	if (dirClust==0) fileidx = 0;	// root directory
-	else fileidx = 2;
+	else if (BPB.is_fat32() && dirClust==BPB.v32.BPB_RootClus) fileidx = 0; // root directory FAT32
+	else fileidx = 2; /* assume . and .. exist as first two entries */
 	bool found = false;
 	while(directoryBrowse(dirClust, &tmpentry, fileidx)) {
 		if(memcmp(&tmpentry.entryname, &pathName[0], 11) == 0) {
@@ -2398,5 +2418,13 @@ bool fatDrive::TestDir(const char *dir) {
 
 Bit32u fatDrive::GetPartitionOffset(void) {
 	return partSectOff;
+}
+
+Bit32u fatDrive::GetFirstClusterOffset(void) {
+    return firstDataSector - partSectOff;
+}
+
+Bit32u fatDrive::GetHighestClusterNumber(void) {
+    return CountOfClusters + 1ul;
 }
 
