@@ -880,6 +880,19 @@ struct DtaResult {
 Bit32u byte_count,file_count,dir_count;
 Bitu p_count;
 std::vector<std::string> dirs, adirs;
+
+static bool dirPaused(DOS_Shell * shell, Bitu w_size, bool optP, bool optW) {
+	p_count+=optW?5:1;
+	if (optP && p_count%(22*w_size)<1) {
+		shell->WriteOut(MSG_Get("SHELL_CMD_PAUSE"));
+		Bit8u c;Bit16u n=1;
+		DOS_ReadFile(STDIN,&c,&n);
+		if (c==3) {shell->WriteOut("^C\r\n");return false;}
+		if (c==0) DOS_ReadFile(STDIN,&c,&n); // read extended key
+	}
+	return true;
+}
+
 static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat, Bitu w_size, bool optW, bool optS, bool optP, bool optB, bool optA, bool optAD, bool optAminusD, bool optAS, bool optAminusS, bool optAH, bool optAminusH, bool optAR, bool optAminusR, bool optAA, bool optAminusA, bool optON, bool optOD, bool optOE, bool optOS, bool reverseSort) {
 	char path[DOS_PATHLENGTH];
 	char sargs[CROSS_LEN], largs[CROSS_LEN];
@@ -894,12 +907,11 @@ static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat,
 		shell->WriteOut(MSG_Get("SHELL_ILLEGAL_PATH"));
 		return true;
 	}
-    if (!optB) {
-		if (optS) shell->WriteOut("\n");
+    if (!optB&&!optS) {
 		shell->WriteOut(MSG_Get("SHELL_CMD_DIR_INTRO"),uselfn&&DOS_GetSFNPath(path,largs,true)?largs:sargs);
 		if (optP) {
-			p_count+=optS?(optW?15:3):(optW?10:2);
-			if (optS&&p_count%(22*w_size)<3) {
+			p_count+=optW?10:2;
+			if (p_count%(22*w_size)<2) {
 				shell->WriteOut(MSG_Get("SHELL_CMD_PAUSE"));
 				Bit8u c;Bit16u n=1;
 				DOS_ReadFile(STDIN,&c,&n);
@@ -913,7 +925,7 @@ static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat,
 	Bit32u cbyte_count=0,cfile_count=0,w_count=0;
 	int fbak=faux;
 	faux=uselfn?255:256;
-	bool ret=DOS_FindFirst(args,0xffff & ~DOS_ATTR_VOLUME), found=true;
+	bool ret=DOS_FindFirst(args,0xffff & ~DOS_ATTR_VOLUME), found=true, first=true;
 	faux=fbak;
 	if (ret) {
 		std::vector<DtaResult> results;
@@ -974,6 +986,21 @@ static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat,
 					shell->WriteOut("%s\n",uselfn?lname:name);
 				}
 			} else {
+				if (first&&optS) {
+					first=false;
+					shell->WriteOut("\n");
+					shell->WriteOut(MSG_Get("SHELL_CMD_DIR_INTRO"),uselfn&&DOS_GetSFNPath(path,largs,true)?largs:sargs);
+					if (optP) {
+						p_count+=optW?15:3;
+						if (optS&&p_count%(22*w_size)<3) {
+							shell->WriteOut(MSG_Get("SHELL_CMD_PAUSE"));
+							Bit8u c;Bit16u n=1;
+							DOS_ReadFile(STDIN,&c,&n);
+							if (c==3) {shell->WriteOut("^C\r\n");return false;}
+							if (c==0) DOS_ReadFile(STDIN,&c,&n); // read extended key
+						}
+					}
+				}
 				char * ext = empty_string;
 				if (!optW && (name[0] != '.')) {
 					ext = strrchr(name, '.');
@@ -1029,16 +1056,9 @@ static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat,
 			shell->WriteOut("\n");
 	} else
 		found=false;
-	if (!found&&!optB) {
+	if (!found&&!optB&&!optS) {
 		shell->WriteOut(MSG_Get("SHELL_CMD_FILE_NOT_FOUND"),args);
-		p_count+=optW?5:1;
-		if (optP && p_count%(22*w_size)<1) {
-			shell->WriteOut(MSG_Get("SHELL_CMD_PAUSE"));
-			Bit8u c;Bit16u n=1;
-			DOS_ReadFile(STDIN,&c,&n);
-			if (c==3) {shell->WriteOut("^C\r\n");return false;}
-			if (c==0) DOS_ReadFile(STDIN,&c,&n); // read extended key
-		}
+		if (!dirPaused(shell, w_size, optP, optW)) return false;
 	}
 	if (optS) {
 		size_t len=strlen(sargs);
@@ -1065,30 +1085,11 @@ static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat,
 			} while ( (ret=DOS_FindNext()) );
 			dirs.insert(dirs.begin()+1, cdirs.begin(), cdirs.end());
 		}
-		if (!optB) {
+		if (found&&!optB) {
 			FormatNumber(cbyte_count,numformat);
 			shell->WriteOut(MSG_Get("SHELL_CMD_DIR_BYTES_USED"),cfile_count,numformat);
-			p_count+=optW?5:1;
-			if (optP && p_count%(22*w_size)<1) {
-				shell->WriteOut(MSG_Get("SHELL_CMD_PAUSE"));
-				Bit8u c;Bit16u n=1;
-				DOS_ReadFile(STDIN,&c,&n);
-				if (c==3) {shell->WriteOut("^C\r\n");return false;}
-				if (c==0) DOS_ReadFile(STDIN,&c,&n); // read extended key
-			}
+			if (!dirPaused(shell, w_size, optP, optW)) return false;
 		}
-	}
-	return true;
-}
-
-static bool dirPaused(DOS_Shell * shell, Bitu w_size, bool optP, bool optW) {
-	p_count+=optW?5:1;
-	if (optP && p_count%(22*w_size)<1) {
-		shell->WriteOut(MSG_Get("SHELL_CMD_PAUSE"));
-		Bit8u c;Bit16u n=1;
-		DOS_ReadFile(STDIN,&c,&n);
-		if (c==3) {shell->WriteOut("^C\r\n");return false;}
-		if (c==0) DOS_ReadFile(STDIN,&c,&n); // read extended key
 	}
 	return true;
 }
@@ -1234,7 +1235,10 @@ void DOS_Shell::CMD_DIR(char * args) {
 		if (optS) {
 			WriteOut("\n");
 			if (!dirPaused(this, w_size, optP, optW)) {dos.dta(save_dta);return;}
-			WriteOut(MSG_Get("SHELL_CMD_DIR_FILES_LISTED"));
+			if (!file_count&&!dir_count)
+				WriteOut(MSG_Get("SHELL_CMD_FILE_NOT_FOUND"),args);
+			else
+				WriteOut(MSG_Get("SHELL_CMD_DIR_FILES_LISTED"));
 			if (!dirPaused(this, w_size, optP, optW)) {dos.dta(save_dta);return;}
 		}
 		/* Show the summary of results */
@@ -1245,12 +1249,12 @@ void DOS_Shell::CMD_DIR(char * args) {
 		//TODO Free Space
 		Bitu free_space=1024u*1024u*100u;
 		if (Drives[drive]) {
-			if (dos.version.major > 7 || (dos.version.major == 7 && dos.version.minor >= 10)) { /* FAT32 aware extended API */
-				Bit32u bytes_sector;Bit32u sectors_cluster;Bit32u total_clusters;Bit32u free_clusters;
+			Bit32u bytes_sector32;Bit32u sectors_cluster32;Bit32u total_clusters32;Bit32u free_clusters32;
+			if (dos.version.major > 7 || (dos.version.major == 7 && dos.version.minor >= 10) &&
+				Drives[drive]->AllocationInfo32(&bytes_sector32,&sectors_cluster32,&total_clusters32,&free_clusters32)) { /* FAT32 aware extended API */
 				rsize=true;
 				freec=0;
-				Drives[drive]->AllocationInfo32(&bytes_sector,&sectors_cluster,&total_clusters,&free_clusters);
-				free_space=(Bitu)bytes_sector * (Bitu)sectors_cluster * (Bitu)(freec?freec:free_clusters);
+				free_space=(Bitu)bytes_sector32 * (Bitu)sectors_cluster32 * (Bitu)(freec?freec:free_clusters32);
 				rsize=false;
 			}
 			else {
@@ -2509,7 +2513,18 @@ void DOS_Shell::CMD_VOL(char *args){
 		WriteOut(MSG_Get("SHELL_CMD_VOL_SERIAL_LABEL"),bufin);
 
 	WriteOut(MSG_Get("SHELL_CMD_VOL_SERIAL"));
-	WriteOut("0000-1234\n"); // fake serial number
+	unsigned long serial_number=0x1234;
+	if (!strncmp(Drives[drive]->GetInfo(),"fatDrive ",9)) {
+		fatDrive* fdp = dynamic_cast<fatDrive*>(Drives[drive]);
+		if (fdp != NULL) serial_number=fdp->GetSerial();
+	}
+#if defined (WIN32)
+	if (!strncmp(Drives[drive]->GetInfo(),"local ",6)) {
+		localDrive* ldp = dynamic_cast<localDrive*>(Drives[drive]);
+		if (ldp != NULL) serial_number=ldp->GetSerial();
+	}
+#endif
+	WriteOut("%04X-%04X\n", serial_number/0x10000, serial_number%0x10000);
 	return;
 }
 

@@ -76,6 +76,7 @@ public:
 	virtual unsigned long GetCompressedSize(char* name);
 #if defined (WIN32)
 	virtual HANDLE CreateOpenFile(char const* const name);
+	virtual unsigned long GetSerial();
 #endif
 	virtual bool Rename(const char * oldname,const char * newname);
 	virtual bool AllocationInfo(Bit16u * _bytes_sector,Bit8u * _sectors_cluster,Bit16u * _total_clusters,Bit16u * _free_clusters);
@@ -252,7 +253,7 @@ struct FAT_BootSector {
         struct FAT_BPB_MSDOS30              v30;    /* offset 0x00B size 0x015 MS-DOS 3.0 BPB */
         struct FAT_BPB_MSDOS331             v331;   /* offset 0x00B size 0x019 MS-DOS 3.31 BPB */
         struct FAT_BPB_MSDOS40              v40;    /* offset 0x00B size 0x039 MS-DOS 4.0 BPB (FAT12/FAT16) */
-        struct FAT_BPB_MSDOS710_FAT32       v710_32;/* offset 0x00B size 0x0xx MS-DOS 7.10 BPB (FAT32) */
+        struct FAT_BPB_MSDOS710_FAT32       v710_32;/* offset 0x00B size 0x04F MS-DOS 7.10 BPB (FAT32) */
 
         FAT_BPB_MSDOS                       v;      /* offset 0x00B ... */
         FAT32_BPB_MSDOS                     v32;    /* offset 0x00B ... */
@@ -262,7 +263,7 @@ struct FAT_BootSector {
         }
     } bpb;
     /* --------- The rest of the sector ---------- */
-    Bit8u  bootcode[512 - 2/*magic*/ - sizeof(bpb) - 8/*OEM*/ - 3/*JMP*/];
+    Bit8u  bootcode[512 - 2/*magic*/ - sizeof(bpb_union_t) - 8/*OEM*/ - 3/*JMP*/];
     Bit8u  magic1; /* 0x55 */
     Bit8u  magic2; /* 0xaa */
 #ifndef SECTOR_SIZE_MAX
@@ -360,6 +361,7 @@ public:
 #if defined (WIN32)
 	virtual HANDLE CreateOpenFile(char const* const name);
 #endif
+	virtual unsigned long GetSerial();
 	virtual bool Rename(const char * oldname,const char * newname);
 	virtual bool AllocationInfo(Bit16u * _bytes_sector,Bit8u * _sectors_cluster,Bit16u * _total_clusters,Bit16u * _free_clusters);
 	virtual bool AllocationInfo32(Bit32u * _bytes_sector,Bit32u * _sectors_cluster,Bit32u * _total_clusters,Bit32u * _free_clusters);

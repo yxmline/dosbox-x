@@ -1998,6 +1998,7 @@ static Bitu DOS_21Handler(void) {
 				reg_ah = 0;
 				CALLBACK_SCF(false);
 			} else if (reg_al==2) {
+				/* Get extended DPB */
 				Bit32u ptr = SegPhys(es)+reg_di;
 				Bit8u drive;
 
@@ -2029,10 +2030,18 @@ static Bitu DOS_21Handler(void) {
 									MEM_BlockRead(srcptr,tmp,24);
 									MEM_BlockWrite(ptr+0x02,tmp,24);
 								}
+								Bit32u bytes_per_sector,sectors_per_cluster,total_clusters,free_clusters,tfree;
+								rsize=true;
+								totalc=freec=0;
+								if (DOS_GetFreeDiskSpace32(reg_dl,&bytes_per_sector,&sectors_per_cluster,&total_clusters,&free_clusters))
+									tfree = freec?freec:free_clusters;
+								else
+									tfree=0xFFFFFFFF;
+								rsize=false;
 								mem_writeb(ptr+0x1A,0x00);      // dpb flags
 								mem_writed(ptr+0x1B,0xFFFFFFFF);// ptr to next DPB if Windows 95 magic SI signature (TODO)
 								mem_writew(ptr+0x1F,2);         // cluster to start searching when writing (FIXME)
-								mem_writed(ptr+0x21,0xFFFFFFFF);// number of free clusters (FIXME: We just say unknown)
+								mem_writed(ptr+0x21,tfree);// number of free clusters
 								mem_writew(ptr+0x25,bpb.v32.BPB_ExtFlags);
 								mem_writew(ptr+0x27,bpb.v32.BPB_FSInfo);
 								mem_writew(ptr+0x29,bpb.v32.BPB_BkBootSec);
@@ -3485,7 +3494,7 @@ void DOS_Int21_71a6(const char *name1, const char *name2) {
     (void)name1;
     (void)name2;
 	char buf[64];
-	unsigned long serial_number=0,st=0,cdate=0,ctime=0,adate=0,atime=0,mdate=0,mtime=0;
+	unsigned long serial_number=0x1234,st=0,cdate=0,ctime=0,adate=0,atime=0,mdate=0,mtime=0;
 	Bit8u entry=(Bit8u)reg_bx, handle;
 	if (entry>=DOS_FILES) {
 		reg_ax=DOSERR_INVALID_HANDLE;
@@ -3497,11 +3506,19 @@ void DOS_Int21_71a6(const char *name1, const char *name2) {
 		if (Files[i] && psp.FindEntryByHandle(i)==entry)
 			handle=i;
 	if (handle < DOS_FILES && Files[handle] && Files[handle]->name!=NULL) {
-		char volume[] = "A:\\";
-		volume[0]+=Files[handle]->GetDrive();
+		Bit8u drive=Files[handle]->GetDrive();
+		if (Drives[drive]) {
+			if (!strncmp(Drives[drive]->GetInfo(),"fatDrive ",9)) {
+				fatDrive* fdp = dynamic_cast<fatDrive*>(Drives[drive]);
+				if (fdp != NULL) serial_number=fdp->GetSerial();
+			}
 #if defined (WIN32)
-		GetVolumeInformation(volume, NULL, 0, &serial_number, NULL, NULL, NULL, 0);
+			if (!strncmp(Drives[drive]->GetInfo(),"local ",6)) {
+				localDrive* ldp = dynamic_cast<localDrive*>(Drives[drive]);
+				if (ldp != NULL) serial_number=ldp->GetSerial();
+			}
 #endif
+		}
 		struct stat status;
 		if (DOS_GetFileAttrEx(Files[handle]->name, &status, Files[handle]->GetDrive())) {
 #if !defined(HX_DOS)
