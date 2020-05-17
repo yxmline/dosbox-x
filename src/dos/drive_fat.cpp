@@ -119,13 +119,10 @@ fatFile::fatFile(const char* /*name*/, Bit32u startCluster, Bit32u fileLen, fatD
 }
 
 void fatFile::Flush(void) {
-#if 0//UNTESTED: THIS MAY CAUSE FURTHER PROBLEMS
-    // FIXME: Copy-pasta from Close
 	if (loadedSector) {
-        myDrive->writeSector(currentSector, sectorBuffer);
-        loadedSector = false;
-    }
-#endif
+		myDrive->writeSector(currentSector, sectorBuffer);
+		loadedSector = false;
+	}
 
     if (modified || newtime) {
         direntry tmpentry = {};
@@ -214,11 +211,13 @@ bool fatFile::Write(const Bit8u * data, Bit16u *size) {
 	Bit16u sizedec, sizecount;
 	sizedec = *size;
 	sizecount = 0;
-	
+
 	if(seekpos < filelength && *size == 0) {
 		/* Truncate file to current position */
 		myDrive->deleteClustChain(firstCluster, seekpos);
 		filelength = seekpos;
+		if (filelength == 0) firstCluster = 0; /* A file of length zero has a starting cluster of zero as well */
+		modified = true;
 		goto finalizeWrite;
 	}
 
@@ -231,11 +230,20 @@ bool fatFile::Write(const Bit8u * data, Bit16u *size) {
 			myDrive->allocateCluster(firstCluster, 0);
 			filelength = clustSize;
 		}
-		filelength = ((filelength - 1) / clustSize + 1) * clustSize;
+
+		/* round up */
+		filelength += clustSize - 1;
+		filelength -= filelength % clustSize;
+
+		/* add clusters until the file length is correct */
 		while(filelength < seekpos) {
 			if(myDrive->appendCluster(firstCluster) == 0) goto finalizeWrite; // out of space
 			filelength += clustSize;
 		}
+		assert(filelength < (seekpos+clustSize));
+
+		/* limit file length to seekpos, then bail out if write count is zero */
+		modified = true;
 		if(filelength > seekpos) filelength = seekpos;
 		if(*size == 0) goto finalizeWrite;
 	}
@@ -275,13 +283,15 @@ bool fatFile::Write(const Bit8u * data, Bit16u *size) {
 			}
 			filelength = seekpos+1;
 		}
+		--sizedec;
+		modified = true;
 		sectorBuffer[curSectOff++] = data[sizecount++];
 		seekpos++;
 		if(curSectOff >= myDrive->getSectorSize()) {
 			if(loadedSector) myDrive->writeSector(currentSector, sectorBuffer);
-            loadedSector = false;
+			loadedSector = false;
 
-            if (sizedec <= 1) goto finalizeWrite; // --sizedec == 0
+			if (sizedec == 0) goto finalizeWrite;
 
 			currentSector = myDrive->getAbsoluteSectFromBytePos(firstCluster, seekpos);
 			if(currentSector == 0) {
@@ -298,8 +308,6 @@ bool fatFile::Write(const Bit8u * data, Bit16u *size) {
 			myDrive->readSector(currentSector, sectorBuffer);
 			loadedSector = true;
 		}
-        modified = true;
-		--sizedec;
 	}
 	if(curSectOff>0 && loadedSector) myDrive->writeSector(currentSector, sectorBuffer);
 
@@ -610,11 +618,10 @@ nextfile:
 			Bit32u newClust;
 			newClust = appendCluster(dirClustNumber);
 			if(newClust == 0) return;
+			zeroOutCluster(newClust);
 			/* Try again to get tmpsector */
 			tmpsector = getAbsoluteSectFromChain(dirClustNumber, logentsector);
 			if(tmpsector == 0) return; /* Give up if still can't get more room for directory */
-			memset(sectbuf,0,sizeof(sectbuf)); /* make sure the new sector starts with zeros so directory search stops before junk */
-			writeSector(tmpsector,sectbuf);
 		}
 		readSector(tmpsector,sectbuf);
 	}
@@ -862,81 +869,119 @@ Bit32u fatDrive::getAbsoluteSectFromChain(Bit32u startClustNum, Bit32u logicalSe
 }
 
 void fatDrive::deleteClustChain(Bit32u startCluster, Bit32u bytePos) {
+	if (startCluster < 2) return; /* do not corrupt the FAT media ID. The file has no chain. Do nothing. */
+
 	Bit32u clustSize = getClusterSize();
 	Bit32u endClust = (bytePos + clustSize - 1) / clustSize;
 	Bit32u countClust = 1;
 
 	Bit32u currentClust = startCluster;
-	bool isEOF = false;
-	while(!isEOF) {
-		Bit32u testvalue = getClusterValue(currentClust);
-		if(testvalue == 0) {
-			/* What the crap?  Cluster is already empty - BAIL! */
+	Bit32u eofClust = 0;
+
+	switch(fattype) {
+		case FAT12:
+			eofClust = 0xff8;
 			break;
+		case FAT16:
+			eofClust = 0xfff8;
+			break;
+		case FAT32:
+			eofClust = 0x0ffffff8;
+			break;
+		default:
+			abort();
+			break;
+	}
+
+	/* chain preservation */
+	while (countClust < endClust) {
+		Bit32u testvalue = getClusterValue(currentClust);
+		if (testvalue == 0) {
+			LOG(LOG_DOSMISC,LOG_WARN)("deleteClusterChain startCluster=%u countClust=%u endClust=%u currentClust=%u testvalue=%u eof=%u unexpected zero cluster value in FAT table",
+					(unsigned int)startCluster,(unsigned int)countClust,(unsigned int)endClust,(unsigned int)currentClust,(unsigned int)testvalue,(unsigned int)eofClust);
+			return;
 		}
-		switch(fattype) {
-			case FAT12:
-				if(testvalue >= 0xff8) isEOF = true;
-				break;
-			case FAT16:
-				if(testvalue >= 0xfff8) isEOF = true;
-				break;
-			case FAT32:
-				if(testvalue >= 0x0ffffff8) isEOF = true; /* FAT32 is really FAT28 with 4 reserved bits */
-				break;
-		}
-		if(countClust == endClust && !isEOF) {
-			/* Mark cluster as end */
-			switch(fattype) {
-				case FAT12:
-					setClusterValue(currentClust, 0xfff);
-					break;
-				case FAT16:
-					setClusterValue(currentClust, 0xffff);
-					break;
-				case FAT32:
-					setClusterValue(currentClust, 0x0fffffff);
-					break;
-			}
-		} else if(countClust > endClust) {
-			/* Mark cluster as empty */
-			setClusterValue(currentClust, 0);
-		}
-		if(isEOF) break;
+		else if (testvalue >= eofClust)
+			return; /* Allocation chain is already shorter than intended */
+
 		currentClust = testvalue;
 		countClust++;
+	}
+
+	/* cut the chain here, write EOF.
+	 * This condition will NOT occur if bytePos == 0 (i.e. complete file truncation)
+	 * because countClust == 1 and endClust == 0 */
+	if (countClust == endClust) {
+		Bit32u testvalue = getClusterValue(currentClust);
+		if (testvalue == 0) {
+			LOG(LOG_DOSMISC,LOG_WARN)("deleteClusterChain startCluster=%u countClust=%u endClust=%u currentClust=%u testvalue=%u eof=%u unexpected zero cluster value in FAT table",
+					(unsigned int)startCluster,(unsigned int)countClust,(unsigned int)endClust,(unsigned int)currentClust,(unsigned int)testvalue,(unsigned int)eofClust);
+			return;
+		}
+		else if (testvalue >= eofClust)
+			return; /* No need to write EOF because EOF is already there */
+
+		setClusterValue(currentClust,eofClust);
+		currentClust = testvalue;
+		countClust++;
+	}
+
+	/* then run the rest of the chain and zero it out */
+	while (1) {
+		Bit32u testvalue = getClusterValue(currentClust);
+		if (testvalue == 0) {
+			LOG(LOG_DOSMISC,LOG_WARN)("deleteClusterChain startCluster=%u countClust=%u endClust=%u currentClust=%u testvalue=%u eof=%u unexpected zero cluster value in FAT table",
+					(unsigned int)startCluster,(unsigned int)countClust,(unsigned int)endClust,(unsigned int)currentClust,(unsigned int)testvalue,(unsigned int)eofClust);
+			return;
+		}
+
+		setClusterValue(currentClust,0);
+		currentClust = testvalue;
+		countClust++;
+
+		/* this follows setClusterValue() to make sure the end of the chain is zeroed too */
+		if (testvalue >= eofClust)
+			return;
 	}
 }
 
 Bit32u fatDrive::appendCluster(Bit32u startCluster) {
+	if (startCluster < 2) return 0; /* do not corrupt the FAT media ID. The file has no chain. Do nothing. */
+
 	Bit32u currentClust = startCluster;
-	bool isEOF = false;
-	
-	while(!isEOF) {
-		Bit32u testvalue = getClusterValue(currentClust);
-		if(testvalue == 0) {
-			LOG(LOG_DOSMISC,LOG_WARN)("FAT appendCluster: allocation chain ends suddenly with zero cluster value at cluster %u",(unsigned int)currentClust);
-			/* What the crap?  Cluster is already empty - BAIL! */
+	Bit32u eofClust = 0;
+
+	switch(fattype) {
+		case FAT12:
+			eofClust = 0xff8;
 			break;
+		case FAT16:
+			eofClust = 0xfff8;
+			break;
+		case FAT32:
+			eofClust = 0x0ffffff8;
+			break;
+		default:
+			abort();
+			break;
+	}
+
+	while (1) {
+		Bit32u testvalue = getClusterValue(currentClust);
+		if (testvalue == 0) {
+			LOG(LOG_DOSMISC,LOG_WARN)("appendCluster currentClust=%u testvalue=%u eof=%u unexpected zero cluster value in FAT table",
+					(unsigned int)currentClust,(unsigned int)testvalue,(unsigned int)eofClust);
+			return 0;
 		}
-		switch(fattype) {
-			case FAT12:
-				if(testvalue >= 0xff8) isEOF = true;
-				break;
-			case FAT16:
-				if(testvalue >= 0xfff8) isEOF = true;
-				break;
-			case FAT32:
-				if(testvalue >= 0x0ffffff8) isEOF = true; /* FAT32 is really FAT28 with 4 reserved upper bits */
-				break;
+		else if (testvalue >= eofClust) {
+			break; /* found it! */
 		}
-		if(isEOF) break;
+
 		currentClust = testvalue;
 	}
 
 	Bit32u newClust = getFirstFreeClust();
-	/* Drive is full */
-	if(newClust == 0) return 0;
+	if(newClust == 0) return 0; /* Drive is full */
 
 	if(!allocateCluster(newClust, currentClust)) return 0;
 
@@ -1737,21 +1782,26 @@ bool fatDrive::FileCreate(DOS_File **file, const char *name, Bit16u attributes) 
 
 	Bit16u save_errorcode=dos.errorcode;
 
-    if (attributes & DOS_ATTR_VOLUME) {
-        SetLabel(name,false,true);
-        return true;
-    }
+	if (attributes & DOS_ATTR_VOLUME) {
+		SetLabel(name,false,true);
+		return true;
+	}
+	if (attributes & DOS_ATTR_DIRECTORY) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}
 
 	/* Check if file already exists */
 	if(getFileDirEntry(name, &fileEntry, &dirClust, &subEntry)) {
-		/* Truncate file */
-		fileEntry.entrysize=0;
-		directoryChange(dirClust, &fileEntry, (Bit32s)subEntry);
-
+		/* Truncate file allocation chain */
 		{
 			const Bit32u chk = BPB.is_fat32() ? fileEntry.Cluster32() : fileEntry.loFirstClust;
 			if(chk != 0) deleteClustChain(chk, 0);
 		}
+		/* Update directory entry */
+		fileEntry.entrysize=0;
+		fileEntry.SetCluster32(0);
+		directoryChange(dirClust, &fileEntry, (Bit32s)subEntry);
 	} else {
 		/* Can we even get the name of the file itself? */
 		if(!getEntryName(name, &dirName[0])) return false;
@@ -1894,13 +1944,12 @@ bool fatDrive::FindFirst(const char *_dir, DOS_DTA &dta,bool /*fcb_findfirst*/) 
         }
     }
 
-	// FIXME: FAT32!!
 	if (faux>=255) {
 		dta.SetDirID(0);
-		dta.SetDirIDCluster((Bit16u)(cwdDirCluster&0xffff));
+		dta.SetDirIDCluster(cwdDirCluster);
 	} else {
 		dpos[faux]=0;
-		dnum[faux]=cwdDirCluster&0xffff;
+		dnum[faux]=cwdDirCluster;
 	}
 
 	return FindNextInternal(cwdDirCluster, dta, &dummyClust);
@@ -1962,14 +2011,14 @@ bool fatDrive::FindNextInternal(Bit32u dirClustNumber, DOS_DTA &dta, direntry *f
     assert((dirent_per_sector * sizeof(direntry)) <= SECTOR_SIZE_MAX);
 
 	dta.GetSearchParams(attrs, srch_pattern,uselfn);
-	dirPos = faux>=255?dta.GetDirID():dpos[faux];
+	dirPos = faux>=255?dta.GetDirID():dpos[faux]; /* NTS: Windows 9x is said to have a 65536 dirent limit even for FAT32, so dirPos as 16-bit is acceptable */
 
 nextfile:
 	logentsector = (Bit32u)((size_t)dirPos / dirent_per_sector);
 	entryoffset = (Bit32u)((size_t)dirPos % dirent_per_sector);
 
 	if(dirClustNumber==0) {
-        assert(!BPB.is_fat32());
+        if (BPB.is_fat32()) return false;
 
 		if(dirPos >= BPB.v.BPB_RootEntCnt) {
 			if (faux<255) {
@@ -2263,6 +2312,7 @@ bool fatDrive::addDirectoryEntry(Bit32u dirClustNumber, const direntry& useEntry
 				Bit32u newClust;
 				newClust = appendCluster(dirClustNumber);
 				if(newClust == 0) return false;
+				zeroOutCluster(newClust);
 				/* Try again to get tmpsector */
 				tmpsector = getAbsoluteSectFromChain(dirClustNumber, logentsector);
 				if(tmpsector == 0) return false; /* Give up if still can't get more room for directory */
@@ -2305,24 +2355,24 @@ bool fatDrive::MakeDir(const char *dir) {
     Bit16u ct,cd;
 
 	/* Can we even get the name of the directory itself? */
-	if(!getEntryName(dir, &dirName[0])) return false;
+	if(!getEntryName(dir, &dirName[0])||!strlen(trim(dirName))) return false;
 	convToDirFile(&dirName[0], &pathName[0]);
 
 	/* Fail to make directory if already exists */
 	if(getDirClustNum(dir, &dummyClust, false)) return false;
 
+	/* Can we find the base directory? */
+	if(!getDirClustNum(dir, &dirClust, true)) return false;
+
 	dummyClust = getFirstFreeClust();
 	/* No more space */
 	if(dummyClust == 0) return false;
-	
+
 	if(!allocateCluster(dummyClust, 0)) return false;
 
 	zeroOutCluster(dummyClust);
 
-	/* Can we find the base directory? */
-	if(!getDirClustNum(dir, &dirClust, true)) return false;
-
-    time_t_to_DOS_DateTime(/*&*/ct,/*&*/cd,::time(NULL));
+	time_t_to_DOS_DateTime(/*&*/ct,/*&*/cd,::time(NULL));
 
 	/* Add the new directory to the base directory */
 	memset(&tmpentry,0, sizeof(direntry));
@@ -2387,6 +2437,7 @@ bool fatDrive::RemoveDir(const char *dir) {
 
 	/* Can't remove root directory */
 	if(dummyClust == 0) return false;
+	if(BPB.is_fat32() && dummyClust==BPB.v32.BPB_RootClus) return false;
 
 	/* Get parent directory starting cluster */
 	if(!getDirClustNum(dir, &dirClust, true)) return false;
@@ -2431,20 +2482,45 @@ bool fatDrive::Rename(const char * oldname, const char * newname) {
 		DOS_SetError(DOSERR_WRITE_PROTECTED);
         return false;
     }
-    direntry fileEntry1 = {};
-	Bit32u dirClust1, subEntry1;
-	if(!getFileDirEntry(oldname, &fileEntry1, &dirClust1, &subEntry1)) return false;
-	/* File to be renamed really exists */
+    direntry fileEntry1 = {}, fileEntry2 = {};
+	Bit32u dirClust1, subEntry1, dirClust2, subEntry2;
+	char dirName[DOS_NAMELENGTH_ASCII], dirName2[DOS_NAMELENGTH_ASCII];
+	char pathName[11], pathName2[11];
+	
+	if(!getFileDirEntry(oldname, &fileEntry1, &dirClust1, &subEntry1)) {
+		/* Can we even get the name of the directory itself? */
+		if(!getEntryName(oldname, &dirName[0])) return false;
+		convToDirFile(&dirName[0], &pathName[0]);
 
-    direntry fileEntry2 = {};
-	Bit32u dirClust2, subEntry2;
+		/* Get parent directory starting cluster */
+		if(!getDirClustNum(oldname, &dirClust1, true)) return false;
+
+		if(getFileDirEntry(newname, &fileEntry2, &dirClust2, &subEntry2)) return false;
+		if(!getEntryName(newname, &dirName2[0])||!strlen(trim(dirName2))) return false;
+		convToDirFile(&dirName2[0], &pathName2[0]);
+
+		/* Find directory entry in parent directory */
+		Bit32s fileidx = 2;
+		if (dirClust1==0) fileidx = 0;	// root directory
+		else if (BPB.is_fat32() && dirClust1==BPB.v32.BPB_RootClus) fileidx = 0; // root directory FAT32
+		Bit32s last_idx=0;
+		while(directoryBrowse(dirClust1, &fileEntry1, fileidx, last_idx)) {
+			if(memcmp(&fileEntry1.entryname, &pathName[0], 11) == 0) {
+				for (int i=0; i<11; i++)
+					fileEntry1.entryname[i]=toupper(pathName2[i]);
+				directoryChange(dirClust1, &fileEntry1, fileidx);
+				return true;
+			}
+			fileidx++;
+		}
+		return false;
+	}
+	/* File to be renamed really exists */
 
 	/* Check if file already exists */
 	if(!getFileDirEntry(newname, &fileEntry2, &dirClust2, &subEntry2)) {
 		/* Target doesn't exist, can rename */
 
-		char dirName2[DOS_NAMELENGTH_ASCII];
-		char pathName2[11];
 		/* Can we even get the name of the file itself? */
 		if(!getEntryName(newname, &dirName2[0])) return false;
 		convToDirFile(&dirName2[0], &pathName2[0]);
@@ -2485,4 +2561,3 @@ Bit32u fatDrive::GetFirstClusterOffset(void) {
 Bit32u fatDrive::GetHighestClusterNumber(void) {
     return CountOfClusters + 1ul;
 }
-
