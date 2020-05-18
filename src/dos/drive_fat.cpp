@@ -630,7 +630,7 @@ nextfile:
 
 	if (dos.version.major >= 7) {
 		/* skip LFN entries */
-		if ((sectbuf[entryoffset].attrib & 0x0F) == 0x0F)
+		if ((sectbuf[entryoffset].attrib & 0x3F) == 0x0F)
 			goto nextfile;
 	}
 
@@ -1686,6 +1686,11 @@ void fatDrive::fatDriveInit(const char *sysFilename, Bit32u bytesector, Bit32u c
 		fattype = FAT32;
 	}
 
+	/* just so you know....! */
+	if (fattype == FAT32 && (dos.version.major < 7 || (dos.version.major == 7 && dos.version.minor < 10))) {
+		LOG_MSG("CAUTION: Mounting FAT32 partition when reported DOS version is less than 7.10. Disk formatting/repair utilities may mis-identify the partition.");
+	}
+
 	/* There is no cluster 0, this means we are in the root directory */
 	cwdDirCluster = 0;
 
@@ -1791,6 +1796,12 @@ bool fatDrive::FileCreate(DOS_File **file, const char *name, Bit16u attributes) 
 		return false;
 	}
 
+	/* you cannot create root directory */
+	if (*name == 0) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}
+
 	/* Check if file already exists */
 	if(getFileDirEntry(name, &fileEntry, &dirClust, &subEntry)) {
 		/* Truncate file allocation chain */
@@ -1848,6 +1859,13 @@ bool fatDrive::FileExists(const char *name) {
 bool fatDrive::FileOpen(DOS_File **file, const char *name, Bit32u flags) {
     direntry fileEntry = {};
 	Bit32u dirClust, subEntry;
+
+	/* you cannot open root directory */
+	if (*name == 0) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}
+
 	if(!getFileDirEntry(name, &fileEntry, &dirClust, &subEntry)) return false;
 	/* TODO: check for read-only flag and requested write access */
 	*file = new fatFile(name, BPB.is_fat32() ? fileEntry.Cluster32() : fileEntry.loFirstClust, fileEntry.entrysize, this);
@@ -1872,6 +1890,12 @@ bool fatDrive::FileUnlink(const char * name) {
     }
     direntry fileEntry = {};
 	Bit32u dirClust, subEntry;
+
+	/* you cannot delete root directory */
+	if (*name == 0) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}
 
 	if(!getFileDirEntry(name, &fileEntry, &dirClust, &subEntry)) return false;
 	if(uselfn&&(strchr(name, '*')||strchr(name, '?'))) {
@@ -2001,9 +2025,12 @@ bool fatDrive::FindNextInternal(Bit32u dirClustNumber, DOS_DTA &dta, direntry *f
 	Bit32u tmpsector;
 	Bit8u attrs;
 	Bit16u dirPos;
-    char srch_pattern[CROSS_LEN];
+	char srch_pattern[CROSS_LEN];
 	char find_name[DOS_NAMELENGTH_ASCII];
-    char lfind_name[LFN_NAMELENGTH+1];
+	char lfind_name[LFN_NAMELENGTH+1];
+	unsigned int lfn_max_ord = 0;
+	unsigned char lfn_checksum = 0;
+	bool lfn_ord_found[0x40];
 	char extension[4];
 
     size_t dirent_per_sector = getSectSize() / sizeof(direntry);
@@ -2012,6 +2039,8 @@ bool fatDrive::FindNextInternal(Bit32u dirClustNumber, DOS_DTA &dta, direntry *f
 
 	dta.GetSearchParams(attrs, srch_pattern,uselfn);
 	dirPos = faux>=255?dta.GetDirID():dpos[faux]; /* NTS: Windows 9x is said to have a 65536 dirent limit even for FAT32, so dirPos as 16-bit is acceptable */
+
+	memset(lfind_name,0,LFN_NAMELENGTH);
 
 nextfile:
 	logentsector = (Bit32u)((size_t)dirPos / dirent_per_sector);
@@ -2047,7 +2076,10 @@ nextfile:
 	else dpos[faux]=dirPos;
 
 	/* Deleted file entry */
-	if (sectbuf[entryoffset].entryname[0] == 0xe5) goto nextfile;
+	if (sectbuf[entryoffset].entryname[0] == 0xe5) {
+		lfn_max_ord = 0;
+		goto nextfile;
+	}
 
 	/* End of directory list */
 	if (sectbuf[entryoffset].entryname[0] == 0x00) {
@@ -2060,43 +2092,101 @@ nextfile:
 	}
 	memset(find_name,0,DOS_NAMELENGTH_ASCII);
 	memset(extension,0,4);
-	memset(lfind_name,0,LFN_NAMELENGTH);
 	memcpy(find_name,&sectbuf[entryoffset].entryname[0],8);
     memcpy(extension,&sectbuf[entryoffset].entryname[8],3);
-	memcpy(lfind_name,&sectbuf[entryoffset].entryname[0],8);
 
     if (!(sectbuf[entryoffset].attrib & DOS_ATTR_VOLUME)) {
         trimString(&find_name[0]);
         trimString(&extension[0]);
-		trimString(&lfind_name[0]);
     }
 
-    //if(!(sectbuf[entryoffset].attrib & DOS_ATTR_DIRECTORY))
-    if (extension[0]!=0) {
-        if (!(sectbuf[entryoffset].attrib & DOS_ATTR_VOLUME)) {
-            strcat(find_name, ".");
-            strcat(lfind_name, ".");
+	if (extension[0]!=0) {
+		if (!(sectbuf[entryoffset].attrib & DOS_ATTR_VOLUME)) {
+			strcat(find_name, ".");
 		}
-        strcat(find_name, extension);
-        strcat(lfind_name, extension);
-    }
+		strcat(find_name, extension);
+	}
 
-    if (sectbuf[entryoffset].attrib & DOS_ATTR_VOLUME)
+	if (sectbuf[entryoffset].attrib & DOS_ATTR_VOLUME)
         trimString(find_name);
 
     /* Compare attributes to search attributes */
 
     //TODO What about attrs = DOS_ATTR_VOLUME|DOS_ATTR_DIRECTORY ?
-    if (attrs == DOS_ATTR_VOLUME) {
+	if (attrs == DOS_ATTR_VOLUME) {
+		if (dos.version.major >= 7) {
+			/* skip LFN entries */
+			if ((sectbuf[entryoffset].attrib & 0x3F) == 0x0F)
+				goto nextfile;
+		}
+
 		if (!(sectbuf[entryoffset].attrib & DOS_ATTR_VOLUME)) goto nextfile;
 		labelCache.SetLabel(find_name, false, true);
+	} else if (dos.version.major >= 7 && (sectbuf[entryoffset].attrib & 0x3F) == 0x0F) { /* long filename piece */
+		struct direntry_lfn *dlfn = (struct direntry_lfn*)(&sectbuf[entryoffset]);
+
+		/* assume last entry comes first, because that's how Windows 9x does it and that is how you're supposed to do it according to Microsoft */
+		if (dlfn->LDIR_Ord & 0x40) {
+			lfn_max_ord = (dlfn->LDIR_Ord & 0x3F); /* NTS: First entry has ordinal 1, this is the HIGHEST ordinal in the LFN. The other entries follow in descending ordinal. */
+			for (unsigned int i=0;i < 0x40;i++) lfn_ord_found[i] = false;
+			lfn_checksum = dlfn->LDIR_Chksum;
+			memset(lfind_name,0,LFN_NAMELENGTH);
+		}
+
+		if (lfn_max_ord != 0 && (dlfn->LDIR_Ord & 0x3F) > 0 && (dlfn->LDIR_Ord & 0x3F) <= lfn_max_ord && dlfn->LDIR_Chksum == lfn_checksum) {
+			unsigned int oidx = (dlfn->LDIR_Ord & 0x3Fu) - 1u;
+			unsigned int stridx = oidx * 13u;
+
+			if ((stridx+13u) <= LFN_NAMELENGTH) {
+				for (unsigned int i=0;i < 5;i++)
+					lfind_name[stridx+i+0] = (char)(dlfn->LDIR_Name1[i] & 0xFF);
+				for (unsigned int i=0;i < 6;i++)
+					lfind_name[stridx+i+5] = (char)(dlfn->LDIR_Name2[i] & 0xFF);
+				for (unsigned int i=0;i < 2;i++)
+					lfind_name[stridx+i+11] = (char)(dlfn->LDIR_Name3[i] & 0xFF);
+
+				lfn_ord_found[oidx] = true;
+			}
+		}
+
+		goto nextfile;
 	} else {
-		if (~attrs & sectbuf[entryoffset].attrib & (DOS_ATTR_DIRECTORY | DOS_ATTR_VOLUME) ) goto nextfile;
+		if (~attrs & sectbuf[entryoffset].attrib & (DOS_ATTR_DIRECTORY | DOS_ATTR_VOLUME) ) {
+			lfn_max_ord = 0;
+			goto nextfile;
+		}
 	}
 
+	if (lfn_max_ord != 0) {
+		bool ok = false;
+		unsigned int complete = 0;
+		for (unsigned int i=0;i < lfn_max_ord;i++) complete += lfn_ord_found[i]?1:0;
 
-	/* Compare name to search pattern */
-	if(!WildFileCmp(find_name,srch_pattern)&&!LWildFileCmp(lfind_name,srch_pattern)) goto nextfile;
+		if (complete == lfn_max_ord) {
+			unsigned char chk = 0;
+			for (unsigned int i=0;i < 11;i++) {
+				chk = ((chk & 1u) ? 0x80u : 0x00u) + (chk >> 1u) + sectbuf[entryoffset].entryname[i];
+			}
+
+			if (lfn_checksum == chk) {
+				ok = true;
+			}
+		}
+
+		if (!ok) memset(lfind_name,0,LFN_NAMELENGTH);
+		lfn_max_ord = 0;
+	}
+
+	/* Compare name to search pattern. Skip long filename match if no long filename given. */
+	if (!(WildFileCmp(find_name,srch_pattern) || (lfind_name[0] != 0 && LWildFileCmp(lfind_name,srch_pattern)))) {
+		lfn_max_ord = 0;
+		goto nextfile;
+	}
+
+	// HACK: Drive emulation seems to REQUIRE a LFN, or else 8.3 names have no name and funny things happen.
+	//       This is contrary to actual Windows 9x/ME behavior where files with 8.3 names usually have no LFN
+	//       and none is returned.
+	if (lfind_name[0] == 0) strcpy(lfind_name,find_name);
 
 	//dta.SetResult(find_name, sectbuf[entryoffset].entrysize, sectbuf[entryoffset].crtDate, sectbuf[entryoffset].crtTime, sectbuf[entryoffset].attrib);
 
@@ -2121,6 +2211,13 @@ bool fatDrive::SetFileAttr(const char *name, Bit16u attr) {
     }
     direntry fileEntry = {};
 	Bit32u dirClust, subEntry;
+
+	/* you cannot set file attr root directory (right?) */
+	if (*name == 0) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}
+
 	if(!getFileDirEntry(name, &fileEntry, &dirClust, &subEntry)) {
 		char dirName[DOS_NAMELENGTH_ASCII];
 		char pathName[11];
@@ -2156,6 +2253,13 @@ bool fatDrive::SetFileAttr(const char *name, Bit16u attr) {
 bool fatDrive::GetFileAttr(const char *name, Bit16u *attr) {
     direntry fileEntry = {};
 	Bit32u dirClust, subEntry;
+
+	/* you CAN get file attr root directory */
+	if (*name == 0) {
+		*attr=DOS_ATTR_DIRECTORY;
+		return true;
+	}
+
 	if(!getFileDirEntry(name, &fileEntry, &dirClust, &subEntry)) {
 		char dirName[DOS_NAMELENGTH_ASCII];
 		char pathName[11];
@@ -2354,6 +2458,12 @@ bool fatDrive::MakeDir(const char *dir) {
     char pathName[11];
     Bit16u ct,cd;
 
+	/* you cannot mkdir root directory */
+	if (*dir == 0) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}
+
 	/* Can we even get the name of the directory itself? */
 	if(!getEntryName(dir, &dirName[0])||!strlen(trim(dirName))) return false;
 	convToDirFile(&dirName[0], &pathName[0]);
@@ -2428,6 +2538,12 @@ bool fatDrive::RemoveDir(const char *dir) {
 	char dirName[DOS_NAMELENGTH_ASCII];
 	char pathName[11];
 
+	/* you cannot rmdir root directory */
+	if (*dir == 0) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}
+
 	/* Can we even get the name of the directory itself? */
 	if(!getEntryName(dir, &dirName[0])) return false;
 	convToDirFile(&dirName[0], &pathName[0]);
@@ -2482,6 +2598,13 @@ bool fatDrive::Rename(const char * oldname, const char * newname) {
 		DOS_SetError(DOSERR_WRITE_PROTECTED);
         return false;
     }
+
+	/* you cannot rename root directory */
+	if (*oldname == 0 || *newname == 0) {
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}
+
     direntry fileEntry1 = {}, fileEntry2 = {};
 	Bit32u dirClust1, subEntry1, dirClust2, subEntry2;
 	char dirName[DOS_NAMELENGTH_ASCII], dirName2[DOS_NAMELENGTH_ASCII];
@@ -2547,6 +2670,10 @@ bool fatDrive::Rename(const char * oldname, const char * newname) {
 
 bool fatDrive::TestDir(const char *dir) {
 	Bit32u dummyClust;
+
+	/* root directory is directory */
+	if (*dir == 0) return true;
+
 	return getDirClustNum(dir, &dummyClust, false);
 }
 

@@ -2232,21 +2232,13 @@ void DOSBOX_SetupConfigSections(void) {
 	Pint->Set_help("Fluidsynth polyphony.");
 
 	Pstring = secprop->Add_string("fluid.cores",Property::Changeable::WhenIdle,"default");
-	Pstring->Set_help("Fluidsynth CPU cores to use, default.");
+	Pstring->Set_help("Fluidsynth CPU cores to use, or default.");
 
-	#if defined (WIN32)
-		Pstring = secprop->Add_string("fluid.periods",Property::Changeable::WhenIdle,"8");
-    #else
-		Pstring = secprop->Add_string("fluid.periods",Property::Changeable::WhenIdle,"16");
-    #endif
-	Pstring->Set_help("Fluidsynth periods.");
+	Pstring = secprop->Add_string("fluid.periods",Property::Changeable::WhenIdle,"default");
+	Pstring->Set_help("Fluidsynth periods, or default.");
 
-	#if defined (WIN32)
-		Pstring = secprop->Add_string("fluid.periodsize",Property::Changeable::WhenIdle,"512");
-	#else
-		Pstring = secprop->Add_string("fluid.periodsize",Property::Changeable::WhenIdle,"64");
-	#endif
-	Pstring->Set_help("Fluidsynth period size.");
+	Pstring = secprop->Add_string("fluid.periodsize",Property::Changeable::WhenIdle,"default");
+	Pstring->Set_help("Fluidsynth period size, or default.");
 
 	const char *fluidreverb[] = {"no", "yes",0};
 	Pstring = secprop->Add_string("fluid.reverb",Property::Changeable::WhenIdle,"yes");	
@@ -3073,8 +3065,15 @@ void DOSBOX_SetupConfigSections(void) {
             "7.1                              MS-DOS 7.1 (Windows 98 pure DOS mode) emulation\n"
             "LFN (long filename) support will be enabled with an initial DOS version of 7.0 or higher.\n");
 
+    Pbool = secprop->Add_bool("lfn",Property::Changeable::WhenIdle,true);
+    Pbool->Set_help("Enable long filename support. This option has no effect unless the reported DOS version is 7.0 or higher at any time.\n"
+                    "Disabling LFNs on MS-DOS 7.0 and higher simulates running in pure DOS mode without the Windows 9x/ME kernel VFAT driver providing LFNs.");
+
     Pbool = secprop->Add_bool("automount",Property::Changeable::WhenIdle,true);
-    Pbool->Set_help("Enable automatic mount.");
+    Pbool->Set_help("Enable automatic drive mounting in Windows.");
+
+    Pbool = secprop->Add_bool("automountall",Property::Changeable::OnlyAtStart,false);
+    Pbool->Set_help("Automatically mount all available Windows drives at start.");
 
     Pbool = secprop->Add_bool("int33",Property::Changeable::WhenIdle,true);
     Pbool->Set_help("Enable INT 33H (mouse) support.");
