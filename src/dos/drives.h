@@ -415,13 +415,32 @@ private:
 	bool FindNextInternal(Bit32u dirClustNumber, DOS_DTA & dta, direntry *foundEntry);
 	bool getDirClustNum(const char * dir, Bit32u * clustNum, bool parDir);
 	bool getFileDirEntry(char const * const filename, direntry * useEntry, Bit32u * dirClust, Bit32u * subEntry);
-	bool addDirectoryEntry(Bit32u dirClustNumber, const direntry& useEntry);
+	bool addDirectoryEntry(Bit32u dirClustNumber, const direntry& useEntry,const char *lfn=NULL);
 	void zeroOutCluster(Bit32u clustNumber);
 	bool getEntryName(const char *fullname, char *entname);
 	friend void DOS_Shell::CMD_SUBST(char* args); 	
 	struct {
 		char srch_dir[CROSS_LEN];
     } srchInfo[MAX_OPENDIRS] = {};
+
+	/* directory entry range of LFN entries after FindNextInternal(), needed by
+	 * filesystem code such as RemoveDir() which needs to delete the dirent AND
+	 * the LFNs. Range is dirPos_start inclusive to dirPos_end exclusive.
+	 * If start == end then there are no LFNs.
+	 *
+	 * Removal of entries:
+	 * for (x=start;x < end;x++) ... */
+	struct lfnRange_t {
+		Bit16u      dirPos_start;
+		Bit16u      dirPos_end;
+
+		void clear(void) {
+			dirPos_start = dirPos_end = 0;
+		}
+		bool empty(void) const {
+			return dirPos_start == dirPos_end;
+		}
+	} lfnRange = {0,0};
 
 	struct {
 		Bit16u bytes_sector;
