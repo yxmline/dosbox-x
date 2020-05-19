@@ -37,7 +37,7 @@
 #include "dos_network.h"
 
 extern bool log_int21, log_fileio;
-extern int faux;
+extern int lfn_filefind_handle;
 unsigned long totalc, freec;
 Bitu INT29_HANDLER(void);
 Bit32u BIOS_get_PC98_INT_STUB(void);
@@ -91,7 +91,7 @@ int dos_clipboard_device_access;
 char *dos_clipboard_device_name;
 const char dos_clipboard_device_default[]="CLIP$";
 
-bool enablelfn=true;
+int enablelfn=-1;
 bool uselfn;
 extern bool int15_wait_force_unmask_irq;
 
@@ -510,7 +510,7 @@ static Bitu DOS_21Handler(void) {
                 LOG(LOG_DOSMISC,LOG_DEBUG)("DOS:INT 20h/INT 21h AH=00h recovered CS segment %04x",f_cs);
 
                 DOS_Terminate(f_cs,false,0);
-            } else if (dos.version.major >= 7 && mem_readw(SegPhys(ss)+reg_sp) >=0x2700 && mem_readw(SegPhys(ss)+reg_sp+2)/0x100 == 0x90 && dos.psp()/0x100 >= 0xCC && dos.psp()/0x100 <= 0xCF)
+            } else if (dos.version.major >= 7 && uselfn && mem_readw(SegPhys(ss)+reg_sp) >=0x2700 && mem_readw(SegPhys(ss)+reg_sp+2)/0x100 == 0x90 && dos.psp()/0x100 >= 0xCC)
                 /* Wengier: This case fixes the bug that DIR /S from MS-DOS 7+ could crash hard within DOSBox-X. With this change it should now work properly. */
                 DOS_Terminate(dos.psp(),false,0);
 			else
@@ -1493,7 +1493,7 @@ static Bitu DOS_21Handler(void) {
             break;
         case 0x4e:                  /* FINDFIRST Find first matching file */
             MEM_StrCopy(SegPhys(ds)+reg_dx,name1,DOSNAMEBUF);
-			faux=256;
+			lfn_filefind_handle=LFN_FILEFIND_NONE;
             if (DOS_FindFirst(name1,reg_cx)) {
                 CALLBACK_SCF(false);    
                 reg_ax=0;           /* Undocumented */
@@ -2897,7 +2897,10 @@ public:
 		dos.direct_output=false;
 		dos.internal_output=false;
 
-		enablelfn = section->Get_bool("lfn");
+		if (!strcmp(section->Get_string("lfn"), "true")) enablelfn=1;
+		else if (!strcmp(section->Get_string("lfn"), "false")) enablelfn=0;
+		else if (!strcmp(section->Get_string("lfn"), "autostart")) enablelfn=-2;
+		else enablelfn=-1;
 
 		std::string ver = section->Get_string("ver");
 		if (!ver.empty()) {
@@ -2924,7 +2927,7 @@ public:
 						dos.version.major, dos.version.minor);
 			}
 		}
-		uselfn = enablelfn && (dos.version.major>6);
+		uselfn = enablelfn==1 || ((enablelfn == -1 || enablelfn == -2) && dos.version.major>6);
 
         if (IS_PC98_ARCH) {
             void PC98_InitDefFuncRow(void);
@@ -3307,16 +3310,16 @@ void DOS_Int21_714e(char *name1, char *name2) {
 		}
 		if (strlen(name2)>2&&name2[strlen(name2)-2]=='\\'&&name2[strlen(name2)-1]=='*')
 			strcat(name2, ".*");
-		faux=handle;
+		lfn_filefind_handle=handle;
 		bool b=DOS_FindFirst(name2,reg_cx,false);
-		faux=256;
+		lfn_filefind_handle=LFN_FILEFIND_NONE;
 		int error=dos.errorcode;
 		Bit16u attribute = 0;
 		if (!b&&DOS_GetFileAttr(name2, &attribute) && (attribute&DOS_ATTR_DIRECTORY)) {
 			strcat(name2,"\\*.*");
-			faux=handle;
+			lfn_filefind_handle=handle;
 			b=DOS_FindFirst(name2,reg_cx,false);
-			faux=256;
+			lfn_filefind_handle=LFN_FILEFIND_NONE;
 			error=dos.errorcode;
 		}
 		if (b) {
@@ -3359,7 +3362,7 @@ void DOS_Int21_714f(const char *name1, const char *name2) {
 			CALLBACK_SCF(true);
 			return;
 		}
-		faux=handle;
+		lfn_filefind_handle=handle;
 		if (DOS_FindNext()) {
 				DOS_DTA dta(dos.dta());
 				char finddata[CROSS_LEN];
@@ -3370,7 +3373,7 @@ void DOS_Int21_714f(const char *name1, const char *name2) {
 				reg_ax=dos.errorcode;
 				CALLBACK_SCF(true);
 		}
-		faux=256;
+		lfn_filefind_handle=LFN_FILEFIND_NONE;
 }
 
 void DOS_Int21_7156(char *name1, char *name2) {
