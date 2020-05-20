@@ -788,7 +788,7 @@ nextfile:
 	goto nextfile;
 }
 
-bool fatDrive::getFileDirEntry(char const * const filename, direntry * useEntry, Bit32u * dirClust, Bit32u * subEntry) {
+bool fatDrive::getFileDirEntry(char const * const filename, direntry * useEntry, Bit32u * dirClust, Bit32u * subEntry,bool dirOk) {
 	size_t len = strlen(filename);
 	char dirtoken[DOS_PATHLENGTH];
 	Bit32u currentClust = 0; /* FAT12/FAT16 root directory */
@@ -823,21 +823,24 @@ bool fatDrive::getFileDirEntry(char const * const filename, direntry * useEntry,
                 Bit16u find_date,find_time;Bit32u find_size;Bit8u find_attr;
                 imgDTA->GetResult(find_name,lfind_name,find_size,find_date,find_time,find_attr);
 				if(!(find_attr & DOS_ATTR_DIRECTORY)) break;
+
+				char * findNext;
+				findNext = strtok(NULL,"\\");
+				if (findNext == NULL && dirOk) break; /* dirOk means that if the last element is a directory, then refer to the directory itself */
+				findDir = findNext;
 			}
 
 			if (BPB.is_fat32())
 				currentClust = foundEntry.Cluster32();
 			else
 				currentClust = foundEntry.loFirstClust;
-
-			findDir = strtok(NULL,"\\");
 		}
 	} else {
 		/* Set to root directory */
 	}
 
 	/* Search found directory for our file */
-	imgDTA->SetupSearch(0,0x7,findFile);
+	imgDTA->SetupSearch(0,0x7 | (dirOk ? DOS_ATTR_DIRECTORY : 0),findFile);
 	imgDTA->SetDirID(0);
 	if(!FindNextInternal(currentClust, *imgDTA, &foundEntry)) {lfn_filefind_handle=fbak;return false;}
 	lfn_filefind_handle=fbak;
@@ -1920,7 +1923,13 @@ bool fatDrive::FileCreate(DOS_File **file, const char *name, Bit16u attributes) 
 	}
 
 	/* Check if file already exists */
-	if(getFileDirEntry(name, &fileEntry, &dirClust, &subEntry)) {
+	if(getFileDirEntry(name, &fileEntry, &dirClust, &subEntry, true/*dirOk*/)) {
+		/* You can't create/truncate a directory! */
+		if (fileEntry.attrib & DOS_ATTR_DIRECTORY) {
+			DOS_SetError(DOSERR_ACCESS_DENIED);
+			return false;
+		}
+
 		/* Truncate file allocation chain */
 		{
 			const Bit32u chk = BPB.is_fat32() ? fileEntry.Cluster32() : fileEntry.loFirstClust;
@@ -2689,7 +2698,7 @@ bool fatDrive::MakeDir(const char *dir) {
 		DOS_SetError(DOSERR_WRITE_PROTECTED);
         return false;
     }
-	Bit32u dummyClust, dirClust;
+	Bit32u dummyClust, dirClust, subEntry;
 	direntry tmpentry;
 	char dirName[DOS_NAMELENGTH_ASCII];
     char pathName[11], path[DOS_PATHLENGTH];
@@ -2705,8 +2714,8 @@ bool fatDrive::MakeDir(const char *dir) {
 	if(!getEntryName(dir, &dirName[0])||!strlen(trim(dirName))) return false;
 	convToDirFile(&dirName[0], &pathName[0]);
 
-	/* Fail to make directory if already exists */
-	if(getDirClustNum(dir, &dummyClust, false)) return false;
+	/* Fail to make directory if something of that name already exists */
+	if(getFileDirEntry(dir,&tmpentry,&dummyClust,&subEntry,/*dirOk*/true)) return false;
 
 	/* Can we find the base directory? */
 	if(!getDirClustNum(dir, &dirClust, true)) return false;
