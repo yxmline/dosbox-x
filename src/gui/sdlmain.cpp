@@ -129,11 +129,12 @@ typedef enum PROCESS_DPI_AWARENESS {
 # include "shell.h"
 # include <cstring>
 # include <fstream>
-# include <sstream>
 # if defined(__MINGW32__) && !defined(HX_DOS)
 #  include <imm.h> // input method editor
 # endif
 #endif // WIN32
+
+#include <sstream>
 
 #include "mapper.h"
 #include "vga.h"
@@ -3626,9 +3627,9 @@ static void GUI_StartUp() {
     GFX_Stop();
 
 #if defined(C_SDL2)
-    SDL_SetWindowTitle(sdl.window,"DOSBox");
+    SDL_SetWindowTitle(sdl.window,"DOSBox-X");
 #else
-    SDL_WM_SetCaption("DOSBox",VERSION);
+    SDL_WM_SetCaption("DOSBox-X",VERSION);
 #endif
 
     /* Please leave the Splash screen stuff in working order in DOSBox. We spend a lot of time making DOSBox. */
@@ -6467,6 +6468,7 @@ bool DOSBOX_parse_argv() {
             fprintf(stderr,"  -lang <message file>                    Use specific message file instead of language= setting\n");
             fprintf(stderr,"  -nodpiaware                             Ignore (don't signal) Windows DPI awareness\n");
             fprintf(stderr,"  -securemode                             Enable secure mode\n");
+            fprintf(stderr,"  -noconfig                               Don't execute CONFIG.SYS config section\n");
             fprintf(stderr,"  -noautoexec                             Don't execute AUTOEXEC.BAT config section\n");
             fprintf(stderr,"  -exit                                   Exit after executing AUTOEXEC.BAT\n");
             fprintf(stderr,"  -c <command string>                     Execute this command in addition to AUTOEXEC.BAT.\n");
@@ -6509,6 +6511,9 @@ bool DOSBOX_parse_argv() {
         }
         else if (optname == "exit") {
             control->opt_exit = true;
+        }
+        else if (optname == "noconfig") {
+            control->opt_noconfig = true;
         }
         else if (optname == "noautoexec") {
             control->opt_noautoexec = true;
@@ -6863,9 +6868,9 @@ void update_capture_fmt_menu(void);
 bool capture_fmt_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem);
 
 void update_pc98_clock_pit_menu(void) {
-    Section_prop * dosbox_section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+    Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
 
-    int pc98rate = dosbox_section->Get_int("pc-98 timer master frequency");
+    int pc98rate = pc98_section->Get_int("pc-98 timer master frequency");
     if (pc98rate > 6) pc98rate /= 2;
     if (pc98rate == 0) pc98rate = 5; /* Pick the most likely to work with DOS games (FIXME: This is a GUESS!! Is this correct?) */
     else if (pc98rate < 5) pc98rate = 4;
@@ -6895,8 +6900,8 @@ bool dos_pc98_clock_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * con
         tmp += tmp1;
     }
 
-    Section_prop * dosbox_section = static_cast<Section_prop *>(control->GetSection("dosbox"));
-    dosbox_section->HandleInputline(tmp.c_str());
+    Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
+    pc98_section->HandleInputline(tmp.c_str());
 
     TIMER_OnPowerOn(NULL);
     TIMER_OnEnterPC98_Phase2_UpdateBDA();
@@ -6999,11 +7004,11 @@ bool vid_pc98_5mhz_gdc_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * 
         gdc_clock_1 = gdc_5mhz_mode;
         gdc_clock_2 = gdc_5mhz_mode;
 
-        Section_prop * dosbox_section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+        Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
         if (gdc_5mhz_mode)
-            dosbox_section->HandleInputline("pc-98 start gdc at 5mhz=1");
+            pc98_section->HandleInputline("pc-98 start gdc at 5mhz=1");
         else
-            dosbox_section->HandleInputline("pc-98 start gdc at 5mhz=0");
+            pc98_section->HandleInputline("pc-98 start gdc at 5mhz=0");
 
         mainMenu.get_item("pc98_5mhz_gdc").check(gdc_5mhz_mode).refresh_item(mainMenu);
     }
@@ -7019,11 +7024,11 @@ bool vid_pc98_200scanline_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item
 
         pc98_allow_scanline_effect = !pc98_allow_scanline_effect;
 
-        Section_prop * dosbox_section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+        Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
         if (pc98_allow_scanline_effect)
-            dosbox_section->HandleInputline("pc-98 allow scanline effect=1");
+            pc98_section->HandleInputline("pc-98 allow scanline effect=1");
         else
-            dosbox_section->HandleInputline("pc-98 allow scanline effect=0");
+            pc98_section->HandleInputline("pc-98 allow scanline effect=0");
 
         mainMenu.get_item("pc98_allow_200scanline").check(pc98_allow_scanline_effect).refresh_item(mainMenu);
     }
@@ -7040,11 +7045,11 @@ bool vid_pc98_4parts_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * co
 
         updateGDCpartitions4(!pc98_allow_4_display_partitions);
 
-        Section_prop * dosbox_section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+        Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
         if (pc98_allow_4_display_partitions)
-            dosbox_section->HandleInputline("pc-98 allow 4 display partition graphics=1");
+            pc98_section->HandleInputline("pc-98 allow 4 display partition graphics=1");
         else
-            dosbox_section->HandleInputline("pc-98 allow 4 display partition graphics=0");
+            pc98_section->HandleInputline("pc-98 allow 4 display partition graphics=0");
 
         mainMenu.get_item("pc98_allow_4partitions").check(pc98_allow_4_display_partitions).refresh_item(mainMenu);
     }
@@ -7065,11 +7070,11 @@ bool vid_pc98_enable_188user_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::i
         enable_pc98_188usermod = !enable_pc98_188usermod;
         gdc_egc_enable_update_vars();
 
-        Section_prop * dosbox_section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+        Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
         if (enable_pc98_188usermod)
-            dosbox_section->HandleInputline("pc-98 enable 188 user cg=1");
+            pc98_section->HandleInputline("pc-98 enable 188 user cg=1");
         else
-            dosbox_section->HandleInputline("pc-98 enable 188 user cg=0");
+            pc98_section->HandleInputline("pc-98 enable 188 user cg=0");
 
         mainMenu.get_item("pc98_enable_188user").check(enable_pc98_188usermod).refresh_item(mainMenu);
     }
@@ -7090,18 +7095,18 @@ bool vid_pc98_enable_egc_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item 
         enable_pc98_egc = !enable_pc98_egc;
         gdc_egc_enable_update_vars();
 
-        Section_prop * dosbox_section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+        Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
         if (enable_pc98_egc) {
-            dosbox_section->HandleInputline("pc-98 enable egc=1");
+            pc98_section->HandleInputline("pc-98 enable egc=1");
 
             if(!enable_pc98_grcg) { //Also enable GRCG if GRCG is disabled when enabling EGC
                 enable_pc98_grcg = !enable_pc98_grcg;
                 mem_writeb(0x54C,(enable_pc98_grcg ? 0x02 : 0x00) | (enable_pc98_16color ? 0x04 : 0x00));   
-                dosbox_section->HandleInputline("pc-98 enable grcg=1");
+                pc98_section->HandleInputline("pc-98 enable grcg=1");
             }
         }
         else
-            dosbox_section->HandleInputline("pc-98 enable egc=0");
+            pc98_section->HandleInputline("pc-98 enable egc=0");
 
         mainMenu.get_item("pc98_enable_egc").check(enable_pc98_egc).refresh_item(mainMenu);
         mainMenu.get_item("pc98_enable_grcg").check(enable_pc98_grcg).refresh_item(mainMenu);
@@ -7121,17 +7126,17 @@ bool vid_pc98_enable_grcg_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item
         enable_pc98_grcg = !enable_pc98_grcg;
         gdc_grcg_enable_update_vars();
 
-        Section_prop * dosbox_section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+        Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
         if (enable_pc98_grcg)
-            dosbox_section->HandleInputline("pc-98 enable grcg=1");
+            pc98_section->HandleInputline("pc-98 enable grcg=1");
         else
-            dosbox_section->HandleInputline("pc-98 enable grcg=0");
+            pc98_section->HandleInputline("pc-98 enable grcg=0");
 
         if ((!enable_pc98_grcg) && enable_pc98_egc) { // Also disable EGC if switching off GRCG
             void gdc_egc_enable_update_vars(void);
             enable_pc98_egc = !enable_pc98_egc;
             gdc_egc_enable_update_vars();   
-            dosbox_section->HandleInputline("pc-98 enable egc=0");
+            pc98_section->HandleInputline("pc-98 enable egc=0");
         }
 
         mainMenu.get_item("pc98_enable_egc").check(enable_pc98_egc).refresh_item(mainMenu);
@@ -7152,11 +7157,11 @@ bool vid_pc98_enable_analog_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::it
         enable_pc98_16color = !enable_pc98_16color;
         gdc_16color_enable_update_vars();
 
-        Section_prop * dosbox_section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+        Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
         if (enable_pc98_16color)
-            dosbox_section->HandleInputline("pc-98 enable 16-color=1");
+            pc98_section->HandleInputline("pc-98 enable 16-color=1");
         else
-            dosbox_section->HandleInputline("pc-98 enable 16-color=0");
+            pc98_section->HandleInputline("pc-98 enable 16-color=0");
 
         mainMenu.get_item("pc98_enable_analog").check(enable_pc98_16color).refresh_item(mainMenu);
     }
@@ -7175,11 +7180,11 @@ bool vid_pc98_enable_analog256_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu:
         enable_pc98_256color = !enable_pc98_256color;
         gdc_16color_enable_update_vars();
 
-        Section_prop * dosbox_section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+        Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
         if (enable_pc98_256color)
-            dosbox_section->HandleInputline("pc-98 enable 256-color=1");
+            pc98_section->HandleInputline("pc-98 enable 256-color=1");
         else
-            dosbox_section->HandleInputline("pc-98 enable 256-color=0");
+            pc98_section->HandleInputline("pc-98 enable 256-color=0");
 
         mainMenu.get_item("pc98_enable_analog256").check(enable_pc98_256color).refresh_item(mainMenu);
     }
@@ -7898,8 +7903,8 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         CheckScrollLockState();
 
         /* -- setup the config sections for config parsing */
-        LOG::SetupConfigSection();
         SDL_SetupConfigSection();
+        LOG::SetupConfigSection();
         DOSBOX_SetupConfigSections();
 
         /* -- Parse configuration files */
@@ -8054,7 +8059,76 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 			bool change_success = tsec->HandleInputline(inputline.c_str());
 			if (!change_success) LOG_MSG("Cannot set \"%s\"\n", inputline.c_str());
 		}
+		
+		// Redirect existing PC-98 related settings from other sections to the [pc98] section if the latter is empty
+		Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
+		assert(pc98_section != NULL);
+		const char * extra = const_cast<char*>(pc98_section->data.c_str());
+		if (!extra||!strlen(extra)) {
+			char linestr[CROSS_LEN+1], *p;
+			Section_prop * section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+			extra = const_cast<char*>(section->data.c_str());
+			if (extra) {
+				std::istringstream in(extra);
+				if (in)	for (std::string line; std::getline(in, line); ) {
+					if (strncasecmp(line.c_str(), "pc-98 ", 6)) continue;
+					if (line.length()>CROSS_LEN) {
+						strncpy(linestr, line.c_str(), CROSS_LEN);
+						linestr[CROSS_LEN]=0;
+					} else
+						strcpy(linestr, line.c_str());
+					p=strchr(linestr, '=');
+					if (p!=NULL&&pc98_section->HandleInputline(line)) {
+						*p=0;
+						LOG_MSG("Redirected \"%s\" from [dosbox] to [pc98] section\n", trim(linestr));
+					}
+				}
+			}
+			section = static_cast<Section_prop *>(control->GetSection("dos"));
+			extra = const_cast<char*>(section->data.c_str());
+			if (extra) {
+				std::istringstream in(extra);
+				if (in)	for (std::string line; std::getline(in, line); ) {
+					if (strncasecmp(line.c_str(), "pc-98 ", 6)) continue;
+					if (line.length()>CROSS_LEN) {
+						strncpy(linestr, line.c_str(), CROSS_LEN);
+						linestr[CROSS_LEN]=0;
+					} else
+						strcpy(linestr, line.c_str());
+					p=strchr(linestr, '=');
+					if (p!=NULL&&pc98_section->HandleInputline(line)) {
+						*p=0;
+						LOG_MSG("Redirected \"%s\" from [dos] to [pc98] section\n", trim(linestr));
+					}
+				}
+			}
+		}
 
+		// Redirect existing files= setting from [dos] section to the [config] section if the latter is empty
+		Section_prop * config_section = static_cast<Section_prop *>(control->GetSection("config"));
+		assert(config_section != NULL);
+		extra = const_cast<char*>(config_section->data.c_str());
+		if (!extra||!strlen(extra)) {
+			char linestr[CROSS_LEN+1], *p;
+			Section_prop * section = static_cast<Section_prop *>(control->GetSection("dos"));
+			extra = const_cast<char*>(section->data.c_str());
+			if (extra) {
+				std::istringstream in(extra);
+				if (in)	for (std::string line; std::getline(in, line); ) {
+					if (strncasecmp(line.c_str(), "files", 5)) continue;
+					if (line.length()>CROSS_LEN) {
+						strncpy(linestr, line.c_str(), CROSS_LEN);
+						linestr[CROSS_LEN]=0;
+					} else
+						strcpy(linestr, line.c_str());
+					p=strchr(linestr, '=');
+					if (p!=NULL&&config_section->HandleInputline(line)) {
+						*p=0;
+						LOG_MSG("Redirected \"%s\" from [dos] to [config] section\n", trim(linestr));
+					}
+				}
+			}
+		}
 
 #if (ENVIRON_LINKED)
         /* -- parse environment block (why?) */
