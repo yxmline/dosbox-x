@@ -79,7 +79,7 @@ bool filename_not_8x3(const char *n) {
  * If the name is strict 8.3 uppercase like "FILENAME.TXT" there is no point making an LFN because it is a waste of space */
 bool filename_not_strict_8x3(const char *n) {
 	if (filename_not_8x3(n)) return true;
-	for (int i=0; i<strlen(n); i++)
+	for (unsigned int i=0; i<strlen(n); i++)
 		if (n[i]>='a' && n[i]<='z')
 			return true;
 	return false; /* it is strict 8.3 upper case */
@@ -103,7 +103,7 @@ char* fatDrive::Generate_SFN(const char *path, const char *name) {
 	if (!strlen(lfn)) return NULL;
 	direntry fileEntry = {};
 	Bit32u dirClust, subEntry;
-	int k=1, i, t=10000;
+	unsigned int k=1, i, t=10000;
 	while (k<10000) {
 		n=lfn;
 		if (t>strlen(n)||k==1||k==10||k==100||k==1000) {
@@ -111,7 +111,7 @@ char* fatDrive::Generate_SFN(const char *path, const char *name) {
 			*sfn=0;
 			while (*n == '.'||*n == ' ') n++;
 			while (strlen(n)&&(*(n+strlen(n)-1)=='.'||*(n+strlen(n)-1)==' ')) *(n+strlen(n)-1)=0;
-			while (*n != 0 && *n != '.' && i<(k<10?6:(k<100?5:(k<1000?4:3)))) {
+			while (*n != 0 && *n != '.' && i<(k<10?6u:(k<100?5u:(k<1000?4:3u)))) {
 				if (*n == ' ') {
 					n++;
 					continue;
@@ -903,10 +903,10 @@ bool fatDrive::getDirClustNum(const char *dir, Bit32u *clustNum, bool parDir) {
 				lfn_filefind_handle=fbak;
 				return false;
 			} else {
-				lfn_filefind_handle=fbak;
                 char find_name[DOS_NAMELENGTH_ASCII],lfind_name[LFN_NAMELENGTH];
                 Bit16u find_date,find_time;Bit32u find_size;Bit8u find_attr;
 				imgDTA->GetResult(find_name,lfind_name,find_size,find_date,find_time,find_attr);
+				lfn_filefind_handle=fbak;
 				if(!(find_attr &DOS_ATTR_DIRECTORY)) return false;
 			}
 			if (BPB.is_fat32())
@@ -2287,7 +2287,7 @@ nextfile:
 			lfnRange.dirPos_start = dirPos - 1; /* NTS: The code above has already incremented dirPos */
 		}
 
-		if (lfn_max_ord != 0 && (dlfn->LDIR_Ord & 0x3F) > 0 && (dlfn->LDIR_Ord & 0x3F) <= lfn_max_ord && dlfn->LDIR_Chksum == lfn_checksum) {
+		if (lfn_max_ord != 0 && (dlfn->LDIR_Ord & 0x3F) > 0 && (dlfn->LDIR_Ord & 0x3Fu) <= lfn_max_ord && dlfn->LDIR_Chksum == lfn_checksum) {
 			unsigned int oidx = (dlfn->LDIR_Ord & 0x3Fu) - 1u;
 			unsigned int stridx = oidx * 13u;
 
@@ -2523,7 +2523,7 @@ bool fatDrive::addDirectoryEntry(Bit32u dirClustNumber, const direntry& useEntry
 		/* 13 characters per LFN entry.
 		 * FIXME: When we convert the LFN to wchar using code page, strlen() prior to conversion will not work,
 		 *        convert first then count wchar_t characters. */
-		need = 1 + ((strlen(lfn) + 12) / 13)/*round up*/;
+		need = (unsigned int)(1 + ((strlen(lfn) + 12) / 13))/*round up*/;
 	}
 
 	size_t dirent_per_sector = getSectSize() / sizeof(direntry);
