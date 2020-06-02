@@ -1361,7 +1361,7 @@ void fatDrive::UpdateDPB(unsigned char dos_drive) {
 }
 
 void fatDrive::fatDriveInit(const char *sysFilename, Bit32u bytesector, Bit32u cylsector, Bit32u headscyl, Bit32u cylinders, Bit64u filesize, const std::vector<std::string> &options) {
-	Bit32u startSector;
+	Bit32u startSector = 0,countSector = 0;
 	bool pc98_512_to_1024_allow = false;
     int opt_partition_index = -1;
 	bool is_hdd = (filesize > 2880);
@@ -1422,7 +1422,7 @@ void fatDrive::fatDriveInit(const char *sysFilename, Bit32u bytesector, Bit32u c
 
             if(mbrData.magic1!= 0x55 ||	mbrData.magic2!= 0xaa) LOG_MSG("Possibly invalid partition table in disk image.");
 
-            startSector = 63;
+            startSector = 0;
 
             /* PC-98 bootloader support.
              * These can be identified by the "IPL1" in the boot sector.
@@ -1519,7 +1519,7 @@ void fatDrive::fatDriveInit(const char *sysFilename, Bit32u bytesector, Bit32u c
             }
             else {
                 /* IBM PC master boot record search */
-                int m;
+                int m=4;
 
                 if (opt_partition_index >= 0) {
                     /* user knows best! */
@@ -1530,17 +1530,28 @@ void fatDrive::fatDriveInit(const char *sysFilename, Bit32u bytesector, Bit32u c
                     }
 
                     startSector = mbrData.pentry[m=opt_partition_index].absSectStart;
+                    countSector = mbrData.pentry[m=opt_partition_index].partSize;
                 }
                 else {
                     for(m=0;m<4;m++) {
                         /* Pick the first available partition */
-                        if(mbrData.pentry[m].partSize != 0x00 &&
-                                (mbrData.pentry[m].parttype == 0x01 || mbrData.pentry[m].parttype == 0x04 ||
-                                 mbrData.pentry[m].parttype == 0x06 || mbrData.pentry[m].parttype == 0x0B ||
-                                 mbrData.pentry[m].parttype == 0x0C || mbrData.pentry[m].parttype == 0x0D ||
-                                 mbrData.pentry[m].parttype == 0x0E || mbrData.pentry[m].parttype == 0x0F)) {
+                        if (mbrData.pentry[m].parttype == 0x01 || mbrData.pentry[m].parttype == 0x04 || mbrData.pentry[m].parttype == 0x06) {
                             LOG_MSG("Using partition %d on drive (type 0x%02x); skipping %d sectors", m, mbrData.pentry[m].parttype, mbrData.pentry[m].absSectStart);
                             startSector = mbrData.pentry[m].absSectStart;
+                            countSector = mbrData.pentry[m].partSize;
+                            break;
+                        }
+                        else if (dos.version.major >= 7 && mbrData.pentry[m].parttype == 0x0E/*FAT16B LBA*/) { /* MS-DOS 7.0 or higher */
+                            LOG_MSG("Using partition %d on drive (type 0x%02x); skipping %d sectors", m, mbrData.pentry[m].parttype, mbrData.pentry[m].absSectStart);
+                            startSector = mbrData.pentry[m].absSectStart;
+                            countSector = mbrData.pentry[m].partSize;
+                            break;
+                        }
+                        else if ((dos.version.major > 7 || (dos.version.major == 7 && dos.version.minor >= 10)) && /* MS-DOS 7.10 or higher */
+                                (mbrData.pentry[m].parttype == 0x0B || mbrData.pentry[m].parttype == 0x0C)) { /* FAT32 types */
+                            LOG_MSG("Using partition %d on drive (type 0x%02x); skipping %d sectors", m, mbrData.pentry[m].parttype, mbrData.pentry[m].absSectStart);
+                            startSector = mbrData.pentry[m].absSectStart;
+                            countSector = mbrData.pentry[m].partSize;
                             break;
                         }
                     }
@@ -1550,6 +1561,7 @@ void fatDrive::fatDriveInit(const char *sysFilename, Bit32u bytesector, Bit32u c
             }
 
             partSectOff = startSector;
+            partSectSize = countSector;
         } else {
             /* Get floppy disk parameters based on image size */
             loadedDisk->Get_Geometry(&headscyl, &cylinders, &cylsector, &bytesector);
@@ -1565,6 +1577,20 @@ void fatDrive::fatDriveInit(const char *sysFilename, Bit32u bytesector, Bit32u c
 
         BPB = {};
         loadedDisk->Read_AbsoluteSector(0+partSectOff,&bootbuffer);
+
+        /* If the sector is full of 0xF6, the partition is brand new and was just created with Microsoft FDISK.EXE (Windows 98 behavior)
+         * and therefore there is NO FAT filesystem here. We'll go farther and check if all bytes are just the same. */
+        {
+            unsigned int i=1;
+
+            while (i < 128 && ((Bit8u*)(&bootbuffer))[0] == ((Bit8u*)(&bootbuffer))[i]) i++;
+
+            if (i == 128) {
+                LOG_MSG("Boot sector appears to have been created by FDISK.EXE but not formatted");
+                created_successfully = false;
+                return;
+            }
+        }
 
         if (!is_hdd) {
             /* Identify floppy format */
@@ -1913,7 +1939,7 @@ Bits fatDrive::UnMount(void) {
 	return 0;
 }
 
-Bit8u fatDrive::GetMediaByte(void) { return loadedDisk->GetBiosType(); }
+Bit8u fatDrive::GetMediaByte(void) { return BPB.v.BPB_Media; }
 const FAT_BootSector::bpb_union_t &fatDrive::GetBPB(void) { return BPB; }
 
 bool fatDrive::FileCreate(DOS_File **file, const char *name, Bit16u attributes) {

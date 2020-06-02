@@ -1,0 +1,308 @@
+
+arch "x86";
+description "Machine-parsable list of opcodes";
+charset_encoding "UTF-8"; /* default */
+
+define modeflag "mode64" {
+    description "64-bit long mode";
+    type boolean;
+}
+
+define modeflag "stack32" {
+    description "32-bit stack segment";
+    type boolean;
+}
+
+define modeflag "data32" {
+    description "32-bit data segment";
+    type boolean;
+}
+
+define modeflag "code32" {
+    description "32-bit code segment";
+    type boolean;
+}
+
+define tempflag "dec_code32" {
+    description "32-bit code segment decode";
+    on start of instruction set to modeflag "code32";
+    type boolean;
+}
+
+define tempflag "dec_data32" {
+    description "32-bit data segment decode";
+    on start of instruction set to modeflag "data32";
+    type boolean;
+}
+
+define tempflag "dec_stack32" {
+    description "32-bit stack segment decode";
+    on start of instruction set to modeflag "stack32";
+    type boolean;
+}
+
+define register type "general" {
+    type uint64_t;
+    subset "qw" bit range(63:0);
+    subset "dw" bit range(31:0);
+    subset "w"  bit range(15:0);
+    subset "bh" bit range(15:8);
+    subset "b"  bit range( 7:0);
+}
+
+define register type "cpu flags" {
+    type register type "general";
+}
+
+define register type "segment" {
+    type uint16_t;
+    subset "selector_index" bit range(15:3);
+    subset "ldt_select"     bit value 2;
+    subset "priv_level"     bit range(1:0);
+}
+
+define register "RAX" {
+    type register type "general";
+}
+
+define register "RBX" {
+    type register type "general";
+}
+
+define register "RCX" {
+    type register type "general";
+}
+
+define register "RDX" {
+    type register type "general";
+}
+
+define register "RSI" {
+    type register type "general";
+}
+
+define register "RDI" {
+    type register type "general";
+}
+
+define register "RBP" {
+    type register type "general";
+}
+
+define register "RSP" {
+    type register type "general";
+}
+
+define register "RIP" {
+    type register type "general";
+}
+
+define register "RFLAGS" {
+    type register type "cpu flags";
+    subset "cf"         bit value 0 description "carry";
+    subset "pf"         bit value 2 description "parity";
+    subset "af"         bit value 4 description "aux";
+    subset "zf"         bit value 6 description "zero";
+    subset "sf"         bit value 7 description "sign";
+    subset "tf"         bit value 8 description "trap";
+    subset "if"         bit value 9 description "interrupt enable";
+    subset "df"         bit value 10 description "direction";
+    subset "of"         bit value 11 description "overflow";
+    subset "iopl"       bit range(13:12) description "I/O privilege level";
+    subset "nt"         bit value 14 description "nested task";
+    subset "rf"         bit value 16 description "resume";
+    subset "vm"         bit value 17 description "virtual 8086 mode";
+    subset "ac"         bit value 18 description "alignment check";
+    subset "vif"        bit value 19 description "virtual interrupt";
+    subset "vip"        bit value 20 description "virtual interrupt pending";
+    subset "id";        bit value 21 description "identification (CPUID)";
+
+    subset "common results" bitmask("cf","pf","af","zf",sf","of");
+    subset "popf" eval(subset("common results") | bitmask("tf","if","df"));
+}
+
+define register "EAX" {
+    subset "dw" of register "RAX";
+}
+
+define register "EBX" {
+    subset "dw" of register "RBX";
+}
+
+define register "ECX" {
+    subset "dw" of register "RCX";
+}
+
+define register "EDX" {
+    subset "dw" of register "RDX";
+}
+
+define register "ESI" {
+    subset "dw" of register "RSI";
+}
+
+define register "EDI" {
+    subset "dw" of register "RDI";
+}
+
+define register "EBP" {
+    subset "dw" of register "RBP";
+}
+
+define register "ESP" {
+    subset "dw" of register "RSP";
+}
+
+define register "EIP" {
+    subset "dw" of register "RIP";
+}
+
+define register "EFLAGS" {
+    subset "dw" of register "RFLAGS";
+}
+
+define register "AX" {
+    subset "w" of register "EAX";
+}
+
+define register "BX" {
+    subset "w" of register "EBX";
+}
+
+define register "CX" {
+    subset "w" of register "ECX";
+}
+
+define register "DX" {
+    subset "w" of register "EDX";
+}
+
+define register "SI" {
+    subset "w" of register "ESI";
+}
+
+define register "DI" {
+    subset "w" of register "EDI";
+}
+
+define register "BP" {
+    subset "w" of register "EBP";
+}
+
+define register "SP" {
+    subset "w" of register "ESP";
+}
+
+define register "IP" {
+    subset "w" of register "EIP";
+}
+
+define register "FLAGS" {
+    subset "w" of register "EFLAGS";
+}
+
+define register "AL" {
+    subset "b" of register "AX";
+}
+
+define register "BL" {
+    subset "b" of register "BX";
+}
+
+define register "CL" {
+    subset "b" of register "CX";
+}
+
+define register "DL" {
+    subset "b" of register "DX";
+}
+
+define register "AH" {
+    subset "bh" of register "AX";
+}
+
+define register "BH" {
+    subset "bh" of register "BX";
+}
+
+define register "CH" {
+    subset "bh" of register "CX";
+}
+
+define register "DH" {
+    subset "bh" of register "DX";
+}
+
+define register "CS" {
+    type register type "segment";
+}
+
+define register "DS" {
+    type register type "segment";
+}
+
+define register "ES" {
+    type register type "segment";
+}
+
+define register "FS" {
+    type register type "segment";
+}
+
+define register "GS" {
+    type register type "segment";
+}
+
+define register "SS" {
+    type register type "segment";
+}
+
+define register map "genregw" {
+    index 0 register "RAX";
+    index 1 register "RCX";
+    index 2 register "RDX";
+    index 3 register "RBX";
+    index 4 register "RSP";
+    index 5 register "RBP";
+    index 6 register "RSI";
+    index 7 register "RDI";
+}
+
+define register map "genregb" {
+    index 0 register "AL";
+    index 1 register "CL";
+    index 2 register "DL";
+    index 3 register "BL";
+    index 4 register "AH";
+    index 5 register "CH";
+    index 6 register "DH";
+    index 7 register "BH";
+}
+
+define register map "sreg" {
+    index 0 register "ES";
+    index 1 register "CS";
+    index 2 register "SS";
+    index 3 register "DS";
+    index 4 register "FS";
+    index 5 register "GS";
+    /* no index 6 */
+    /* no index 7 */
+}
+
+define encoding "mrm" {
+    description "mod/reg/rm field as encoded in instruction";
+    type uint8_t;
+    subset "mod" bit range(7:6);
+    subset "reg" bit range(5:3);
+    subset "rm"  bit range(2:0);
+}
+
+define encoding "sib" {
+    description "scale/index/base field as encoded in instruction";
+    type uint8_t;
+    subset "scale" bit range(7:6);
+    subset "index" bit range(5:3);
+    subset "base"  bit range(2:0);
+}
+
