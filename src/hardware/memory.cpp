@@ -2129,3 +2129,143 @@ Bitu MEM_PageMaskActive(void) {
     return memory.mem_alias_pagemask_active;
 }
 
+//save state support
+extern void* VGA_PageHandler_Func[16];
+
+void *Memory_PageHandler_table[] =
+{
+	NULL,
+	&ram_page_handler,
+	&rom_page_handler,
+
+	VGA_PageHandler_Func[0],
+	VGA_PageHandler_Func[1],
+	VGA_PageHandler_Func[2],
+	VGA_PageHandler_Func[3],
+	VGA_PageHandler_Func[4],
+	VGA_PageHandler_Func[5],
+	VGA_PageHandler_Func[6],
+	VGA_PageHandler_Func[7],
+	VGA_PageHandler_Func[8],
+	VGA_PageHandler_Func[9],
+	VGA_PageHandler_Func[10],
+	VGA_PageHandler_Func[11],
+	VGA_PageHandler_Func[12],
+	VGA_PageHandler_Func[13],
+	VGA_PageHandler_Func[14],
+	VGA_PageHandler_Func[15],
+};
+
+extern bool dos_kernel_disabled;
+
+namespace
+{
+class SerializeMemory : public SerializeGlobalPOD
+{
+public:
+	SerializeMemory() : SerializeGlobalPOD("Memory")
+	{}
+
+private:
+	virtual void getBytes(std::ostream& stream)
+	{
+		Bit8u pagehandler_idx[0x10000];
+		unsigned int size_table;
+
+
+		// assume 256MB max memory
+		// FIXME: Memory size can be much larger! Up to 3.5GB on 64-bit builds!
+		size_table = sizeof(Memory_PageHandler_table) / sizeof(void *);
+		for( unsigned int lcv=0; lcv<memory.pages; lcv++ ) {
+			pagehandler_idx[lcv] = 0xff;
+
+			for( unsigned int lcv2=0; lcv2<size_table; lcv2++ ) {
+				if( memory.phandlers[lcv] == Memory_PageHandler_table[lcv2] ) {
+					pagehandler_idx[lcv] = lcv2;
+					break;
+				}
+			}
+		}
+
+		//*******************************************
+		//*******************************************
+
+		SerializeGlobalPOD::getBytes(stream);
+
+		// - near-pure data
+		WRITE_POD( &memory, memory );
+
+		// - static 'new' ptr
+		WRITE_POD_SIZE( MemBase, memory.pages*4096 );
+
+		//***********************************************
+		//***********************************************
+
+		if (!dos_kernel_disabled) {
+			WRITE_POD_SIZE( memory.mhandles, sizeof(MemHandle) * memory.pages );
+		}
+		else {
+			/* gotta fake it! */
+			MemHandle m = 0;
+			for (unsigned int i=0;i < memory.pages;i++) {
+				WRITE_POD_SIZE( &m, sizeof(MemHandle) );
+			}
+		}
+		WRITE_POD( &pagehandler_idx, pagehandler_idx );
+	}
+
+	virtual void setBytes(std::istream& stream)
+	{
+		Bit8u pagehandler_idx[0x10000];
+		void *old_ptrs[4];
+
+		old_ptrs[0] = (void *) memory.phandlers;
+		old_ptrs[1] = (void *) memory.mhandles;
+		old_ptrs[2] = (void *) memory.lfb.handler;
+		old_ptrs[3] = (void *) memory.lfb_mmio.handler;
+
+		//***********************************************
+		//***********************************************
+
+		SerializeGlobalPOD::setBytes(stream);
+
+
+		// - near-pure data
+		READ_POD( &memory, memory );
+
+		// - static 'new' ptr
+		READ_POD_SIZE( MemBase, memory.pages*4096 );
+
+		//***********************************************
+		//***********************************************
+
+		memory.phandlers = (PageHandler **) old_ptrs[0];
+		memory.mhandles = (MemHandle *) old_ptrs[1];
+		memory.lfb.handler = (PageHandler *) old_ptrs[2];
+		memory.lfb_mmio.handler = (PageHandler *) old_ptrs[3];
+
+
+		if (!dos_kernel_disabled) {
+			READ_POD_SIZE( memory.mhandles, sizeof(MemHandle) * memory.pages );
+		}
+		else {
+			/* gotta fake it! */
+			MemHandle m = 0;
+			for (unsigned int i=0;i < memory.pages;i++) {
+				READ_POD_SIZE( &m, sizeof(MemHandle) );
+			}
+		}
+		READ_POD( &pagehandler_idx, pagehandler_idx );
+
+
+		for( unsigned int lcv=0; lcv<memory.pages; lcv++ ) {
+			if( pagehandler_idx[lcv] != 0xff )
+				memory.phandlers[lcv] = (PageHandler *) Memory_PageHandler_table[ pagehandler_idx[lcv] ];
+			else if ( lcv >= 0xa0 && lcv <= 0xff)
+				{ /* VGA and BIOS emulation does not handle this right, yet */ }
+			else
+				memory.phandlers[lcv] = NULL; /* MEM_SlowPath() will fill it in again */
+		}
+	}
+} dummy;
+}
