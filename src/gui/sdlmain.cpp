@@ -3356,39 +3356,6 @@ void ResetSystem(bool pressed) {
     throw int(3);
 }
 
-ZIPFile savestate_zip;
-
-void GUI_EXP_LoadState(bool pressed) {
-    if (!pressed) return;
-
-    LOG_MSG("Loading state... (experimental)");
-
-    if (savestate_zip.open("exsavest.zip",O_RDONLY) < 0) {
-        LOG_MSG("Unable to open save state");
-        return;
-    }
-
-    DispatchVMEvent(VM_EVENT_LOAD_STATE);
-
-    savestate_zip.close();
-}
-
-void GUI_EXP_SaveState(bool pressed) {
-    if (!pressed) return;
-
-    LOG_MSG("Saving state... (experimental)");
-
-    if (savestate_zip.open("exsavest.zip",O_RDWR|O_CREAT|O_TRUNC) < 0) {
-        LOG_MSG("Unable to open save state for writing");
-        return;
-    }
-
-    DispatchVMEvent(VM_EVENT_SAVE_STATE);
-
-    savestate_zip.writeZIPFooter();
-    savestate_zip.close();
-}
-
 bool has_GUI_StartUp = false;
 
 static void GUI_StartUp() {
@@ -3743,14 +3710,6 @@ static void GUI_StartUp() {
 
     MAPPER_AddHandler(&GUI_ResetResize, MK_nothing, 0, "resetsize", "ResetSize", &item);
     item->set_text("Reset window size");
-
-    /* EXPERIMENTAL!!!! */
-    MAPPER_AddHandler(&GUI_EXP_SaveState, MK_f1, MMODHOST, "exp_savestate", "EX:SvState", &item);
-    item->set_text("Save State (EXPERIMENTAL)");
-
-    /* EXPERIMENTAL!!!! */
-    MAPPER_AddHandler(&GUI_EXP_LoadState, MK_f2, MMODHOST, "exp_loadstate", "EX:LdState", &item);
-    item->set_text("Load State (EXPERIMENTAL)");
 
     UpdateWindowDimensions();
 }
@@ -7609,11 +7568,11 @@ bool force_loadstate_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * c
 bool refresh_slots_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
-	for (int i=0; i<10; i++) {
+	for (unsigned int i=0; i<SaveState::SLOT_COUNT; i++) {
 		char name[6]="slot0";
 		name[4]='0'+i;
-		std::string str="Slot 1"+std::string(SaveState::instance().isEmpty(i)?" [Empty]":"");
-		str[5]='1'+i;
+		std::string command=SaveState::instance().getName(i);
+		std::string str="Slot "+(i>=9?"10":std::string(1, '1'+i))+(command=="[Empty]"?" [Empty slot]":(command==""?"":" (Program: "+command+")"));
 		mainMenu.get_item(name).set_text(str.c_str()).refresh_item(mainMenu);
 	}
     return true;
@@ -8744,16 +8703,14 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             item.set_text("Select save slot");
 
             {
-				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"slot0").set_text(("Slot 1"+std::string(SaveState::instance().isEmpty(0)?" [Empty]":"")).c_str()).set_callback_function(save_slot_0_callback);
-				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"slot1").set_text(("Slot 2"+std::string(SaveState::instance().isEmpty(1)?" [Empty]":"")).c_str()).set_callback_function(save_slot_1_callback);
-				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"slot2").set_text(("Slot 3"+std::string(SaveState::instance().isEmpty(2)?" [Empty]":"")).c_str()).set_callback_function(save_slot_2_callback);
-				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"slot3").set_text(("Slot 4"+std::string(SaveState::instance().isEmpty(3)?" [Empty]":"")).c_str()).set_callback_function(save_slot_3_callback);
-				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"slot4").set_text(("Slot 5"+std::string(SaveState::instance().isEmpty(4)?" [Empty]":"")).c_str()).set_callback_function(save_slot_4_callback);
-				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"slot5").set_text(("Slot 6"+std::string(SaveState::instance().isEmpty(5)?" [Empty]":"")).c_str()).set_callback_function(save_slot_5_callback);
-				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"slot6").set_text(("Slot 7"+std::string(SaveState::instance().isEmpty(6)?" [Empty]":"")).c_str()).set_callback_function(save_slot_6_callback);
-				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"slot7").set_text(("Slot 8"+std::string(SaveState::instance().isEmpty(7)?" [Empty]":"")).c_str()).set_callback_function(save_slot_7_callback);
-				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"slot8").set_text(("Slot 9"+std::string(SaveState::instance().isEmpty(8)?" [Empty]":"")).c_str()).set_callback_function(save_slot_8_callback);
-				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"slot9").set_text(("Slot 10"+std::string(SaveState::instance().isEmpty(9)?" [Empty]":"")).c_str()).set_callback_function(save_slot_9_callback);
+				DOSBoxMenu::callback_t callbacks[SaveState::SLOT_COUNT] = {save_slot_0_callback, save_slot_1_callback, save_slot_2_callback, save_slot_3_callback, save_slot_4_callback, save_slot_5_callback, save_slot_6_callback, save_slot_7_callback, save_slot_8_callback, save_slot_9_callback};
+				char name[6]="slot0";
+				for (unsigned int i=0; i<SaveState::SLOT_COUNT; i++) {
+					name[4]='0'+i;
+					std::string command=SaveState::instance().getName(i);
+					std::string str="Slot "+(i>=9?"10":std::string(1, '1'+i))+(command=="[Empty]"?" [Empty slot]":(command==""?"":" (Program: "+command+")"));
+					mainMenu.alloc_item(DOSBoxMenu::item_type_id,name).set_text(str.c_str()).set_callback_function(callbacks[i]);
+				}
             }
 			char name[6]="slot0";
 			name[4]='0'+GetGameState_Run();
