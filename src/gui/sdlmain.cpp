@@ -868,10 +868,12 @@ void UpdateWindowDimensions(void)
     PrintScreenSizeInfo();
 }
 
+#define MAPPERFILE_SDL1         "mapper-" VERSION ".map"
+#define MAPPERFILE_SDL2         "mapper-" VERSION ".sdl2.map"
 #if defined(C_SDL2)
-# define MAPPERFILE             "mapper-" VERSION ".sdl2.map"
+# define MAPPERFILE             MAPPERFILE_SDL2
 #else
-# define MAPPERFILE             "mapper-" VERSION ".map"
+# define MAPPERFILE             MAPPERFILE_SDL1
 #endif
 
 void                        GUI_ResetResize(bool);
@@ -3676,9 +3678,6 @@ static void GUI_StartUp() {
     //ShowSplashScreen();   /* I will keep the splash screen alive. But now, the BIOS will do it --J.C. */
 
     /* Get some Event handlers */
-#if defined(__WIN32__) && !defined(C_SDL2)
-    MAPPER_AddHandler(ToggleMenu,MK_return,MMOD1|MMOD2,"togglemenu","ToggleMenu");
-#endif // WIN32
     MAPPER_AddHandler(ResetSystem, MK_r, MMODHOST, "reset", "Reset", &item); /* Host+R (Host+CTRL+R acts funny on my Linux system) */
     item->set_text("Reset guest system");
 
@@ -6117,8 +6116,11 @@ void SDL_SetupConfigSection() {
     Pstring = Pmulti->GetSection()->Add_string("inactive",Property::Changeable::Always,"normal");
     Pstring->Set_values(inactt);
 
-    Pstring = sdl_sec->Add_path("mapperfile",Property::Changeable::Always,MAPPERFILE);
+    Pstring = sdl_sec->Add_path("mapperfile",Property::Changeable::Always,MAPPERFILE_SDL1);
     Pstring->Set_help("File used to load/save the key/event mappings from. Resetmapper only works with the default value.");
+
+    Pstring = sdl_sec->Add_path("mapperfile_sdl2",Property::Changeable::Always,MAPPERFILE_SDL2);
+    Pstring->Set_help("File used to load/save the key/event mappings from (SDL2 builds). Resetmapper only works with the default value.");
 
 #if C_DIRECT3D && C_D3DSHADERS
     Pmulti = sdl_sec->Add_multi("pixelshader",Property::Changeable::Always," ");
@@ -7029,6 +7031,40 @@ bool dos_mouse_sensitivity_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::ite
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
     GUI_Shortcut(2);
+    return true;
+}
+
+extern int enablelfn;
+bool dos_lfn_auto_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    enablelfn = -1;
+	uselfn = dos.version.major>6;
+    mainMenu.get_item("dos_lfn_auto").check(true).refresh_item(mainMenu);
+    mainMenu.get_item("dos_lfn_enable").check(false).refresh_item(mainMenu);
+    mainMenu.get_item("dos_lfn_disable").check(false).refresh_item(mainMenu);
+    return true;
+}
+
+bool dos_lfn_enable_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    enablelfn = 1;
+	uselfn = true;
+    mainMenu.get_item("dos_lfn_auto").check(false).refresh_item(mainMenu);
+    mainMenu.get_item("dos_lfn_enable").check(true).refresh_item(mainMenu);
+    mainMenu.get_item("dos_lfn_disable").check(false).refresh_item(mainMenu);
+    return true;
+}
+
+bool dos_lfn_disable_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    enablelfn = 0;
+	uselfn = false;
+    mainMenu.get_item("dos_lfn_auto").check(false).refresh_item(mainMenu);
+    mainMenu.get_item("dos_lfn_enable").check(false).refresh_item(mainMenu);
+    mainMenu.get_item("dos_lfn_disable").check(true).refresh_item(mainMenu);
     return true;
 }
 
@@ -8655,6 +8691,20 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             }
 
             {
+                DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"DOSLFNMenu");
+                item.set_text("Long filename support");
+
+                {
+                    mainMenu.alloc_item(DOSBoxMenu::item_type_id,"dos_lfn_auto").set_text("Auto").
+                        set_callback_function(dos_lfn_auto_menu_callback);
+                    mainMenu.alloc_item(DOSBoxMenu::item_type_id,"dos_lfn_enable").set_text("Enable").
+                        set_callback_function(dos_lfn_enable_menu_callback);
+                    mainMenu.alloc_item(DOSBoxMenu::item_type_id,"dos_lfn_disable").set_text("Disable").
+                        set_callback_function(dos_lfn_disable_menu_callback);
+                }
+            }
+
+            {
                 DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"DOSPC98Menu");
                 item.set_text("PC-98 PIT master clock");
 
@@ -8794,21 +8844,11 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         {
             DOSBoxMenu::item *item;
 
-            MAPPER_AddHandler(&SetCyclesCount_mapper_shortcut, MK_nothing, 0, "editcycles", "EditCycles", &item);
-            item->set_text("Edit cycles");
-
-            MAPPER_AddHandler(&HideMenu_mapper_shortcut, MK_escape, MMODHOST, "togmenu", "TogMenu", &item);
+            MAPPER_AddHandler(&HideMenu_mapper_shortcut, MK_escape, MMODHOST, "togmenu", "ToggleMenu", &item);
             item->set_text("Hide/show menu bar");
 
             MAPPER_AddHandler(&PauseWithInterrupts_mapper_shortcut, MK_nothing, 0, "pauseints", "PauseInts", &item);
             item->set_text("Pause with interrupts enabled");
-        }
-
-        {
-            DOSBoxMenu::item *item;
-
-            MAPPER_AddHandler(&AspectRatio_mapper_shortcut, MK_nothing, 0, "aspratio", "AspRatio", &item);
-            item->set_text("Fit to aspect ratio");
         }
 
         RENDER_Init();
@@ -8957,8 +8997,9 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         extern bool Mouse_Vertical;
         extern bool Mouse_Drv;
 
-        mainMenu.get_item("dos_mouse_enable_int33").check(Mouse_Drv).refresh_item(mainMenu);
+        mainMenu.get_item("dos_mouse_enable_int33").check(Mouse_Drv).refresh_item(mainMenu);	
         mainMenu.get_item("dos_mouse_y_axis_reverse").check(Mouse_Vertical).refresh_item(mainMenu);
+
 #if !defined(C_EMSCRIPTEN)
         mainMenu.get_item("show_console").check(showconsole_init).refresh_item(mainMenu);
 #endif
