@@ -27,6 +27,7 @@ charset_encoding "UTF-8"; /* default */
    dstidx: DI/EDI
    immb: 8-bit immediate
    immw: word immediate
+   imma: address (offset) immediate
    immsb: 8-bit immediate signed
    sib: scalar/index/byte
    flags: flags register (FLAGS if 16-bit, EFLAGS if 32-bit)
@@ -438,4 +439,122 @@ opcode sequence(0x9B) name "WAIT" { /* wait for FPU */
 }
 opcode sequence(0x9C) name "PUSHF" { common opcode "PUSHF" param(flags); }
 opcode sequence(0x9D) name "POPF" { common opcode "POPF" param(flags); }
+opcode sequence(0x9E) name "SAHF" {
+    input AH;
+    output flags;
+}
+opcode sequence(0x9F) name "LAHF" {
+    input flags;
+    output AH;
+}
+opcode sequence(0xA0 imma) name "MOV" { common opcode "MOV" param(AL,memory reference word imma); }
+opcode sequence(0xA1 imma) name "MOV" { common opcode "MOV" param(accum,memory reference word imma); }
+opcode sequence(0xA2 imma) name "MOV" { common opcode "MOV" param(memory reference word imma,AL); }
+opcode sequence(0xA3 imma) name "MOV" { common opcode "MOV" param(memory reference word imma,accum); }
+opcode sequence(0xA4) name "MOVSB" {
+    /* if DF = 1, srcidx -= 1, dstidx -= 1; */
+    /* if DF = 0, srcidx += 1, dstidx += 1; */
+    input memory reference byte srcidx, flags(DF);
+    output memory reference byte farptr(ES,dstidx);
+    modifies srcidx,dstidx;
+
+    /* how to show it */
+    syntax ;
+}
+opcode sequence(0xA5) name "MOVSW" {
+    /* if DF = 1, srcidx -= wordsize, dstidx -= wordsize; */
+    /* if DF = 0, srcidx += wordsize, dstidx += wordsize; */
+    input memory reference word srcidx, flags(DF);
+    output memory reference word farptr(ES,dstidx);
+    modifies srcidx,dstidx;
+
+    /* how to show it */
+    syntax ;
+}
+opcode sequence(0xA6) name "CMPSB" {
+    /* if DF = 1, srcidx -= 1, dstidx -= 1; */
+    /* if DF = 0, srcidx += 1, dstidx += 1; */
+    input memory reference byte srcidx, memory reference byte farptr(ES,dstidx), flags(DF);
+    modifies srcidx,dstidx,flags(CF,PF,AF,ZF,SF,OF);
+
+    /* how to show it */
+    syntax ;
+}
+opcode sequence(0xA7) name "CMPSW" {
+    /* if DF = 1, srcidx -= wordsize, dstidx -= wordsize; */
+    /* if DF = 0, srcidx += wordsize, dstidx += wordsize; */
+    input memory reference word srcidx, memory reference word farptr(ES,dstidx), flags(DF);
+    modifies srcidx,dstidx,flags(CF,PF,AF,ZF,SF,OF);
+
+    /* how to show it */
+    syntax ;
+}
+opcode sequence(0xA8 immb) name "TEST" { common opcode "TEST" param(AL,immb); }
+opcode sequence(0xA9 immw) name "TEST" { common opcode "TEST" param(accum,immw); }
+opcode sequence(0xAA) name "STOSB" {
+    /* if DF = 1, dstidx -= 1; */
+    /* if DF = 0, dstidx += 1; */
+    input AL, flags(DF);
+    output memory reference byte farptr(ES,dstidx);
+    modifies dstidx;
+
+    /* how to show it */
+    syntax ;
+}
+opcode sequence(0xAB) name "STOSW" {
+    /* if DF = 1, dstidx -= wordsize; */
+    /* if DF = 0, dstidx += wordsize; */
+    input accum, flags(DF);
+    output memory reference word farptr(ES,dstidx);
+    modifies dstidx;
+
+    /* how to show it */
+    syntax ;
+}
+opcode sequence(0xAC) name "LODSB" {
+    /* if DF = 1, srcidx -= 1; */
+    /* if DF = 0, srcidx += 1; */
+    input memory reference byte srcidx, flags(DF);
+    output AL;
+    modifies srcidx;
+
+    /* how to show it */
+    syntax ;
+}
+opcode sequence(0xAD) name "LODSW" {
+    /* if DF = 1, srcidx -= wordsize; */
+    /* if DF = 0, srcidx += wordsize; */
+    input memory reference word srcidx, flags(DF);
+    output accum;
+    modifies srcidx;
+
+    /* how to show it */
+    syntax ;
+}
+opcode sequence(0xAE) name "SCASB" {
+    /* if DF = 1, dstidx -= 1; */
+    /* if DF = 0, dstidx += 1; */
+    input AL,memory reference byte farptr(ES,dstidx), flags(DF);
+    modifies flags(CF,PF,AF,ZF,SF,OF);
+
+    /* how to show it */
+    syntax ;
+}
+opcode sequence(0xAF) name "SCASW" {
+    /* if DF = 1, dstidx -= wordsize; */
+    /* if DF = 0, dstidx += wordsize; */
+    input accum,memory reference word farptr(ES,dstidx), flags(DF);
+    modifies flags(CF,PF,AF,ZF,SF,OF);
+
+    /* how to show it */
+    syntax ;
+}
+opcode sequence([0xB0,0xB7] immb) name "MOV" {
+    reg index = opbyte(0) & 7;
+    common opcode "MOV"  param(regb,immb);
+}
+opcode sequence([0xB8,0xBF] immw) name "MOV" {
+    reg index = opbyte(0) & 7;
+    common opcode "MOV"  param(regw,immw);
+}
 
