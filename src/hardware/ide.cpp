@@ -533,65 +533,95 @@ void IDEATAPICDROMDevice::mode_sense() {
 
     write = sector;
 
-    /* some header. not well documented */
-    *write++ = 0x00;    /* ?? */
-    *write++ = 0x00;    /* length */
-    *write++ = 0x00;    /* ?? */
-    *write++ = 0x00;
-    *write++ = 0x00;
-    *write++ = 0x00;
-    *write++ = 0x00;
-    *write++ = 0x00;
+    /* Mode Parameter List MMC-3 Table 340 */
+    /* - Mode parameter header */
+    /* - Page(s) */
 
-    *write++ = PAGE;    /* page code */
-    *write++ = 0x00;    /* page length (fill in later) */
+    /* Mode Parameter Header (response for 10-byte MODE SENSE) SPC-2 Table 148 */
+    *write++ = 0x00;    /* MODE DATA LENGTH                     (MSB) */
+    *write++ = 0x00;    /*                                      (LSB) */
+    *write++ = 0x00;    /* MEDIUM TYPE */
+    *write++ = 0x00;    /* DEVICE-SPECIFIC PARAMETER */
+    *write++ = 0x00;    /* Reserved */
+    *write++ = 0x00;    /* Reserved */
+    *write++ = 0x00;    /* BLOCK DESCRIPTOR LENGTH              (MSB) */
+    *write++ = 0x00;    /*                                      (LSB) */
+    /* NTS: MMC-3 Table 342 says that BLOCK DESCRIPTOR LENGTH is zero, where it would be 8 for legacy units */
+
+    /* Mode Page Format MMC-3 Table 341 */
+    *write++ = PAGE;    /* PS|reserved|Page Code */
+    *write++ = 0x00;    /* Page Length (n - 1) ... Length in bytes of the mode parameters that follow */
     switch (PAGE) {
-        case 0x01: /* Read error recovery */
-            *write++ = 0x00;    /* maximum error correction */
-            *write++ = 3;       /* read retry count */
-            *write++ = 0x00;
-            *write++ = 0x00;
-            *write++ = 0x00;
-            *write++ = 0x00;
+        case 0x01: /* Read error recovery MMC-3 Section 6.3.4 table 344 */
+            *write++ = 0x00;    /* +2 Error recovery Parameter  AWRE|ARRE|TB|RC|Reserved|PER|DTE|DCR */
+            *write++ = 3;       /* +3 Read Retry Count */
+            *write++ = 0x00;    /* +4 Reserved */
+            *write++ = 0x00;    /* +5 Reserved */
+            *write++ = 0x00;    /* +6 Reserved */
+            *write++ = 0x00;    /* +7 Reserved */
+            *write++ = 0x00;    /* +8 Write Retry Count (this is not yet CD burner) */
+            *write++ = 0x00;    /* +9 Reserved */
+            *write++ = 0x00;    /* +10 Recovery Time Limit (should be zero)         (MSB) */
+            *write++ = 0x00;    /* +11                                              (LSB) */
             break;
-        case 0x0E: /* CD-ROM audio control */
-            *write++ = 0x04;    /* ?? */
-            *write++ = 0x00;    /* reserved @+3 */
-            *write++ = 0x00;    /* reserved @+4 */
-            *write++ = 0x00;    /* reserved @+5 */
-            *write++ = 0x00;
-            *write++ = 75;      /* logical blocks per second */
-
-            *write++ = 0x01;    /* output port 0 selection */
-            *write++ = 0xD8;    /* output port 0 volume (?) */
-            *write++ = 0x02;    /* output port 1 selection */
-            *write++ = 0xD8;    /* output port 1 volume (?) */
-            *write++ = 0x00;    /* output port 2 selection */
-            *write++ = 0x00;    /* output port 2 volume (?) */
-            *write++ = 0x00;    /* output port 3 selection */
-            *write++ = 0x00;    /* output port 3 volume (?) */
+        case 0x0E: /* CD-ROM audio control MMC-3 Section 6.3.7 table 354 */
+                   /* also MMC-1 Section 5.2.3.1 table 97 */
+            *write++ = 0x04;    /* +2 Reserved|IMMED=1|SOTC=0|Reserved */
+            *write++ = 0x00;    /* +3 Reserved */
+            *write++ = 0x00;    /* +4 Reserved */
+            *write++ = 0x00;    /* +5 Reserved */
+            *write++ = 0x00;    /* +6 Obsolete (75) */
+            *write++ = 75;      /* +7 Obsolete (75) */
+            *write++ = 0x01;    /* +8 output port 0 selection (0001b = channel 0) */
+            *write++ = 0xFF;    /* +9 output port 0 volume (0xFF = 0dB atten.) */
+            *write++ = 0x02;    /* +10 output port 1 selection (0010b = channel 1) */
+            *write++ = 0xFF;    /* +11 output port 1 volume (0xFF = 0dB atten.) */
+            *write++ = 0x00;    /* +12 output port 2 selection (none) */
+            *write++ = 0x00;    /* +13 output port 2 volume (0x00 = mute) */
+            *write++ = 0x00;    /* +14 output port 3 selection (none) */
+            *write++ = 0x00;    /* +15 output port 3 volume (0x00 = mute) */
             break;
-        case 0x2A: /* CD-ROM mechanical status */
-            *write++ = 0x00;    /* reserved @+2 ?? */
-            *write++ = 0x00;    /* reserved @+3 ?? */
-            *write++ = 0xF1;    /* multisession=0 mode2form2=1 mode2form=1 audioplay=1 */
-            *write++ = 0xFF;    /* ISRC=1 UPC=1 C2=1 RWDeinterleave=1 RWSupported=1 CDDAAccurate=1 CDDASupported=1 */
-            *write++ = 0x29;    /* loading mechanism type=tray  eject=1  prevent jumper=0  lockstate=0  lock=1 */
-            *write++ = 0x03;    /* separate channel mute=1 separate channel volume levels=1 */
+        case 0x2A: /* CD-ROM mechanical status MMC-3 Section 6.3.11 table 361 */
+                                /*    MSB            |             |             |             |              |               |              |       LSB */
+            *write++ = 0x07;    /* +2 Reserved       |Reserved     |DVD-RAM read |DVD-R read   |DVD-ROM read  |   Method 2    | CD-RW read   | CD-R read */
+            *write++ = 0x00;    /* +3 Reserved       |Reserved     |DVD-RAM write|DVD-R write  |   Reserved   |  Test Write   | CD-RW write  | CD-R write */
+            *write++ = 0x71;    /* +4 Buffer Underrun|Multisession |Mode 2 form 2|Mode 2 form 1|Digital Port 2|Digital Port 1 |  Composite   | Audio play */
+            *write++ = 0xFF;    /* +5 Read code bar  |UPC          |ISRC         |C2 Pointers  |R-W deintcorr | R-W supported |CDDA accurate |CDDA support */
+            *write++ = 0x2F;    /* +6 Loading mechanism type                     |Reserved     |Eject         |Prevent Jumper |Lock state    |Lock */
+                                /*      0 (0x00) = Caddy
+                                 *      1 (0x20) = Tray
+                                 *      2 (0x40) = Popup
+                                 *      3 (0x60) = Reserved
+                                 *      4 (0x80) = Changer with indivually changeable discs
+                                 *      5 (0xA0) = Changer using a magazine mechanism
+                                 *      6 (0xC0) = Reserved
+                                 *      6 (0xE0) = Reserved */
+            *write++ = 0x03;    /* +7 Reserved       |Reserved     |R-W in leadin|Side chg cap |S/W slot sel  |Changer disc pr|Sep. ch. mute |Sep. volume levels */
 
-            x = 176 * 8;        /* maximum speed supported: 8X */
+            x = 176 * 8;        /* +8 maximum speed supported in kB: 8X  (obsolete in MMC-3) */
             *write++ = x>>8;
             *write++ = x;
 
-            x = 256;        /* (?) */
+            x = 256;            /* +10 Number of volume levels supported */
             *write++ = x>>8;
             *write++ = x;
 
-            x = 6 * 256;        /* (?) */
+            x = 6 * 256;        /* +12 buffer size supported by drive in kB */
             *write++ = x>>8;
             *write++ = x;
 
-            x = 176 * 8;        /* current speed supported: 8X */
+            x = 176 * 8;        /* +14 current read speed selected in kB: 8X  (obsolete in MMC-3) */
+            *write++ = x>>8;
+            *write++ = x;
+
+            *write++ = 0;       /* +16 Reserved */
+            *write++ = 0x00;    /* +17 Reserved | Reserved | Length | Length | LSBF | RCK | BCK | Reserved */
+
+            x = 0;              /* +18 maximum write speed supported in kB: 0  (obsolete in MMC-3) */
+            *write++ = x>>8;
+            *write++ = x;
+
+            x = 0;              /* +20 current write speed in kB: 0  (obsolete in MMC-3) */
             *write++ = x>>8;
             *write++ = x;
             break;
@@ -601,8 +631,11 @@ void IDEATAPICDROMDevice::mode_sense() {
             break;
     }
 
-    /* fill in page length */
-    sector[1] = (unsigned int)(write-sector) - 2;
+    /* mode param header, data length */
+    x = (unsigned int)(write-sector) - 2;
+    sector[0] = (unsigned char)(x >> 8u);
+    sector[1] = (unsigned char)x;
+    /* page length */
     sector[8+1] = (unsigned int)(write-sector) - 2 - 8;
 
     prepare_read(0,MIN((unsigned int)(write-sector),(unsigned int)host_maximum_byte_count));
