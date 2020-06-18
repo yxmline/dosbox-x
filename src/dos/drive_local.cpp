@@ -529,7 +529,7 @@ FILE * localDrive::GetSystemFilePtr(char const * const name, char const * const 
 
     // "type" always has ANSI chars (like "rb"), nothing fancy
     for (tis=0;tis < 7 && type[tis] != 0;tis++) wtype[tis] = (wchar_t)type[tis];
-    assert(tis < 7); // guard
+    assert(tis <= 7); // guard
     wtype[tis] = 0;
 
 	return _wfopen(host_name,wtype);
@@ -955,7 +955,7 @@ bool localDrive::MakeDir(const char * dir) {
 #if defined (WIN32)						/* MS Visual C++ */
 	int temp=_wmkdir(host_name);
 #else
-	int temp=mkdir(host_name,0700);
+	int temp=mkdir(host_name,0775);
 #endif
 	if (temp==0) dirCache.CacheOut(newdir,true);
 
@@ -1844,7 +1844,7 @@ bool Overlay_Drive::RemoveDir(const char * dir) {
 
 		if (!empty) return false;
 		if (logoverlay) LOG_MSG("directory empty! Hide it.");
-		//Directory is empty, mark it as deleted and create DBOVERLAY file.
+		//Directory is empty, mark it as deleted and create $DBOVERLAY file.
 		//Ensure that overlap folder can not be created.
 		char odir[CROSS_LEN];
 		strcpy(odir,overlaydir);
@@ -1924,7 +1924,7 @@ bool Overlay_Drive::MakeDir(const char * dir) {
 #if defined (WIN32)
 					temp=_wmkdir(host_name);
 #else
-					temp=mkdir(host_name,0700);
+					temp=mkdir(host_name,0775);
 #endif
 					if (temp==0) madepdir=true;
 				}
@@ -1937,7 +1937,7 @@ bool Overlay_Drive::MakeDir(const char * dir) {
 #if defined (WIN32)
 		temp=_wmkdir(host_name);
 #else
-		temp=mkdir(host_name,0700);
+		temp=mkdir(host_name,0775);
 #endif
 	}
 	if (temp==0) {
@@ -2032,11 +2032,18 @@ FILE* Overlay_Drive::create_file_in_overlay(const char* dos_filename, char const
 	strcat(newname,dos_filename); //HERE we need to convert it to Linux TODO
 	CROSS_FILENAME(newname);
 
+#ifdef host_cnv_use_wchar
+    wchar_t wmode[8];
+    unsigned int tis;
+    for (tis=0;tis < 7 && mode[tis] != 0;tis++) wmode[tis] = (wchar_t)mode[tis];
+    assert(tis < 7); // guard
+    wmode[tis] = 0;
+#endif
 	FILE* f;
 	const host_cnv_char_t* host_name = CodePageGuestToHost(newname);
 	if (host_name!=NULL) {
 #ifdef host_cnv_use_wchar
-		f = _wfopen(host_name,_HT("wb+"));
+		f = _wfopen(host_name,wmode);
 #else
 		f = fopen_wrap(host_name,mode);
 #endif
@@ -2071,7 +2078,7 @@ FILE* Overlay_Drive::create_file_in_overlay(const char* dos_filename, char const
 			const host_cnv_char_t* host_name = CodePageGuestToHost(temp_name);
 			if (host_name!=NULL) {
 #ifdef host_cnv_use_wchar
-				f = _wfopen(host_name,_HT("wb+"));
+				f = _wfopen(host_name,wmode);
 #else
 				f = fopen_wrap(host_name,mode);
 #endif
@@ -2090,7 +2097,7 @@ FILE* Overlay_Drive::create_file_in_overlay(const char* dos_filename, char const
 			const host_cnv_char_t* host_name = CodePageGuestToHost(newname);
 			if (host_name!=NULL) {
 #ifdef host_cnv_use_wchar
-				f = _wfopen(host_name,_HT("wb+"));
+				f = _wfopen(host_name,wmode);
 #else
 				f = fopen_wrap(host_name,mode);
 #endif
@@ -2151,7 +2158,7 @@ static OverlayFile* ccc(DOS_File* file) {
 }
 
 Overlay_Drive::Overlay_Drive(const char * startdir,const char* overlay, Bit16u _bytes_sector,Bit8u _sectors_cluster,Bit16u _total_clusters,Bit16u _free_clusters,Bit8u _mediaid,Bit8u &error,std::vector<std::string> &options)
-:localDrive(startdir,_bytes_sector,_sectors_cluster,_total_clusters,_free_clusters,_mediaid,options),special_prefix("DBOVERLAY") {
+:localDrive(startdir,_bytes_sector,_sectors_cluster,_total_clusters,_free_clusters,_mediaid,options),special_prefix("$DBOVERLAY") {
 	optimize_cache_v1 = true; //Try to not reread overlay files on deletes. Ideally drive_cache should be improved to handle deletes properly.
 	//Currently this flag does nothing, as the current behavior is to not reread due to caching everything.
 #if defined (WIN32)	
@@ -2428,7 +2435,7 @@ bool Overlay_Drive::Sync_leading_dirs(const char* dos_filename){
 #if defined (WIN32)						/* MS Visual C++ */
 				int temp = mkdir(dirnameoverlay);
 #else
-				int temp = mkdir(dirnameoverlay,0700);
+				int temp = mkdir(dirnameoverlay,0775);
 #endif
 				if (temp != 0) return false;
 			}
@@ -2632,7 +2639,7 @@ void Overlay_Drive::update_cache(bool read_directory_contents) {
 
 	if (read_directory_contents) {
 		for (i = specials.begin(); i != specials.end(); ++i) {
-			//Specials look like this DBOVERLAY_YYY_FILENAME.EXT or DIRNAME[\/]DBOVERLAY_YYY_FILENAME.EXT where 
+			//Specials look like this $DBOVERLAY_YYY_FILENAME.EXT or DIRNAME[\/]$DBOVERLAY_YYY_FILENAME.EXT where 
 			//YYY is the operation involved. Currently only DEL is supported.
 			//DEL = file marked as deleted, (but exists in localDrive!)
 			std::string name(*i);
@@ -2645,7 +2652,7 @@ void Overlay_Drive::update_cache(bool read_directory_contents) {
 				special_dir = name.substr(0,s);
 				name.erase(0,s);
 			}
-			name.erase(0,special_prefix.length()+1); //Erase DBOVERLAY_
+			name.erase(0,special_prefix.length()+1); //Erase $DBOVERLAY_
 			s = name.find('_');
 			if (s == std::string::npos || s == 0) continue;
 			special_operation = name.substr(0,s);
@@ -2956,7 +2963,7 @@ bool Overlay_Drive::SetFileAttr(const char * name,Bit16u attr) {
 #if defined (WIN32)
 			temp=_wmkdir(host_name);
 #else
-			temp=mkdir(host_name,0700);
+			temp=mkdir(host_name,0775);
 #endif
 		}
 		if (temp==0) created=true;
