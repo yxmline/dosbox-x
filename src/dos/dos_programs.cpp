@@ -2425,6 +2425,10 @@ restart_int:
             printHelp();
             return;
         }
+		if (cmd->FindExist("-examples")) {
+			WriteOut(MSG_Get("PROGRAM_IMGMAKE_EXAMPLE"));
+			return;
+		}
 
 /*
         this stuff is too frustrating
@@ -2651,7 +2655,11 @@ restart_int:
             WriteOut(MSG_Get("PROGRAM_IMGMAKE_CANNOT_WRITE"),temp_line.c_str());
             return;
         }
+#if defined (_MSC_VER) and (_MSC_VER >= 1400)
+        if(fseeko64(f,(__int64)(size - 1ull),SEEK_SET)) {
+#else
         if(fseeko64(f,static_cast<off_t>(size - 1ull),SEEK_SET)) {
+#endif
             WriteOut(MSG_Get("PROGRAM_IMGMAKE_NOT_ENOUGH_SPACE"),size);
             fclose(f);
             return;
@@ -2823,7 +2831,11 @@ restart_int:
                 sbuf[0]=0xEB; sbuf[1]=0x3c; sbuf[2]=0x90;
             }
             // OEM
-            sprintf((char*)&sbuf[0x03],"MSDOS5.0");
+            if (FAT >= 32) {
+                sprintf((char*)&sbuf[0x03],"MSWIN4.1");
+            } else {
+                sprintf((char*)&sbuf[0x03],"MSDOS5.0");
+            }
             // bytes per sector: always 512
             host_writew(&sbuf[0x0b],512);
             // sectors per cluster: 1,2,4,8,16,...
@@ -2835,13 +2847,29 @@ restart_int:
                 if (vol_sectors >= 400) {
                     unsigned int tmp_fatlimit;
 
-                    /* 1 sector per cluster is very inefficent */
-                    if (vol_sectors >= 6144000/*3000MB*/)
-                        sectors_per_cluster = 8;
-                    else if (vol_sectors >= 1048576/*512MB*/)
-                        sectors_per_cluster = 4;
-                    else if (vol_sectors >= 131072/*64MB*/)
-                        sectors_per_cluster = 2;
+                    /* Windows 98 likes multiples of 4KB, which is actually reasonable considering
+                     * that it keeps FAT32 efficient. Also, Windows 98 SETUP will crash if sectors/cluster
+                     * is too small. Ref: [https://github.com/joncampbell123/dosbox-x/issues/1553#issuecomment-651880604]
+                     * and [http://www.helpwithwindows.com/windows98/fat32.html] */
+                    if (FAT >= 32) {
+                        if (vol_sectors >= 67108864/*32GB*/)
+                            sectors_per_cluster = 64; /* 32KB (64*512) */
+                        else if (vol_sectors >= 33554432/*16GB*/)
+                            sectors_per_cluster = 32; /* 16KB (32*512) */
+                        else if (vol_sectors >= 16777216/*8GB*/)
+                            sectors_per_cluster = 16; /* 8KB (16*512) */
+                        else
+                            sectors_per_cluster = 8; /* 4KB (8*512) */
+                    }
+                    else {
+                        /* 1 sector per cluster is very inefficent */
+                        if (vol_sectors >= 6144000/*3000MB*/)
+                            sectors_per_cluster = 8;
+                        else if (vol_sectors >= 1048576/*512MB*/)
+                            sectors_per_cluster = 4;
+                        else if (vol_sectors >= 131072/*64MB*/)
+                            sectors_per_cluster = 2;
+                    }
 
                     /* no more than 5% of the disk */
                     switch (FAT) {
@@ -2851,10 +2879,10 @@ restart_int:
                         default:    abort(); break;
                     }
 
-                    while ((vol_sectors/sectors_per_cluster) >= (tmp_fatlimit - 2u) && sectors_per_cluster < (FAT >= 16 ? 0x80u : 0x40u)) sectors_per_cluster <<= 1;
+                    while ((vol_sectors/sectors_per_cluster) >= (tmp_fatlimit - 2u) && sectors_per_cluster < 0x80u) sectors_per_cluster <<= 1;
                 }
             }
-            while ((vol_sectors/sectors_per_cluster) >= (fatlimit - 2u) && sectors_per_cluster < (FAT >= 16 ? 0x80u : 0x40u)) sectors_per_cluster <<= 1;
+            while ((vol_sectors/sectors_per_cluster) >= (fatlimit - 2u) && sectors_per_cluster < 0x80u) sectors_per_cluster <<= 1;
             sbuf[0x0d]=(Bit8u)sectors_per_cluster;
             // TODO small floppys have 2 sectors per cluster?
             // reserverd sectors
@@ -3002,8 +3030,8 @@ restart_int:
             }
 
             // warning
-            if (FAT == 12 && sectors_per_cluster > 64u)
-                WriteOut("WARNING: FAT12 with more than 64 sectors per cluster can cause problems with MS-DOS\n");
+            if ((sectors_per_cluster*512ul) >= 65536ul)
+                WriteOut("WARNING: Cluster sizes >= 64KB are not compatible with MS-DOS and SCANDISK\n");
         }
         // write VHD footer if requested, largely copied from RAW2VHD program, no license was included
         if((mediadesc == 0xF8) && (temp_line.find(".vhd")) != std::string::npos) {
@@ -5971,10 +5999,11 @@ void DOS_SetupPrograms(void) {
     MSG_Add("PROGRAM_IMGMAKE_SYNTAX",
         "Creates floppy or harddisk images.\n"
         "Syntax: IMGMAKE file [-t type] [[-size size] | [-chs geometry]] [-nofs]\n"
+        "  [-bat] [-fat] [-spc] [-fatcopies] [-rootdir]"
 #ifdef WIN32
-        "  [-source source] [-r retries] [-bat]\n"
+        " [-source source] [-r retries]"
 #endif
-        "  file: The image file that is to be created - !path on the host!\n"
+        "\n  file: The image file that is to be created - !path on the host!\n"
         "  -t: Type of image.\n"
         "    Floppy templates (names resolve to floppy sizes in kilobytes):\n"
         "     fd_160 fd_180 fd_200 fd_320 fd_360 fd_400 fd_720 fd_1200 fd_1440 fd_2880\n"
@@ -5984,10 +6013,10 @@ void DOS_SetupPrograms(void) {
         "     hd_st251: 40MB image, hd_st225: 20MB image (geometry from old drives)\n"
         "    Custom harddisk images:\n"
         "     hd (requires -size or -chs)\n"
-        "  -size: size of a custom harddisk image in MB.\n"
-        "  -chs: disk geometry in cylinders(1-1023),heads(1-255),sectors(1-63).\n"
-        "  -nofs: add this parameter if a blank image should be created.\n"
-        "  -bat: creates a .bat file with the IMGMOUNT command required for this image.\n"
+        "  -size: Size of a custom harddisk image in MB.\n"
+        "  -chs: Disk geometry in cylinders(1-1023),heads(1-255),sectors(1-63).\n"
+        "  -nofs: Add this parameter if a blank image should be created.\n"
+        "  -bat: Create a .bat file with the IMGMOUNT command required for this image.\n"
         "  -fat: FAT filesystem type (12, 16, or 32)\n"
         "  -spc: Sectors per cluster override. Must be a power of 2.\n"
         "  -fatcopies: Override number of FAT table copies.\n"
@@ -5996,14 +6025,20 @@ void DOS_SetupPrograms(void) {
         "  -source: drive letter - if specified the image is read from a floppy disk.\n"
         "  -retries: how often to retry when attempting to read a bad floppy disk(1-99).\n"
 #endif
-        " Examples:\n"
-        "    imgmake c:\\image.img -t fd_1440          - create a 1.44MB floppy image\n"
-        "    imgmake c:\\image.img -t hd -size 100     - create a 100MB hdd image\n"
-        "    imgmake c:\\image.img -t hd -chs 130,2,17 - create a special hd image"
+        "  -examples: Show some usage examples."
+        );
+    MSG_Add("PROGRAM_IMGMAKE_EXAMPLE",
+        "Some usage examples of IMGMAKE:\n\n"
+        "  imgmake c:\\image.img -t fd_1440          - create a 1.44MB floppy image\n"
+        "  imgmake c:\\image.img -t hd -size 100     - create a 100MB hdd image\n"
+        "  imgmake c:\\image.img -t hd_520 -nofs     - create a 520MB blank hdd image\n"
+        "  imgmake c:\\image.img -t hd_2gig -fat 32  - create a 2GB FAT32 hdd image\n"
+        "  imgmake c:\\image.img -t hd -chs 130,2,17 - create a special hdd image\n"
 #ifdef WIN32
-        "\n    imgmake c:\\image.img -source a           - read image from physical drive A"
+        "  imgmake c:\\image.img -source a           - read image from physical drive A\n"
 #endif
         );
+
 #ifdef WIN32
     MSG_Add("PROGRAM_IMGMAKE_FLREAD",
         "Disk geometry: %d Cylinders, %d Heads, %d Sectors, %d Kilobytes\n\n");
