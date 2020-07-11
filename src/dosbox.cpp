@@ -258,7 +258,7 @@ void                DISNEY_Init(Section*);
 void                PS1SOUND_Init(Section*);
 void                INNOVA_Init(Section*);
 void                SERIAL_Init(Section*); 
-void		   		CHEATS_Init(Section*);
+void                CHEATS_Init(Section*);
 void                DONGLE_Init(Section*);
 #if C_IPX
 void                IPX_Init(Section*);
