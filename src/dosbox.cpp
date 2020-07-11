@@ -3272,6 +3272,12 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool = secprop->Add_bool("automountall",Property::Changeable::OnlyAtStart,false);
     Pbool->Set_help("Automatically mount all available Windows drives at start.");
 
+    Pbool = secprop->Add_bool("startcmd",Property::Changeable::OnlyAtStart,false);
+    Pbool->Set_help("Allow START command to run commands on Windows host.");
+
+    Pstring = secprop->Add_string("startincon",Property::Changeable::OnlyAtStart,"assoc attrib chcp copy dir echo for ftype help if set type ver vol xcopy");
+    Pstring->Set_help("START command will start these commands (separated by space) in a console and wait for a key press before exiting.");
+
     Pbool = secprop->Add_bool("int33",Property::Changeable::WhenIdle,true);
     Pbool->Set_help("Enable INT 33H (mouse) support.");
 
@@ -3545,7 +3551,11 @@ void DOSBOX_SetupConfigSections(void) {
                 "Set to 0 to use controller or CD-ROM drive-specific default.");
     }
 
-    /* CONFIG.SYS options (stub) */
+    /* 4DOS.INI options */
+    secprop=control->AddSection_prop("4dos",&Null_Init,false);
+    Pstring = secprop->Add_string("rem",Property::Changeable::OnlyAtStart,"This section is the 4DOS.INI file, if you use 4DOS as the command shell");
+
+    /* CONFIG.SYS options */
     secprop=control->AddSection_prop("config",&Null_Init,false);
 
     Pstring = secprop->Add_string("rem",Property::Changeable::OnlyAtStart,"This section is DOS's CONFIG.SYS file, not all CONFIG.SYS options supported");
@@ -3556,6 +3566,8 @@ void DOSBOX_SetupConfigSections(void) {
     Pstring = secprop->Add_string("numlock",Property::Changeable::OnlyAtStart,"");
 	Pstring->Set_help("Sets the initial state of the NumLock key.");
     Pstring->Set_values(numopt);
+    Pstring = secprop->Add_string("shell",Property::Changeable::OnlyAtStart,"");
+	Pstring->Set_help("Specifies the command shell (COMMAND.COM or 4DOS.COM).");
     Pstring = secprop->Add_string("dos",Property::Changeable::OnlyAtStart,"high, umb");
 	Pstring->Set_help("Reports whether DOS occupies HMA and allocates UMB memory (if available).");
     Pint = secprop->Add_int("fcbs",Property::Changeable::OnlyAtStart,100);
