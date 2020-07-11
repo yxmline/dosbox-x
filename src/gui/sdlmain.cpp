@@ -91,6 +91,7 @@ void GFX_OpenGLRedrawScreen(void);
 #include "sdlmain.h"
 #include "zipfile.h"
 #include "shell.h"
+#include "cheats.h"
 
 #if defined(LINUX) && defined(HAVE_ALSA)
 # include <alsa/asoundlib.h>
@@ -1064,6 +1065,7 @@ void GFX_SetTitle(Bit32s cycles,Bits frameskip,Bits timing,bool paused){
     static Bit32s internal_cycles=0;
 //  static Bits internal_timing=0;
     char title[200] = {0};
+    cheat::ParseCheatFile(RunningProgram);
 
     Section_prop *section = static_cast<Section_prop *>(control->GetSection("SDL"));
     assert(section != NULL);
