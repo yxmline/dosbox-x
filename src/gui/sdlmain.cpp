@@ -94,6 +94,7 @@ void GFX_OpenGLRedrawScreen(void);
 #include "zipfile.h"
 #include "shell.h"
 #include "../ints/int10.h"
+#include "cheats.h"
 
 #if defined(LINUX) && defined(HAVE_ALSA)
 # include <alsa/asoundlib.h>
