@@ -81,7 +81,7 @@ static Bitu INT2F_Handler(void) {
 	for(Multiplex_it it = Multiplex.begin();it != Multiplex.end();++it)
 		if( (*it)() ) return CBRET_NONE;
    
-	LOG(LOG_DOSMISC,LOG_ERROR)("DOS:INT 2F Unhandled call AX=%4X",reg_ax);
+	LOG(LOG_DOSMISC,LOG_DEBUG)("DOS:INT 2F Unhandled call AX=%4X",reg_ax);
 	return CBRET_NONE;
 }
 
@@ -363,7 +363,7 @@ static bool DOS_MultiplexFunctions(void) {
 		DOS_MCB psp_mcb(dos.psp()-1);
 		psp_mcb.GetFileName(psp_name);
 		// Report Windows version 4.0 (95) to NESTICLE x.xx so that it uses LFN when available
-		if (uselfn && (!strcmp(psp_name, "NESTICLE") || reg_sp == 0x220A && mem_readw(SegPhys(ss)+reg_sp)/0x100 == 0x1F)) {
+		if (uselfn && (!strcmp(psp_name, "NESTICLE") || (reg_sp == 0x220A && mem_readw(SegPhys(ss)+reg_sp)/0x100 == 0x1F))) {
 			reg_ax = 0;
 			reg_bx = 0x400;
 			reg_cx = 2;
