@@ -104,7 +104,7 @@ int enablelfn=-1;
 bool uselfn;
 extern bool infix, winrun, startcmd, startwait;
 extern bool int15_wait_force_unmask_irq;
-extern bool startup_state_numlock;
+extern bool startup_state_numlock, mountwarning;
 std::string startincon;
 
 Bit32u dos_hma_allocator = 0; /* physical memory addr */
@@ -235,71 +235,77 @@ void DOS_SetError(Bit16u code) {
 
 void DOS_SetCountry(Bit16u countryNo) {
 	if (dos.tables.country==NULL) return;
+
+    // For US, Latin America and International English use 12h clock
 	*(dos.tables.country+17)=countryNo==1||countryNo==3||countryNo==61?0:1;
+
+    // Date format
 	switch (countryNo) {
-		case 1:
-			*dos.tables.country=0;
+		case 1:   // United States
+			*dos.tables.country=0; // MM-DD-YYYY
 			break;
-		case 2:
-		case 36:
-		case 38:
-		case 40:
-		case 42:
-		case 46:
-		case 48:
-		case 81:
-		case 82:
-		case 86:
-		case 88:
-		case 354:
-		case 886:
-			*dos.tables.country=2;
+		case 2:   // Canadian-French
+		case 36:  // Hungary
+		case 38:  // Croatia
+		case 40:  // Romania
+		case 42:  // Czech Republic / Slovakia
+		case 46:  // Sweden
+		case 48:  // Poland
+		case 81:  // Japan
+		case 82:  // South Korea
+		case 86:  // China
+		case 354: // Iceland
+		case 886: // Taiwan
+			*dos.tables.country=2; // YYYY-MM-DD
 			break;
 		default:
-			*dos.tables.country=1;
+			*dos.tables.country=1; // DD-MM-YYYY
 			break;
 	}
+
+    // Date seperation character
 	switch (countryNo) {
-		case 3:
-		case 30:
-		case 32:
-		case 34:
-		case 39:
-		case 44:
-		case 55:
-		case 88:
-		case 90:
-		case 785:
-		case 886:
-		case 972:
-			*(dos.tables.country+11)=0x2f;
+		case 3:   // Latin America
+		case 30:  // Greece
+		case 32:  // Belgium
+		case 34:  // Spain
+		case 39:  // Italy
+		case 44:  // United Kingdom
+		case 55:  // Brazil
+		case 90:  // Turkey
+		case 785: // Arabic countries
+		case 886: // Taiwan
+		case 972: // Israel
+			*(dos.tables.country+11)=0x2f; // Forward-slash (/)
 			break;
-		case 7:
-		case 33:
-		case 41:
-		case 43:
-		case 47:
-		case 49:
-		case 86:
-		case 358:
-			*(dos.tables.country+11)=0x2e;
+		case 7:   // Russia
+		case 33:  // France
+		case 41:  // Switzerland
+		case 43:  // Austria
+		case 47:  // Norway
+		case 49:  // Germany
+		case 86:  // China
+		case 358: // Finland
+			*(dos.tables.country+11)=0x2e; // Period (.)
 			break;
 		default:
-			*(dos.tables.country+11)=0x2d;
+			*(dos.tables.country+11)=0x2d; // Dash (-)
 			break;
 	}
+
+    // Time seperation character
 	switch (countryNo) {
-		case 41:
-			*(dos.tables.country+13)=0x2c;
+		case 41:  // Switzerland
+			*(dos.tables.country+13)=0x2c; // Comma (,)
 			break;
-		case 39:
-		case 45:
-		case 46:
-		case 358:
-			*(dos.tables.country+13)=0x2e;
+		case 39:  // Italy
+		case 45:  // Denmark
+		case 46:  // Sweden
+		case 358: // Finland
+			*(dos.tables.country+13)=0x2e; // Period (.)
 			break;
 		default:
-			*(dos.tables.country+13)=0x3a;
+			*(dos.tables.country+13)=0x3a; // Column (:)
 			break;
 	}
 }
@@ -2732,6 +2738,7 @@ public:
 		enable_dummy_device_mcb = section->Get_bool("enable dummy device mcb");
 		int15_wait_force_unmask_irq = section->Get_bool("int15 wait force unmask irq");
         disk_io_unmask_irq0 = section->Get_bool("unmask timer on disk io");
+        mountwarning = section->Get_bool("mountwarning");
 #if defined (WIN32)
         if (winrun) {
             Section* tsec = control->GetSection("dos");
@@ -2739,7 +2746,6 @@ public:
             tsec->HandleInputline("dos clipboard device enable=true");
         }
         startcmd = section->Get_bool("startcmd");
-        startwait = section->Get_bool("startwait");
         startincon = section->Get_string("startincon");
         char *dos_clipboard_device_enable = (char *)section->Get_string("dos clipboard device enable");
 		dos_clipboard_device_access = !strcasecmp(dos_clipboard_device_enable, "dummy")?1:(!strcasecmp(dos_clipboard_device_enable, "read")?2:(!strcasecmp(dos_clipboard_device_enable, "write")?3:(!strcasecmp(dos_clipboard_device_enable, "full")||!strcasecmp(dos_clipboard_device_enable, "true")?4:0)));
@@ -3113,7 +3119,8 @@ public:
 						dos.version.major, dos.version.minor);
 			}
 		}
-		dos_ver_menu(true);
+        dos_ver_menu(true);
+        mainMenu.get_item("dos_ver_edit").enable(true).refresh_item(mainMenu);
 
         if (IS_PC98_ARCH) {
             void PC98_InitDefFuncRow(void);
@@ -3130,6 +3137,8 @@ public:
 			EndStartProcess();
 			EndRunProcess();
 		}
+        mainMenu.get_item("dos_win_autorun").enable(false).refresh_item(mainMenu);
+        mainMenu.get_item("dos_win_wait").enable(false).refresh_item(mainMenu);
 #endif
 		mainMenu.get_item("dos_lfn_auto").enable(false).refresh_item(mainMenu);
 		mainMenu.get_item("dos_lfn_enable").enable(false).refresh_item(mainMenu);
@@ -3138,6 +3147,7 @@ public:
 		mainMenu.get_item("dos_ver_500").enable(false).refresh_item(mainMenu);
 		mainMenu.get_item("dos_ver_622").enable(false).refresh_item(mainMenu);
 		mainMenu.get_item("dos_ver_710").enable(false).refresh_item(mainMenu);
+		mainMenu.get_item("dos_ver_edit").enable(false).refresh_item(mainMenu);
 		mainMenu.get_item("shell_config_commands").enable(false).refresh_item(mainMenu);
 		/* NTS: We do NOT free the drives! The OS may use them later! */
 		void DOS_ShutdownFiles();
