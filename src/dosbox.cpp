@@ -815,7 +815,9 @@ void SaveGameState(bool pressed) {
     {
         LOG_MSG("Saving state to slot: %d", (int)currentSlot + 1);
         SaveState::instance().save(currentSlot);
-        if (page==currentSlot/SaveState::SLOT_COUNT)
+        if (page!=GetGameState()/SaveState::SLOT_COUNT)
+            SetGameState(currentSlot);
+        else
             refresh_slots();
     }
     catch (const SaveState::Error& err)
@@ -859,7 +861,6 @@ void NextSaveSlot(bool pressed) {
     const bool emptySlot = SaveState::instance().isEmpty(currentSlot);
     LOG_MSG("Active save slot: %d %s", (int)currentSlot + 1, emptySlot ? "[Empty]" : "");
 }
-
 
 void PreviousSaveSlot(bool pressed) {
     if (!pressed) return;
@@ -1297,7 +1298,7 @@ void DOSBOX_SetupConfigSections(void) {
     const char* irqssb[] = { "7", "5", "3", "9", "10", "11", "12", 0 };
     const char* dmasgus[] = { "3", "0", "1", "5", "6", "7", 0 };
     const char* dmassb[] = { "1", "5", "0", "3", "6", "7", 0 };
-    const char* oplemus[] = { "default", "compat", "fast", "nuked", "mame", 0 };
+    const char* oplemus[] = { "default", "compat", "fast", "nuked", "mame", "opl2board", 0 };
     const char *qualityno[] = { "0", "1", "2", "3", 0 };
     const char* tandys[] = { "auto", "on", "off", 0};
     const char* ps1opt[] = { "on", "off", 0};
@@ -1373,6 +1374,11 @@ void DOSBOX_SetupConfigSections(void) {
     Pstring->Set_help("Set this option (auto by default) to indicate to your OS that DOSBox-X is DPI aware.\n"
             "If it is not set, Windows Vista/7/8/10 and higher may upscale the DOSBox-X window\n"
             "on higher resolution monitors which is probably not what you want.");
+
+    Pstring = secprop->Add_string("quit warning",Property::Changeable::OnlyAtStart,"auto");
+    Pstring->Set_values(truefalseautoopt);
+    Pstring->Set_help("Set this option to indicate whether DOSBox-X should show a warning message when the user tries to close its window.\n"
+            "If set to auto (default), DOSBox-X will warn if there are open file handles or a guest system is currently running.");
 
     Pbool = secprop->Add_bool("keyboard hook", Property::Changeable::Always, false);
     Pbool->Set_help("Use keyboard hook (currently only on Windows) to catch special keys and synchronize the keyboard LEDs with the host");
@@ -2680,6 +2686,9 @@ void DOSBOX_SetupConfigSections(void) {
     Pint->Set_values(oplrates);
     Pint->Set_help("Sample rate of OPL music emulation. Use 49716 for highest quality (set the mixer rate accordingly).");
 
+    Pstring = secprop->Add_string("oplport", Property::Changeable::WhenIdle, "");
+	Pstring->Set_help("Serial port of the OPL2 Audio Board when oplemu=opl2board, opl2mode will become 'opl2' automatically.");
+    
     Phex = secprop->Add_hex("hardwarebase",Property::Changeable::WhenIdle,0x220);
     Phex->Set_help("base address of the real hardware Sound Blaster:\n"\
         "210,220,230,240,250,260,280");
@@ -5205,7 +5214,10 @@ void SaveState::removeState(size_t slot) const {
         remove(save.c_str());
         check_slot.open(save.c_str(), std::ifstream::in);
         if (!check_slot.fail()) notifyError("Failed to remove the state in the save slot.");
-        refresh_slots();
+        if (page!=GetGameState()/SaveState::SLOT_COUNT)
+            SetGameState(slot);
+        else
+            refresh_slots();
     }
 }
 
