@@ -1292,7 +1292,7 @@ void DOSBOX_SetupConfigSections(void) {
         "220", "240", "260", "280", "2a0", "2c0", "2e0",            /* IBM PC      (base+port i.e. 220h base, 22Ch is DSP) */
         "d2",  "d4",  "d6",  "d8",  "da",  "dc",  "de",             /* NEC PC-98   (base+(port << 8) i.e. 00D2h base, 2CD2h is DSP) */
         0 };
-    const char* ems_settings[] = { "true", "emsboard", "emm386", "false", 0};
+    const char* ems_settings[] = { "true", "emsboard", "emm386", "false", "1", "0", 0};
     const char* lfn_settings[] = { "true", "false", "1", "0", "auto", "autostart", 0};
     const char* irqsgus[] = { "5", "3", "7", "9", "10", "11", "12", 0 };
     const char* irqssb[] = { "7", "5", "3", "9", "10", "11", "12", 0 };
@@ -3217,6 +3217,9 @@ void DOSBOX_SetupConfigSections(void) {
                       "If auto (default), DOS will report drive Z as remote or local depending on the program.\n"
                       "Set this option to true to prevent SCANDISK.EXE from attempting scan and repair drive Z:\n"
                       "which is impossible since Z: is a virtual drive not backed by a disk filesystem.");
+
+    Pstring = secprop->Add_string("drive z hide files",Property::Changeable::OnlyAtStart,"");
+    Pstring->Set_help("The files listed here (separated by space) will be hidden/removed from the Z drive.");
 
     Pint = secprop->Add_int("hma minimum allocation",Property::Changeable::WhenIdle,0);
     Pint->Set_help("Minimum allocation size for HMA in bytes (equivalent to /HMAMIN= parameter).");
