@@ -67,19 +67,19 @@ DOSBox-X's supported platforms and releases
 
 DOSBox-X is a cross-platform DOS emulator, so all major host operating systems are officially supported, including:
 
-1. Windows XP or higher, 32-bit and 64-bit
+1. Windows (XP or higher), 32-bit and 64-bit
 
 2. Linux (with X11), 32-bit and 64-bit
 
 3. macOS (Mac OS X) Sierra 10.12 or higher 64-bit
 
-4. MS-DOS or compatible (special HX-DOS versions)
+4. DOS (MS-DOS 5.0+ or compatible)
 
 Windows binaries (both 32-bit and 64-bit), Linux RPM packages (64-bit), macOS packages (64-bit) and DOS versions are officially released periodically, typically on the last day of a month or the first day of the next month. Please check out the [DOSBox-X homepage](http://dosbox-x.com) and the [INSTALL](INSTALL.md) page for the latest DOSBox-X packages on these platforms and further installation instructions. You can also find ZIP (or Linux RPM) packages for all released versions and their change logs in the [Releases](https://github.com/joncampbell123/dosbox-x/releases) page. 
 
-The latest version of DOSBox-X was released on September 1, 2020. If you use Windows, please note that the default Windows releases built with Visual Studio only support Windows Vista and later (Windows 7, 8, and 10); for Windows XP, the MinGW builds are required. Auto-installable Windows packages for DOSBox-X are also available to ease the installation process, which are especially recommended for new and non-expert users. If you use the installers you will be able to start DOSBox-X as soon as the installation ends. The all-in-one Windows installer for the latest official version of DOSBox-X can be downloaded from: [DOSBox-X-Setup-Windows-latest.exe](https://github.com/Wengier/dosbox-x-wiki/raw/master/DOSBox-X-Setup-Windows-latest.exe)
+The latest version of DOSBox-X was released on September 1, 2020. If you use Windows, please note that the default Windows releases built with Visual Studio only support Windows Vista and later (Windows 7, 8, and 10); for Windows XP, the MinGW builds are required. Auto-installable Windows packages for DOSBox-X are available to ease the installation process, which are especially recommended for new and non-expert users. If you use the installers you will be able to start DOSBox-X as soon as the installation ends. The all-in-one Windows installer for the latest official version of DOSBox-X can be downloaded from: [DOSBox-X-Setup-Windows-latest.exe](https://github.com/Wengier/dosbox-x-wiki/raw/master/DOSBox-X-Setup-Windows-latest.exe)
 
-For running DOSBox-X in a real DOS system (MS-DOS or compatible), please use the special HX-DOS builds. It is achieved with the help of the freely-available [HX DOS Extender](https://github.com/Baron-von-Riedesel/HX), which is already included in the recent HX-DOS release packages. However, not all features of DOSBox-X can be supported in this environment. Moreover, while the HX-DOS builds may sometimes happen to also run on Windows, they are made for the HX DOS Extender environment so it is strongly recommended to use the Visual Studio or MinGW builds (both included in the Windows installer) for the Windows platform instead.
+For running DOSBox-X in a real DOS system (MS-DOS or compatible), please use the special HX-DOS builds included in the DOS packages. It is achieved with the help of the freely-available [HX DOS Extender](https://github.com/Baron-von-Riedesel/HX), which is already included in the recent DOS release packages. However, not all features of DOSBox-X that are supported in other platforms can be supported in this environment.
 
 The full source code is officially provided with each DOSBox-X release, which may be compiled to run on the above and other operating systems too. You can also get the latest development source code from the repository directly. See also the [DOSBox-X source code description](README.source-code-description) page for information on compiling the source code.
 
@@ -288,8 +288,9 @@ DOS games. This is evident by the fact that much of the code is
 somewhat accurate code with kludges to make DOS games run,
 instead of focusing on what hardware actually does.
 
-Many of the changes I wanted to make were non-game related, and
-therefore were unlikely to be accepted by the DOSBox developers.
+Many of the changes I (the DOSBox-X project maintainer) wanted to
+make were non-game related, and therefore were unlikely to be
+accepted by the DOSBox developers.
 
 Since then, I have been modifying the source code over time to
 improve emulation, fix bugs, and resolve incompatibilities with
@@ -304,7 +305,7 @@ The original DOSBox project was not written by one programmer. It
 has been under development since late 2000 with patches, fixes,
 and improvements from members all over the Vogons forums. Despite
 not having a major official release since DOSBox 0.74 over 10
-years ago, the project is still in active development today.
+years ago, the project is still in semi-active development today.
 Meanwhile, some of the changes themselves incorporated code from
 other projects.
 
@@ -313,12 +314,14 @@ branch of DOSBox known as [DOSBox SVN Daum](http://ykhwong.x-y.net)
 which itself incorporated features from the original DOSBox
 project, DOSBox-X, and many experimental patches. Although the
 Daum branch seems to be dead, the features borrowed from it still
-exists in DOSBox-X.
+exists in DOSBox-X. Later on, DOSBox-X also incorporated several
+features and improvements from other projects such as [DOSBox ECE](https://dosboxece.yesterplay.net/),
+[dosbox-staging](https://dosbox-staging.github.io/) and [vDosPlus](http://www.vdosplus.org/).
 
-Later on, DOSBox-X also incorporated several features and improvements
-from other projects such as [DOSBox ECE](https://dosboxece.yesterplay.net/), [dosbox-staging](https://dosbox-staging.github.io/) and
-[vDosPlus](http://www.vdosplus.org/), with major improvements and works from its contributors
-such as Wengier, Allofich, and rderooy.
+The DOSBox-X project is also helped by its other developers and
+contributors such as Wengier, aybe, Allofich, and rderooy, who have
+done significant work to improve the DOSBox-X project, including
+creating the documentation and porting code from other projects.
 
 See also the [CREDITS](CREDITS.md) page for crediting of the source code.
 
