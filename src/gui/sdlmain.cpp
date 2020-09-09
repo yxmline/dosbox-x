@@ -8569,7 +8569,109 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             Cross::GetPlatformConfigName(tmp);
             control->ParseConfigFile((config_path + tmp).c_str());
         }
-		
+
+		// Redirect existing PC-98 related settings from other sections to the [pc98] section if the latter is empty
+		Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
+		assert(pc98_section != NULL);
+		const char * extra = const_cast<char*>(pc98_section->data.c_str());
+		if (!extra||!strlen(extra)) {
+			char linestr[CROSS_LEN+1], *p;
+			Section_prop * section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+			extra = const_cast<char*>(section->data.c_str());
+			if (extra&&strlen(extra)) {
+				std::istringstream in(extra);
+				if (in)	for (std::string line; std::getline(in, line); ) {
+					if (strncasecmp(line.c_str(), "pc-98 ", 6)) continue;
+					if (line.length()>CROSS_LEN) {
+						strncpy(linestr, line.c_str(), CROSS_LEN);
+						linestr[CROSS_LEN]=0;
+					} else
+						strcpy(linestr, line.c_str());
+					p=strchr(linestr, '=');
+					if (p!=NULL&&pc98_section->HandleInputline(line)) {
+						*p=0;
+						LOG_MSG("Redirected \"%s\" from [dosbox] to [pc98] section\n", trim(linestr));
+					}
+				}
+			}
+			section = static_cast<Section_prop *>(control->GetSection("dos"));
+			extra = const_cast<char*>(section->data.c_str());
+			if (extra&&strlen(extra)) {
+				std::istringstream in(extra);
+				if (in)	for (std::string line; std::getline(in, line); ) {
+					if (strncasecmp(line.c_str(), "pc-98 ", 6)) continue;
+					if (line.length()>CROSS_LEN) {
+						strncpy(linestr, line.c_str(), CROSS_LEN);
+						linestr[CROSS_LEN]=0;
+					} else
+						strcpy(linestr, line.c_str());
+					p=strchr(linestr, '=');
+					if (p!=NULL&&pc98_section->HandleInputline(line)) {
+						*p=0;
+						LOG_MSG("Redirected \"%s\" from [dos] to [pc98] section\n", trim(linestr));
+					}
+				}
+			}
+		}
+
+		// Redirect existing video related settings from [dosbox] section to the [video] section if the latter is empty
+		Section_prop * video_section = static_cast<Section_prop *>(control->GetSection("video"));
+		assert(video_section != NULL);
+		extra = const_cast<char*>(video_section->data.c_str());
+		if (!extra||!strlen(extra)) {
+			char linestr[CROSS_LEN+1], *p;
+			Section_prop * section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+			extra = const_cast<char*>(section->data.c_str());
+			if (extra&&strlen(extra)) {
+				std::istringstream in(extra);
+				if (in)	for (std::string line; std::getline(in, line); ) {
+					if (!strstr(line.c_str(), "vmem")&&!strstr(line.c_str(), "vga")&&!strstr(line.c_str(), "video")&&!strstr(line.c_str(), "dac")&&!strstr(line.c_str(), "cga")&&!strstr(line.c_str(), "CGA")&&!strstr(line.c_str(), "vesa")&&!strstr(line.c_str(), "hpel")&&!strstr(line.c_str(), "hretrace")&&!strstr(line.c_str(), "debug line")&&!strstr(line.c_str(), "memory bit")&&!strstr(line.c_str(), "forcerate")&&!strstr(line.c_str(), "double-buffered")&&!strstr(line.c_str(), "vblank")&&!strstr(line.c_str(), "setmode")) continue;
+					if (line.length()>CROSS_LEN) {
+						strncpy(linestr, line.c_str(), CROSS_LEN);
+						linestr[CROSS_LEN]=0;
+					} else
+						strcpy(linestr, line.c_str());
+					p=strchr(linestr, '=');
+					if (p!=NULL&&video_section->HandleInputline(line)) {
+						*p=0;
+						LOG_MSG("Redirected \"%s\" from [dosbox] to [video] section\n", trim(linestr));
+					}
+				}
+			}
+		}
+
+		// Redirect existing files= setting from [dos] section to the [config] section if the latter is empty
+		Section_prop * config_section = static_cast<Section_prop *>(control->GetSection("config"));
+		assert(config_section != NULL);
+		extra = const_cast<char*>(config_section->data.c_str());
+		if (!extra||!strlen(extra)) {
+			char linestr[CROSS_LEN+1], *p;
+			Section_prop * section = static_cast<Section_prop *>(control->GetSection("dos"));
+			extra = const_cast<char*>(section->data.c_str());
+			if (extra&&strlen(extra)) {
+				std::istringstream in(extra);
+				if (in)	for (std::string line; std::getline(in, line); ) {
+					if (strncasecmp(line.c_str(), "files", 5)&&strncasecmp(line.c_str(), "dos in hma", 10)) continue;
+					if (line.length()>CROSS_LEN) {
+						strncpy(linestr, line.c_str(), CROSS_LEN);
+						linestr[CROSS_LEN]=0;
+					} else
+						strcpy(linestr, line.c_str());
+					p=strchr(linestr, '=');
+					if (p!=NULL) {
+						if (!strncasecmp(line.c_str(), "dos in hma", 10)) {
+							if (!strcasecmp(trim(p+1), "true")) line="dos=high";
+							else if (!strcasecmp(trim(p+1), "false")) line="dos=low";
+						}
+						if (config_section->HandleInputline(line)) {
+							*p=0;
+							LOG_MSG("Redirected \"%s\" from [dos] to [config] section\n", trim(linestr));
+						}
+					}
+				}
+			}
+		}
+
 		MSG_Add("PROGRAM_CONFIG_PROPERTY_ERROR","No such section or property.\n");
 		MSG_Add("PROGRAM_CONFIG_NO_PROPERTY","There is no property %s in section %s.\n");
 		MSG_Add("PROGRAM_CONFIG_SET_SYNTAX","The syntax for -set option is incorrect.\n");
@@ -8663,111 +8765,9 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 			while (value.size() && (value.at(0) ==' ' ||value.at(0) =='=') ) value.erase(0,1);
 			for(Bitu i = 3; i < pvars.size(); i++) value += (std::string(" ") + pvars[i]);
 			std::string inputline = pvars[1] + "=" + value;
-			
+
 			bool change_success = tsec->HandleInputline(inputline.c_str());
 			if (!change_success&&!value.empty()) LOG_MSG("Cannot set \"%s\"\n", inputline.c_str());
-		}
-		
-		// Redirect existing PC-98 related settings from other sections to the [pc98] section if the latter is empty
-		Section_prop * pc98_section = static_cast<Section_prop *>(control->GetSection("pc98"));
-		assert(pc98_section != NULL);
-		const char * extra = const_cast<char*>(pc98_section->data.c_str());
-		if (!extra||!strlen(extra)) {
-			char linestr[CROSS_LEN+1], *p;
-			Section_prop * section = static_cast<Section_prop *>(control->GetSection("dosbox"));
-			extra = const_cast<char*>(section->data.c_str());
-			if (extra&&strlen(extra)) {
-				std::istringstream in(extra);
-				if (in)	for (std::string line; std::getline(in, line); ) {
-					if (strncasecmp(line.c_str(), "pc-98 ", 6)) continue;
-					if (line.length()>CROSS_LEN) {
-						strncpy(linestr, line.c_str(), CROSS_LEN);
-						linestr[CROSS_LEN]=0;
-					} else
-						strcpy(linestr, line.c_str());
-					p=strchr(linestr, '=');
-					if (p!=NULL&&pc98_section->HandleInputline(line)) {
-						*p=0;
-						LOG_MSG("Redirected \"%s\" from [dosbox] to [pc98] section\n", trim(linestr));
-					}
-				}
-			}
-			section = static_cast<Section_prop *>(control->GetSection("dos"));
-			extra = const_cast<char*>(section->data.c_str());
-			if (extra&&strlen(extra)) {
-				std::istringstream in(extra);
-				if (in)	for (std::string line; std::getline(in, line); ) {
-					if (strncasecmp(line.c_str(), "pc-98 ", 6)) continue;
-					if (line.length()>CROSS_LEN) {
-						strncpy(linestr, line.c_str(), CROSS_LEN);
-						linestr[CROSS_LEN]=0;
-					} else
-						strcpy(linestr, line.c_str());
-					p=strchr(linestr, '=');
-					if (p!=NULL&&pc98_section->HandleInputline(line)) {
-						*p=0;
-						LOG_MSG("Redirected \"%s\" from [dos] to [pc98] section\n", trim(linestr));
-					}
-				}
-			}
-		}
-
-		// Redirect existing video related settings from [dosbox] section to the [video] section if the latter is empty
-		Section_prop * video_section = static_cast<Section_prop *>(control->GetSection("video"));
-		assert(video_section != NULL);
-		extra = const_cast<char*>(video_section->data.c_str());
-		if (!extra||!strlen(extra)) {
-			char linestr[CROSS_LEN+1], *p;
-			Section_prop * section = static_cast<Section_prop *>(control->GetSection("dosbox"));
-			extra = const_cast<char*>(section->data.c_str());
-			if (extra&&strlen(extra)) {
-				std::istringstream in(extra);
-				if (in)	for (std::string line; std::getline(in, line); ) {
-					if (!strstr(line.c_str(), "vmem")&&!strstr(line.c_str(), "vga")&&!strstr(line.c_str(), "video")&&!strstr(line.c_str(), "dac")&&!strstr(line.c_str(), "cga")&&!strstr(line.c_str(), "CGA")&&!strstr(line.c_str(), "vesa")&&!strstr(line.c_str(), "hpel")&&!strstr(line.c_str(), "hretrace")&&!strstr(line.c_str(), "debug line")&&!strstr(line.c_str(), "forcerate")&&!strstr(line.c_str(), "double-buffered")&&!strstr(line.c_str(), "vblank")&&!strstr(line.c_str(), "setmode")) continue;
-					if (line.length()>CROSS_LEN) {
-						strncpy(linestr, line.c_str(), CROSS_LEN);
-						linestr[CROSS_LEN]=0;
-					} else
-						strcpy(linestr, line.c_str());
-					p=strchr(linestr, '=');
-					if (p!=NULL&&video_section->HandleInputline(line)) {
-						*p=0;
-						LOG_MSG("Redirected \"%s\" from [dosbox] to [video] section\n", trim(linestr));
-					}
-				}
-			}
-		}
-
-		// Redirect existing files= setting from [dos] section to the [config] section if the latter is empty
-		Section_prop * config_section = static_cast<Section_prop *>(control->GetSection("config"));
-		assert(config_section != NULL);
-		extra = const_cast<char*>(config_section->data.c_str());
-		if (!extra||!strlen(extra)) {
-			char linestr[CROSS_LEN+1], *p;
-			Section_prop * section = static_cast<Section_prop *>(control->GetSection("dos"));
-			extra = const_cast<char*>(section->data.c_str());
-			if (extra&&strlen(extra)) {
-				std::istringstream in(extra);
-				if (in)	for (std::string line; std::getline(in, line); ) {
-					if (strncasecmp(line.c_str(), "files", 5)&&strncasecmp(line.c_str(), "dos in hma", 10)) continue;
-					if (line.length()>CROSS_LEN) {
-						strncpy(linestr, line.c_str(), CROSS_LEN);
-						linestr[CROSS_LEN]=0;
-					} else
-						strcpy(linestr, line.c_str());
-					p=strchr(linestr, '=');
-					if (p!=NULL) {
-						if (!strncasecmp(line.c_str(), "dos in hma", 10)) {
-							if (!strcasecmp(trim(p+1), "true")) line="dos=high";
-							else if (!strcasecmp(trim(p+1), "false")) line="dos=low";
-						}
-						if (config_section->HandleInputline(line)) {
-							*p=0;
-							LOG_MSG("Redirected \"%s\" from [dos] to [config] section\n", trim(linestr));
-						}
-					}
-				}
-			}
 		}
 
 #if (ENVIRON_LINKED)

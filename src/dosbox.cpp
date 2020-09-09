@@ -986,7 +986,8 @@ void DOSBOX_InitTickLoop() {
 
 void Init_VGABIOS() {
     Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));
-    assert(section != NULL);
+    Section_prop *video_section = static_cast<Section_prop *>(control->GetSection("video"));
+    assert(section != NULL && video_section != NULL);
 
     if (IS_PC98_ARCH) {
         // There IS no VGA BIOS, this is PC-98 mode!
@@ -1007,16 +1008,16 @@ void Init_VGABIOS() {
 	freesizecap = section->Get_bool("freesizecap");
     wpcolon = section->Get_bool("leading colon write protect image");
 
-    VGA_BIOS_Size_override = (Bitu)section->Get_int("vga bios size override");
+    VGA_BIOS_Size_override = (Bitu)video_section->Get_int("vga bios size override");
     if (VGA_BIOS_Size_override > 0) VGA_BIOS_Size_override = (VGA_BIOS_Size_override+0x7FFU)&(~0xFFFU);
 
-    VGA_BIOS_dont_duplicate_CGA_first_half = section->Get_bool("video bios dont duplicate cga first half rom font");
-    VIDEO_BIOS_always_carry_14_high_font = section->Get_bool("video bios always offer 14-pixel high rom font");
-    VIDEO_BIOS_always_carry_16_high_font = section->Get_bool("video bios always offer 16-pixel high rom font");
-    VIDEO_BIOS_enable_CGA_8x8_second_half = section->Get_bool("video bios enable cga second half rom font");
+    VGA_BIOS_dont_duplicate_CGA_first_half = video_section->Get_bool("video bios dont duplicate cga first half rom font");
+    VIDEO_BIOS_always_carry_14_high_font = video_section->Get_bool("video bios always offer 14-pixel high rom font");
+    VIDEO_BIOS_always_carry_16_high_font = video_section->Get_bool("video bios always offer 16-pixel high rom font");
+    VIDEO_BIOS_enable_CGA_8x8_second_half = video_section->Get_bool("video bios enable cga second half rom font");
     /* NTS: mainline compatible mapping demands the 8x8 CGA font */
-    rom_bios_8x8_cga_font = section->Get_bool("rom bios 8x8 CGA font");
-    rom_bios_vptable_enable = section->Get_bool("rom bios video parameter table");
+    rom_bios_8x8_cga_font = video_section->Get_bool("rom bios 8x8 CGA font");
+    rom_bios_vptable_enable = video_section->Get_bool("rom bios video parameter table");
 
     /* sanity check */
     if (VGA_BIOS_dont_duplicate_CGA_first_half && !rom_bios_8x8_cga_font) /* can't point at the BIOS copy if it's not there */
@@ -1120,7 +1121,7 @@ void DOSBOX_RealInit() {
 
     // CGA/EGA/VGA-specific
     extern unsigned char vga_p3da_undefined_bits;
-    vga_p3da_undefined_bits = (unsigned char)section->Get_hex("vga 3da undefined bits");
+    vga_p3da_undefined_bits = (unsigned char)static_cast<Section_prop *>(control->GetSection("video"))->Get_hex("vga 3da undefined bits");
 
     // TODO: should be parsed by motherboard emulation or lower level equiv..?
     std::string cmd_machine;
@@ -1703,11 +1704,6 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool = secprop->Add_bool("enable pci bus",Property::Changeable::OnlyAtStart,true);
     Pbool->Set_help("Enable PCI bus emulation");
 
-    Pbool = secprop->Add_bool("ignore extended memory bit",Property::Changeable::Always,false);
-    Pbool->Set_help("Some DOS applications use VGA 256-color mode but accidentally clear the extended memory\n"
-                    "bit originally defined to indicate whether EGA hardware has more than 64KB of RAM.\n"
-                    "Setting this option can correct for that. Needed for Mr. Blobby.");
-
     secprop=control->AddSection_prop("video",&Null_Init);
     Pint = secprop->Add_int("vmemdelay", Property::Changeable::WhenIdle,0);
     Pint->SetMinMax(-1,100000);
@@ -1733,6 +1729,16 @@ void DOSBOX_SetupConfigSections(void) {
         "For build engine games, use more memory than in the list above so it can\n"
         "use triple buffering and thus won't flicker.\n"
         );
+
+    Pint = secprop->Add_int("vesa set display vsync", Property::Changeable::WhenIdle,-1);
+    Pint->SetMinMax(-1,1);
+    Pint->Set_help(
+        "Whether to wait for vertical retrace if VESA Set Display Address is used to pan the display.\n"
+        "The default value -1 will wait if svga_oldvbe, or not otherwise. 0 means not to wait.\n"
+        "1 means always to wait. This affects only subfunction 0x00. Subfunction 0x80 will always wait\n"
+        "as specified in the VESA BIOS standard.\n"
+        "It is recommended to set this to 1 for VBETEST.EXE so that the panning test and information does not\n"
+        "go by too fast.");
 
     Pint = secprop->Add_int("vmemsizekb", Property::Changeable::WhenIdle,0);
     Pint->SetMinMax(0,1024);
@@ -1976,6 +1982,11 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool = secprop->Add_bool("ignore vblank wraparound",Property::Changeable::Always,false);
     Pbool->Set_help("DOSBox-X can handle active display properly if games or demos reprogram vertical blanking to end in the active picture area.\n"
             "If the wraparound handling prevents the game from displaying properly, set this to false. Out of bounds vblank values will be ignored.\n");
+
+    Pbool = secprop->Add_bool("ignore extended memory bit",Property::Changeable::Always,false);
+    Pbool->Set_help("Some DOS applications use VGA 256-color mode but accidentally clear the extended memory\n"
+                    "bit originally defined to indicate whether EGA hardware has more than 64KB of RAM.\n"
+                    "Setting this option can correct for that. Needed for Mr. Blobby.");
 
     Pbool = secprop->Add_bool("enable vga resize delay",Property::Changeable::Always,false);
     Pbool->Set_help("If the DOS game you are running relies on certain VGA raster tricks that affect active display area, enable this option.\n"
