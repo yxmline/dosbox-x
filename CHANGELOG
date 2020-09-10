@@ -1,4 +1,9 @@
 0.83.6
+  - Added the "Show advanced options" checkbox in the
+    main screen of the Configuration GUI to toggle
+    whether to display all config options for the
+    sections. If unchecked (default), it will show
+    common config options instead of all. (Wengier) 
   - Added code to cap the scan line length given to
     the VESA BIOS given the video mode. This prevents
     VBETEST.EXE from doing test patterns smaller than
