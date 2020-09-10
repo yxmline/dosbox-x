@@ -1006,7 +1006,6 @@ copy "$(SolutionDir)\..\shaders\*.*" "$(OutputPath)\shaders\"</Command>
     <ClCompile Include="..\src\gui\sdlmain.cpp" />
     <ClCompile Include="..\src\gui\sdl_gui.cpp" />
     <ClCompile Include="..\src\gui\sdl_mapper.cpp" />
-    <ClCompile Include="..\src\gui\cheats.cpp" />
     <ClCompile Include="..\src\mt32\sha1\sha1.cpp" />
     <ClCompile Include="..\src\mt32\Synth.cpp" />
     <ClCompile Include="..\src\mt32\Tables.cpp" />
@@ -1233,7 +1232,6 @@ copy "$(SolutionDir)\..\shaders\*.*" "$(OutputPath)\shaders\"</Command>
     <ClInclude Include="..\include\zip.h" />
     <ClInclude Include="..\include\zipcrc.h" />
     <ClInclude Include="..\include\zipfile.h" />
-    <ClInclude Include="..\include\cheats.h" />
     <ClInclude Include="..\src\aviwriter\avi.h" />
     <ClInclude Include="..\src\aviwriter\avi_rw_iobuf.h" />
     <ClInclude Include="..\src\aviwriter\avi_writer.h" />
