@@ -1,9 +1,17 @@
 0.83.6
+  - Improved the message when automatically re-running
+    the executable which failed with the "Packed file
+    is corrupt" error. Also added the "autoloadfix"
+    config option which when set to "false" will not
+    automatically re-run such programs. (Wengier)
   - Added the "Show advanced options" checkbox in the
     main screen of the Configuration GUI to toggle
     whether to display all config options for the
     sections. If unchecked (default), it will show
-    common config options instead of all. (Wengier) 
+    common config options instead of all of them. A
+    new config option "show advanced options" is added
+    which when set to "true" will make the checkbox
+    checked by default. (Wengier)
   - Added code to cap the scan line length given to
     the VESA BIOS given the video mode. This prevents
     VBETEST.EXE from doing test patterns smaller than

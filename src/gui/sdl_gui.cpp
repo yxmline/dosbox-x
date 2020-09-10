@@ -748,12 +748,15 @@ public:
         int button_row_h = 26;
         int button_row_padding_y = 5 + 5;
 
-        int num_prop = 0;
-        while (section->Get_prop(num_prop) != NULL) num_prop++;
+        int num_prop = 0, k=0;
+        while (section->Get_prop(num_prop) != NULL) {
+            if (advopt->isChecked() || section->Get_prop(num_prop)->basic()) k++;
+            num_prop++;
+        }
 
         int allowed_dialog_y = parent->getHeight() - 25 - (border_top + border_bottom) - 50;
 
-        int items_per_col = num_prop;
+        int items_per_col = k;
         int columns = 1;
 
         int scroll_h = items_per_col * row_height;
@@ -780,12 +783,12 @@ public:
         title[0] = std::toupper(title[0]);
         setTitle("Configuration for "+title);
 
-        GUI::Button *b = new GUI::Button(this, button_row_cx, button_row_y, "Cancel", button_w);
+        GUI::Button *b = new GUI::Button(this, button_row_cx, button_row_y, "Help", button_w);
+        b->addActionHandler(this);
+
+        b = new GUI::Button(this, button_row_cx + (button_w + button_pad_w), button_row_y, "Cancel", button_w);
         b->addActionHandler(this);
         closeButton = b;
-
-        b = new GUI::Button(this, button_row_cx + (button_w + button_pad_w), button_row_y, "Help", button_w);
-        b->addActionHandler(this);
 
         b = new GUI::Button(this, button_row_cx + (button_w + button_pad_w)*2, button_row_y, "OK", button_w);
 
@@ -1653,7 +1656,8 @@ public:
 
         new GUI::Label(this, 10, 30, "Choose a settings group to configure:");
         advopt = new GUI::Checkbox(this, 340, 30, "Show advanced options");
-        advopt->setChecked(false);
+        Section_prop * section=static_cast<Section_prop *>(control->GetSection("dosbox"));
+        advopt->setChecked(section->Get_bool("show advanced options"));
 
         Section *sec;
         int gridbtnwidth = 130;

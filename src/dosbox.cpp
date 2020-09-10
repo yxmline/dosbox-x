@@ -1387,6 +1387,9 @@ void DOSBOX_SetupConfigSections(void) {
             "If set to auto (default), DOSBox-X will warn if there are open file handles or a guest system is currently running.");
     Pstring->SetBasic(true);
 
+    Pbool = secprop->Add_bool("show advanced options", Property::Changeable::Always, false);
+    Pbool->Set_help("If set, the Configuration UI will display all config options (including advanced ones) by default.");
+
     Pbool = secprop->Add_bool("keyboard hook", Property::Changeable::Always, false);
     Pbool->Set_help("Use keyboard hook (currently only on Windows) to catch special keys and synchronize the keyboard LEDs with the host");
 
@@ -2283,6 +2286,7 @@ void DOSBOX_SetupConfigSections(void) {
 
     Pbool = secprop->Add_bool("fpu",Property::Changeable::Always,true);
     Pbool->Set_help("Enable FPU emulation");
+    Pbool->SetBasic(true);
 
     Pbool = secprop->Add_bool("segment limits",Property::Changeable::Always,true);
     Pbool->Set_help("Enforce segment limits");
@@ -2349,7 +2353,7 @@ void DOSBOX_SetupConfigSections(void) {
         "                  need if 'auto' fails (Example: fixed 4000).\n"
         "  'max'           will allocate as much cycles as your computer is able to\n"
         "                  handle.");
-    Pmulti->SetBasic(true);
+    Pmulti_remain->SetBasic(true);
 
     Pstring = Pmulti_remain->GetSection()->Add_string("type",Property::Changeable::Always,"auto");
     Pmulti_remain->SetValue("auto",/*init*/true);
@@ -3215,7 +3219,6 @@ void DOSBOX_SetupConfigSections(void) {
     Pmulti_remain->SetBasic(true);
     Pmulti_remain->GetSection()->Add_string("parameters",Property::Changeable::WhenIdle,"");
     Pmulti_remain->Set_help("see serial1");
-    Pmulti->SetBasic(true);
     Pmulti_remain->SetBasic(true);
 
     Pmulti_remain = secprop->Add_multiremain("serial4",Property::Changeable::WhenIdle," ");
@@ -3540,25 +3543,29 @@ void DOSBOX_SetupConfigSections(void) {
                       "If set to autostart, the builtin VER command won't activate/disactivate LFN support according to the reported DOS version.");
     Pstring->SetBasic(true);
 
+    Pbool = secprop->Add_bool("autoloadfix",Property::Changeable::WhenIdle,true);
+    Pbool->Set_help("If set (default), DOSBox-X will automatically re-run the executable with LOADFIX if it failed with the \"Packed file is corrupt\" error.");
+    Pbool->SetBasic(true);
+
     Pbool = secprop->Add_bool("automount",Property::Changeable::WhenIdle,true);
     Pbool->Set_help("Enable automatic drive mounting in Windows.");
-    Pstring->SetBasic(true);
+    Pbool->SetBasic(true);
 
     Pbool = secprop->Add_bool("automountall",Property::Changeable::OnlyAtStart,false);
     Pbool->Set_help("Automatically mount all available Windows drives at start.");
-    Pstring->SetBasic(true);
+    Pbool->SetBasic(true);
 
     Pbool = secprop->Add_bool("mountwarning",Property::Changeable::OnlyAtStart,true);
     Pbool->Set_help("If set, a warning will be displayed if you try to mount C:\\ in Windows or / in other platforms.");
-    Pstring->SetBasic(true);
+    Pbool->SetBasic(true);
 
     Pbool = secprop->Add_bool("startcmd",Property::Changeable::OnlyAtStart,false);
     Pbool->Set_help("Allow starting commands to run on the Windows host including the use of START command.");
-    Pstring->SetBasic(true);
+    Pbool->SetBasic(true);
 
     Pbool = secprop->Add_bool("startwait",Property::Changeable::OnlyAtStart,true);
     Pbool->Set_help("Specify whether DOSBox-X should wait for the Windows programs after they are started.");
-    Pstring->SetBasic(true);
+    Pbool->SetBasic(true);
 
     Pstring = secprop->Add_string("startincon",Property::Changeable::OnlyAtStart,"assoc attrib chcp copy dir echo for ftype help if set type ver vol xcopy");
     Pstring->Set_help("START command will start these commands (separated by space) in a console and wait for a key press before exiting.");
