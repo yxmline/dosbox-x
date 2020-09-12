@@ -94,7 +94,7 @@ static SDL_Surface*         background = NULL;
 #ifdef DOSBOXMENU_EXTERNALLY_MANAGED
 static bool                 gui_menu_init = true;
 #endif
-
+int                         shortcutid = -1;
 void                        GFX_GetSizeAndPos(int &x,int &y,int &width, int &height, bool &fullscreen);
 
 #if defined(WIN32) && !defined(HX_DOS)
@@ -356,8 +356,14 @@ static GUI::ScreenSDL *UI_Startup(GUI::ScreenSDL *screen) {
         }
     }
 
-    guiMenu.rebuild();
-    DOSBox_SetMenu(guiMenu);
+    static DOSBoxMenu nullMenu;
+    if (!shortcut || shortcutid<16) {
+        guiMenu.rebuild();
+        DOSBox_SetMenu(guiMenu);
+    } else {
+        nullMenu.rebuild();
+        DOSBox_SetMenu(nullMenu);
+    }
 #endif
 
     if (screen) screen->setSurface(sdlscreen);
@@ -686,6 +692,101 @@ public:
     }
 };
 
+std::string dispname="";
+std::string CapName(std::string name) {
+    dispname = name;
+    if (name=="sdl"||name=="cpu"||name=="midi"||name=="gus"||name=="ipx"||name=="ne2000")
+        std::transform(dispname.begin(), dispname.end(), dispname.begin(), ::toupper);
+    else if (name=="dosbox")
+        dispname="Main";
+    else if (name=="pc98")
+        dispname="PC-98";
+    else if (name=="vsync")
+        dispname="V-Sync";
+    else if (name=="dos")
+        dispname="DOS Settings";
+    else if (name=="4dos")
+        dispname="4DOS.INI";
+    else if (name=="config")
+        dispname="CONFIG.SYS";
+    else if (name=="autoexec")
+        dispname="AUTOEXEC.BAT";
+    else if (name=="sblaster")
+        dispname="Sound Blaster";
+    else if (name=="speaker")
+        dispname="PC Speaker";
+    else if (name=="serial")
+        dispname="Serial Ports";
+    else if (name=="parallel")
+        dispname="Parallel Ports";
+    else if (name=="fdc, primary")
+        dispname="Floppy Port #1";
+    else if (name=="ide, primary")
+        dispname="IDE Port #1";
+    else if (name=="ide, secondary")
+        dispname="IDE Port #2";
+    else if (name=="ide, tertiary")
+        dispname="IDE Port #3";
+    else if (name=="ide, quaternary")
+        dispname="IDE Port #4";
+    else if (name=="ide, quinternary")
+        dispname="IDE Port #5";
+    else if (name=="ide, sexternary")
+        dispname="IDE Port #6";
+    else if (name=="ide, septernary")
+        dispname="IDE Port #7";
+    else if (name=="ide, octernary")
+        dispname="IDE Port #8";
+    else
+        dispname[0] = std::toupper(name[0]);
+    return dispname;
+}
+
+std::string RestoreName(std::string name) {
+    dispname = name;
+    if (name=="Main")
+        dispname="dosbox";
+    else if (name=="PC-98")
+        dispname="pc98";
+    else if (name=="V-Sync")
+        dispname="vsync";
+    else if (name=="DOS Settings")
+        dispname="dos";
+    else if (name=="4DOS.INI")
+        dispname="4dos";
+    else if (name=="CONFIG.SYS")
+        dispname="config";
+    else if (name=="AUTOEXEC.BAT")
+        dispname="autoexec";
+    else if (name=="Sound Blaster")
+        dispname="sblaster";
+    else if (name=="PC Speaker")
+        dispname="speaker";
+    else if (name=="Serial Ports")
+        dispname="serial";
+    else if (name=="Parallel Ports")
+        dispname="parallel";
+    else if (name=="Floppy Port #1")
+        dispname="fdc, primary";
+    else if (name=="IDE Port #1")
+        dispname="ide, primary";
+    else if (name=="IDE Port #2")
+        dispname="ide, secondary";
+    else if (name=="IDE Port #3")
+        dispname="ide, tertiary";
+    else if (name=="IDE Port #4")
+        dispname="ide, quaternary";
+    else if (name=="IDE Port #5")
+        dispname="ide, quinternary";
+    else if (name=="IDE Port #6")
+        dispname="ide, sexternary";
+    else if (name=="IDE Port #7")
+        dispname="ide, septernary";
+    else if (name=="IDE Port #8")
+        dispname="ide, octernary";
+    return dispname;
+}
+
 GUI::Checkbox *advopt;
 static std::map< std::vector<GUI::Char>, GUI::ToplevelWindow* > cfg_windows_active;
 
@@ -701,10 +802,10 @@ public:
         }
 
         std::string title(section->GetName());
-        title.at(0) = std::toupper(title.at(0));
-        setTitle("Help for "+title);
+        setTitle("Help for "+CapName(title));
+        title[0] = std::toupper(title[0]);
 
-        Section_prop* sec = dynamic_cast<Section_prop*>(section);
+        Section_prop* sec = dynamic_cast<Section_prop*>(title.substr(0, 4)=="Ide,"?control->GetSection("ide, primary"):section);
         if (sec) {
             std::string msg;
             Property *p;
@@ -717,10 +818,10 @@ public:
             if (!msg.empty()) msg.replace(msg.end()-1,msg.end(),"");
             setText(msg);
         } else {
-        std::string name = section->GetName();
-        std::transform(name.begin(), name.end(), name.begin(), (int(*)(int))std::toupper);
-        name += "_CONFIGFILE_HELP";
-        setText(MSG_Get(name.c_str()));
+            std::string name = section->GetName();
+            std::transform(name.begin(), name.end(), name.begin(), (int(*)(int))std::toupper);
+            name += "_CONFIGFILE_HELP";
+            setText(MSG_Get(name.c_str()));
         }
     };
 
@@ -784,8 +885,8 @@ public:
             move(this->x,parent->getHeight() - this->getHeight());
 
         std::string title(section->GetName());
+        setTitle("Configuration for "+CapName(title));
         title[0] = std::toupper(title[0]);
-        setTitle("Configuration for "+title);
 
         GUI::Button *b = new GUI::Button(this, button_row_cx, button_row_y, "Help", button_w);
         b->addActionHandler(this);
@@ -950,8 +1051,8 @@ public:
             scroll_h = allowed_dialog_y;
 
         std::string title(section->GetName());
+        setTitle("Configuration for "+CapName(title));
         title[0] = std::toupper(title[0]);
-        setTitle("Configuration for "+title);
 
 		char extra_data[4096] = { 0 };
 		const char * extra = const_cast<char*>(section->data.c_str());
@@ -1726,9 +1827,10 @@ public:
         while ((sec = control->GetSection(i))) {
             if (i != 0 && (i%15) == 0) bar->addItem(1, "|");
             std::string name = sec->GetName();
+            std::string title = CapName(name);
             name[0] = std::toupper(name[0]);
             const auto sz = gridfunc(i);
-            GUI::Button *b = new GUI::Button(this, sz.first, sz.second, name, gridbtnwidth, gridbtnheight);
+            GUI::Button *b = new GUI::Button(this, sz.first, sz.second, title, gridbtnwidth, gridbtnheight);
             b->addActionHandler(this);
             bar->addItem(1, name);
             i++;
@@ -1765,7 +1867,7 @@ public:
     }
 
     void actionExecuted(GUI::ActionEventSource *b, const GUI::String &arg) {
-        GUI::String sname = arg;
+        GUI::String sname = RestoreName(arg);
         sname.at(0) = (unsigned int)std::tolower((int)sname.at(0));
         Section *sec;
         if (arg == "Close" || arg == "Cancel" || arg == "Close") {
@@ -1807,7 +1909,14 @@ public:
                 lookup->second->raise();
             }
         } else if (arg == "Visit Homepage") {
-            ShellExecute(NULL, "open", "http://dosbox-x.com/", NULL, NULL, SW_SHOWNORMAL);
+            std::string url = "http://dosbox-x.com/";
+#if defined(WIN32)
+            ShellExecute(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+#elif defined(LINUX)
+            system(("xdg-open "+url).c_str());
+#elif defined(MACOSX)
+            system(("open "+url).c_str());
+#endif
         } else if (arg == "About") {
             new GUI::MessageBox2(getScreen(), 100, 150, 330, "About DOSBox-X", aboutmsg);
         } else if (arg == "Introduction") {
@@ -2112,11 +2221,13 @@ void GUI_Shortcut(int select) {
         return;
     }
 
+    shortcutid=select;
     shortcut=true;
     GUI::ScreenSDL *screen = UI_Startup(NULL);
     UI_Select(screen,select);
     UI_Shutdown(screen);
     shortcut=false;
+    shortcutid=-1;
     delete screen;
 }
 
