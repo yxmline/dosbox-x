@@ -46,6 +46,7 @@ extern bool use_quick_reboot;
 extern bool enable_config_as_shell_commands;
 bool winrun=false;
 #if defined(WIN32)
+extern int dos_clipboard_device_access;
 bool direct_mouse_clipboard=false;
 #endif
 
@@ -56,7 +57,7 @@ void GFX_OpenGLRedrawScreen(void);
 # define _GNU_SOURCE
 #endif
 
-// Tell Mac OS X to shut up about deprecated OpenGL calls
+// Tell macOS to shut up about deprecated OpenGL calls
 #ifndef GL_SILENCE_DEPRECATION
 #define GL_SILENCE_DEPRECATION
 #endif
@@ -171,6 +172,7 @@ typedef enum PROCESS_DPI_AWARENESS {
 #endif
 
 #include "sdlmain.h"
+#include "build_timestamp.h"
 
 #ifdef MACOSX
 extern bool has_touch_bar_support;
@@ -958,8 +960,8 @@ bool                        dos_kernel_disabled = true;
 bool                        startup_state_numlock = false; // Global for keyboard initialisation
 bool                        startup_state_capslock = false; // Global for keyboard initialisation
 bool                        startup_state_scrlock = false; // Global for keyboard initialisation
-int mouse_start_x=-1, mouse_start_y=-1, mouse_end_x=-1, mouse_end_y=-1, fx=-1, fy=-1, paste_speed=20, wheel_key=0;
-bool wheel_guest = false;
+int mouse_start_x=-1, mouse_start_y=-1, mouse_end_x=-1, mouse_end_y=-1, fx=-1, fy=-1, paste_speed=20, wheel_key=0, mbutton=3;
+bool wheel_guest = false, clipboard_dosapi = true;
 const char *modifier;
 
 #if defined(WIN32) && !defined(C_SDL2)
@@ -2973,14 +2975,14 @@ void GFX_SwitchFullScreen(void)
                 sdl.desktop.full.height = (unsigned int)screen_size_info.screen_dimensions_pixels.height;
 
 #if !defined(C_SDL2) && defined(MACOSX)
-            /* Mac OS X has this annoying problem with their API where the System Preferences app, display settings panel
+            /* macOS has this annoying problem with their API where the System Preferences app, display settings panel
                allows setting 720p and 1080i/1080p modes on monitors who's native resolution is less than 1920x1080 but
                supports 1920x1080.
 
                This is a problem with HDTV sets made in the late 2000s early 2010s when "HD" apparently meant LCD displays
                with 1368x768 resolution that will nonetheless accept 1080i (and later, 1080p) and downscale on display.
 
-               The problem is that with these monitors, Mac OS X's display API will NOT list 1920x1080 as one of the
+               The problem is that with these monitors, macOS's display API will NOT list 1920x1080 as one of the
                display modes even when the freaking desktop is obviously set to 1920x1080 on that monitor!
 
                If the screen reporting code says 1920x1080 and we try to go fullscreen, SDL1 will intervene and say
@@ -2989,7 +2991,7 @@ void GFX_SwitchFullScreen(void)
                So to work around this, we have to go check SDL's mode list before using the screen size returned by the
                API.
 
-               Oh and for extra fun, Mac OS X is one of those modern systems where "setting the video mode" apparently
+               Oh and for extra fun, macOS is one of those modern systems where "setting the video mode" apparently
                means NOT setting the video hardware mode but just changing how the GPU scales the display... EXCEPT when
                talking to these older displays where if the user set it to 1080i/1080p, our request to set 1368x768
                actually DOES change the video mode. This is just wonderful considering the old HDTV set I bought back in
@@ -3336,7 +3338,7 @@ Bitu GFX_GetRGB(Bit8u red, Bit8u green, Bit8u blue) {
 
 #if C_OPENGL
         case SCREEN_OPENGL:
-# if SDL_BYTEORDER == SDL_LIL_ENDIAN && defined(MACOSX) /* Mac OS X Intel builds use a weird RGBA order (alpha in the low 8 bits) */
+# if SDL_BYTEORDER == SDL_LIL_ENDIAN && defined(MACOSX) /* macOS Intel builds use a weird RGBA order (alpha in the low 8 bits) */
             //USE BGRA
             return (((unsigned long)blue << 24ul) | ((unsigned long)green << 16ul) | ((unsigned long)red <<  8ul)) | (255ul <<  0ul);
 # else
@@ -3648,9 +3650,9 @@ static void GUI_StartUp() {
     /* NTS: This should not print any warning whatsoever because Windows builds by default will use
      *      the Windows API to disable DPI scaling of the main window, unless the user modifies the
      *      setting through dosbox-x.conf or the command line. */
-    /* NTS: Mac OS X has high DPI scaling too, though Apple is wise to enable it by default only for
-     *      Macbooks with "Retina" displays. On Mac OS X, unless otherwise wanted by the user, it is
-     *      wise to let Mac OS X scale up the DOSBox-X window by 2x so that the DOS prompt is not
+    /* NTS: macOS has high DPI scaling too, though Apple is wise to enable it by default only for
+     *      Macbooks with "Retina" displays. On macOS, unless otherwise wanted by the user, it is
+     *      wise to let macOS scale up the DOSBox-X window by 2x so that the DOS prompt is not
      *      a teeny tiny window on the screen. */
     const SDL_VideoInfo* vidinfo = SDL_GetVideoInfo();
     if (vidinfo) {
@@ -3708,6 +3710,10 @@ static void GUI_StartUp() {
     else if (feedback == "flash")
         sdl.mouse.autolock_feedback = AUTOLOCK_FEEDBACK_FLASH;
 
+    const char *clip_mouse_button = section->Get_string("clip_mouse_button");
+    if (!strcmp(clip_mouse_button, "middle")) mbutton=2;
+    else if (!strcmp(clip_mouse_button, "right")) mbutton=3;
+    else mbutton=0;
     modifier = section->Get_string("clip_key_modifier");
     paste_speed = (unsigned int)section->Get_int("clip_paste_speed");
     wheel_key = section->Get_int("mouse_wheel_key");
@@ -3881,7 +3887,8 @@ static void GUI_StartUp() {
     MAPPER_AddHandler(SwitchFullScreen,MK_f,MMODHOST,"fullscr","Fullscreen", &item);
     item->set_text("Toggle fullscreen");
 
-    MAPPER_AddHandler(PasteClipboard, MK_nothing, 0, "paste", "Paste Clip"); //end emendelson
+    MAPPER_AddHandler(PasteClipboard, MK_nothing, 0, "paste", "Paste Clip", &item); //end emendelson; improved by Wengier
+    item->set_text("Pasting from the Windows clipboard");
 #if C_DEBUG
     /* Pause binds with activate-debugger */
     MAPPER_AddHandler(&PauseDOSBox, MK_pause, MMOD1, "pause", "Pause");
@@ -4972,7 +4979,7 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEven
 			fx = -1;
 			fy = -1;
 		}
-		if (!sdl.mouse.locked && button->button == SDL_BUTTON_RIGHT && (direct_mouse_clipboard || !strcmp(modifier,"none")
+		if (!sdl.mouse.locked && ((mbutton==2 && button->button == SDL_BUTTON_MIDDLE) || (mbutton==3 && button->button == SDL_BUTTON_RIGHT)) && (direct_mouse_clipboard || !strcmp(modifier,"none")
 			|| (!strcmp(modifier,"alt") || !strcmp(modifier,"lalt")) && sdl.laltstate==SDL_KEYDOWN || (!strcmp(modifier,"alt") || !strcmp(modifier,"ralt")) && sdl.raltstate==SDL_KEYDOWN
 			|| (!strcmp(modifier,"ctrl") || !strcmp(modifier,"lctrl")) && sdl.lctrlstate==SDL_KEYDOWN || (!strcmp(modifier,"ctrl") || !strcmp(modifier,"rctrl")) && sdl.rctrlstate==SDL_KEYDOWN
 			|| (!strcmp(modifier,"shift") || !strcmp(modifier,"lshift")) && sdl.lshiftstate==SDL_KEYDOWN || (!strcmp(modifier,"shift") || !strcmp(modifier,"rshift")) && sdl.rshiftstate==SDL_KEYDOWN
@@ -5046,7 +5053,7 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEven
         break;
     case SDL_RELEASED:
 #if defined(WIN32)
-		if (!sdl.mouse.locked && button->button == SDL_BUTTON_RIGHT && mouse_start_x >= 0 && mouse_start_y >= 0) {
+		if (!sdl.mouse.locked && ((mbutton==2 && button->button == SDL_BUTTON_MIDDLE) || (mbutton==3 && button->button == SDL_BUTTON_RIGHT)) && mouse_start_x >= 0 && mouse_start_y >= 0) {
 			mouse_end_x=motion->x;
 			mouse_end_y=motion->y;
 			if (mouse_start_x == mouse_end_x && mouse_start_y == mouse_end_y)
@@ -5102,7 +5109,7 @@ void GFX_LosingFocus(void) {
     DoExtendedKeyboardHook(false);
 }
 
-static bool PasteClipboardNext(); // added emendelson from dbDOS
+static bool PasteClipboardNext(); // added emendelson from dbDOS; improved by Wengier
 
 bool GFX_IsFullscreen(void) {
     return sdl.desktop.fullscreen;
@@ -6306,11 +6313,18 @@ void SDL_SetupConfigSection() {
     Pstring->Set_help("Autolock status feedback type, i.e. visual, auditive, none.");
     Pstring->Set_values(feeds);
 
-	const char* clipboardmodifier[] = { "none", "alt", "lalt", "ralt", "ctrl", "lctrl", "rctrl", "shift", "lshift", "rshift", "disabled", 0};
+	const char* clipboardbutton[] = { "none", "middle", "right", 0};
+	Pstring = sdl_sec->Add_string("clip_mouse_button",Property::Changeable::Always, "right");
+	Pstring->Set_values(clipboardbutton);
+	Pstring->Set_help("Select the mouse button for the Windows clipboard copy/paste function.\n"
+		"The default mouse button is \"right\". Set to \"middle\" if the middle mouse button is desired, or \"none\" to disable this feature.");
+    Pstring->SetBasic(true);
+
+	const char* clipboardmodifier[] = { "none", "alt", "lalt", "ralt", "ctrl", "lctrl", "rctrl", "shift", "lshift", "rshift", 0};
 	Pstring = sdl_sec->Add_string("clip_key_modifier",Property::Changeable::Always, "shift");
 	Pstring->Set_values(clipboardmodifier);
 	Pstring->Set_help("Change the keyboard modifier for the Windows clipboard copy/paste function using the right mouse button.\n"
-		"The default modifier is \"shift\". Set to \"none\" if no modifier is desired, or \"disabled\" to disable this feature.");
+		"The default modifier is \"shift\" (both left and right shift keys). Set to \"none\" if no modifier is desired.");
     Pstring->SetBasic(true);
 
     Pint = sdl_sec->Add_int("clip_paste_speed", Property::Changeable::WhenIdle, 20);
@@ -6715,11 +6729,11 @@ bool DOSBOX_parse_argv() {
     while (control->cmdline->GetOpt(optname)) {
         std::transform(optname.begin(), optname.end(), optname.begin(), ::tolower);
 
-        if (optname == "version") {
+        if (optname == "ver" || optname == "version") {
             DOSBox_ShowConsole();
 
-            fprintf(stderr,"\nDOSBox-X version %s %s, copyright 2011-2020 joncampbell123.\n",VERSION,SDL_STRING);
-            fprintf(stderr,"Based on DOSBox by the DOSBox Team (See AUTHORS file)\n\n");
+            fprintf(stderr,"\nDOSBox-X version %s %s, copyright 2011-%s The DOSBox-X Team.\n",VERSION,SDL_STRING,COPYRIGHT_END_YEAR);
+            fprintf(stderr,"DOSBox-X project maintainer: joncampbell123 (The Great Codeholio)\n\n");
             fprintf(stderr,"DOSBox-X comes with ABSOLUTELY NO WARRANTY.  This is free software,\n");
             fprintf(stderr,"and you are welcome to redistribute it under certain conditions;\n");
             fprintf(stderr,"please read the COPYING file thoroughly before doing so.\n\n");
@@ -6734,11 +6748,12 @@ bool DOSBOX_parse_argv() {
             DOSBox_ShowConsole();
 
             fprintf(stderr,"\ndosbox-x [options]\n");
-            fprintf(stderr,"\nDOSBox-X version %s %s, copyright 2011-2020 joncampbell123.\n",VERSION,SDL_STRING);
-            fprintf(stderr,"Based on DOSBox by the DOSBox Team (See AUTHORS file)\n\n");
+            fprintf(stderr,"\nDOSBox-X version %s %s, copyright 2011-%s The DOSBox-X Team.\n",VERSION,SDL_STRING,COPYRIGHT_END_YEAR);
+            fprintf(stderr,"DOSBox-X project maintainer: joncampbell123 (The Great Codeholio)\n\n");
             fprintf(stderr,"Options can be started with either \"-\" or \"/\" (e.g. \"-help\" or \"/help\"):\n\n");
-            fprintf(stderr,"  -?, -h, -help                           Show this help\n");
-            fprintf(stderr,"  -editconf                               Launch editor\n");
+            fprintf(stderr,"  -?, -h, -help                           Show this help screen\n");
+            fprintf(stderr,"  -ver, -version                          Display DOSBox-X version information\n");
+            fprintf(stderr,"  -editconf <editor>                      Edit the config file with the editor\n");
             fprintf(stderr,"  -opencaptures <param>                   Launch captures\n");
             fprintf(stderr,"  -opensaves <param>                      Launch saves\n");
             fprintf(stderr,"  -printconf                              Print config file location\n");
@@ -6789,7 +6804,8 @@ bool DOSBOX_parse_argv() {
             DOSBox_ShowConsole();
 
             fprintf(stderr,"\ndosbox-x [options]\n");
-            fprintf(stderr,"\nDOSBox-X version %s %s, copyright 2011-2020 joncampbell123.\n",VERSION,SDL_STRING);
+            fprintf(stderr,"\nDOSBox-X version %s %s, copyright 2011-%s The DOSBox-X Team.\n",VERSION,SDL_STRING,COPYRIGHT_END_YEAR);
+            fprintf(stderr,"DOSBox-X project maintainer: joncampbell123 (The Great Codeholio)\n\n");
             fprintf(stderr,"Based on DOSBox by the DOSBox Team (See AUTHORS file)\n\n");
             fprintf(stderr,"Debugging options:\n\n");
             fprintf(stderr,"  -debug                                  Set all logging levels to debug\n");
@@ -8036,7 +8052,43 @@ bool direct_mouse_clipboard_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::i
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
     direct_mouse_clipboard = !direct_mouse_clipboard;
-    mainMenu.get_item("direct_mouse_clipboard").check(direct_mouse_clipboard).refresh_item(mainMenu);
+    mainMenu.get_item("clipboard_quick").check(direct_mouse_clipboard).refresh_item(mainMenu);
+    return true;
+}
+
+bool right_mouse_clipboard_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    mbutton = 3;
+    mainMenu.get_item("clipboard_right").check(true).refresh_item(mainMenu);
+    mainMenu.get_item("clipboard_middle").check(false).refresh_item(mainMenu);
+    return true;
+}
+
+bool middle_mouse_clipboard_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    mbutton = 2;
+    mainMenu.get_item("clipboard_right").check(false).refresh_item(mainMenu);
+    mainMenu.get_item("clipboard_middle").check(true).refresh_item(mainMenu);
+    return true;
+}
+
+bool dos_clipboard_api_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    clipboard_dosapi = !clipboard_dosapi;
+    if (control->SecureMode()) clipboard_dosapi = false;
+    mainMenu.get_item("clipboard_dosapi").check(clipboard_dosapi).refresh_item(mainMenu);
+    return true;
+}
+
+bool dos_clipboard_device_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    if (dos_clipboard_device_access == 4) dos_clipboard_device_access=1;
+    else if (dos_clipboard_device_access) dos_clipboard_device_access=4;
+    mainMenu.get_item("clipboard_device").check(dos_clipboard_device_access==4&&!control->SecureMode()).refresh_item(mainMenu);
     return true;
 }
 #endif
@@ -8513,7 +8565,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 #if defined(MACOSX)
     /* The resource system of DOSBox-X relies on being able to locate the Resources subdirectory
        within the DOSBox-X .app bundle. To do this, we have to first know where our own executable
-       is, which Mac OS X helpfully puts int argv[0] for us */
+       is, which macOS helpfully puts int argv[0] for us */
     /* NTS: Experimental testing shows that when we are run from the desktop (double-clicking on
             the .app bundle from the Finder) the current working directory is / (fs root). */
     extern std::string MacOSXEXEPath;
@@ -8549,7 +8601,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             /* Only the Finder would do that.
                Even if the user somehow did this from the Terminal app, it's still
                worth changing to the home directory because certain directories
-               including / are locked readonly even for sudo in Mac OS X */
+               including / are locked readonly even for sudo in macOS */
             /* NTS: HOME is usually an absolute path */
             if (home != NULL) chdir(home);
         }
@@ -8885,12 +8937,24 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 #endif
 
         /* -- Welcome to DOSBox-X! */
-        LOG_MSG("DOSBox-X version %s",VERSION);
-        LOG(LOG_MISC,LOG_NORMAL)("Copyright 2002-2019 enhanced branch by The Great Codeholio, forked from the main project by the DOSBox Team, published under GNU GPL.");
+        LOG_MSG("DOSBox-X version %s ("
+#if defined(WIN32)
+                "Windows"
+#elif defined(HX_DOS)
+                "DOS"
+#elif defined(LINUX)
+                "Linux"
+#elif defined(MACOSX)
+                "macOS"
+#else
+                ""
+#endif
+        " %s)",VERSION,SDL_STRING);
+        LOG(LOG_MISC,LOG_NORMAL)(("Copyright 2011-"+std::string(COPYRIGHT_END_YEAR)+" The DOSBox-X Team. Project maintainer: joncampbell123 (The Great Codeholio). DOSBox-X published under GNU GPL.").c_str());
 
 #if defined(MACOSX)
-        LOG_MSG("Mac OS X EXE path: %s",MacOSXEXEPath.c_str());
-        LOG_MSG("Mac OS X Resource path: %s",MacOSXResPath.c_str());
+        LOG_MSG("macOS EXE path: %s",MacOSXEXEPath.c_str());
+        LOG_MSG("macOS Resource path: %s",MacOSXResPath.c_str());
 #endif
 
         /* -- [debug] setup console */
@@ -9007,7 +9071,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         Windows_DPI_Awareness_Init();
 #endif
 #if defined(MACOSX) && !defined(C_SDL2)
-    /* Our SDL1 in-tree library has a High DPI awareness function for Mac OS X now */
+    /* Our SDL1 in-tree library has a High DPI awareness function for macOS now */
         if (!control->opt_disable_dpi_awareness)
             sdl1_hax_macosx_highdpi_set_enable(dpi_aware_enable);
 #endif
@@ -9015,7 +9079,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 #ifdef MACOSX
         osx_detect_nstouchbar();/*assigns to has_touch_bar_support*/
         if (has_touch_bar_support) {
-            LOG_MSG("Mac OS X: NSTouchBar support detected in system");
+            LOG_MSG("macOS: NSTouchBar support detected in system");
             osx_init_touchbar();
         }
 
@@ -9145,6 +9209,10 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             {
                 DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"WheelToArrow");
                 item.set_text("Mouse wheel movements");
+            }
+            {
+                DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"SharedClipboard");
+                item.set_text("Shared Windows clipboard functions");
             }
         }
         {
@@ -9661,7 +9729,12 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"wait_on_error").set_text("Wait on error").set_callback_function(wait_on_error_menu_callback).check(sdl.wait_on_error);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"auto_lock_mouse").set_text("Autolock mouse").set_callback_function(autolock_mouse_menu_callback).check(sdl.mouse.autoenable);
 #if defined (WIN32)
-        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"direct_mouse_clipboard").set_text("Quick right mouse button copy/paste").set_callback_function(direct_mouse_clipboard_menu_callback).check(direct_mouse_clipboard);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_quick").set_text("Quick edit: copy on select and paste with mouse button").set_callback_function(direct_mouse_clipboard_menu_callback).check(direct_mouse_clipboard);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_right").set_text("Via right mouse button").set_callback_function(right_mouse_clipboard_menu_callback).check(mbutton==3);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_middle").set_text("Via middle mouse button").set_callback_function(middle_mouse_clipboard_menu_callback).check(mbutton==2);
+        if (control->SecureMode()) clipboard_dosapi = false;
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_device").set_text("Enable DOS clipboard device").set_callback_function(dos_clipboard_device_menu_callback).check(dos_clipboard_device_access==4&&!control->SecureMode());
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_dosapi").set_text("Enable DOS clipboard API for applications").set_callback_function(dos_clipboard_api_menu_callback).check(clipboard_dosapi);
 #endif
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_ctrlesc").set_text("Ctrl+Esc").set_callback_function(sendkey_preset_menu_callback);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_alttab").set_text("Alt+Tab").set_callback_function(sendkey_preset_menu_callback);
