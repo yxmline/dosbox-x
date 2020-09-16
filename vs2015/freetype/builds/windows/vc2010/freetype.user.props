@@ -63,7 +63,6 @@
       <UserIncludeDirectories>C:\mydebughelp\include</UserIncludeDirectories>
       <UserLibraryDirectories>C:\mydebughelp\lib</UserLibraryDirectories>
       <UserDependencies>dhelper64.lib</UserDependencies>
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </PropertyGroup>
    -->
 </Project>
