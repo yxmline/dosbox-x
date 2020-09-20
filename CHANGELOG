@@ -2,6 +2,9 @@
   - Support for FluidSynth MIDI Synthesizer is now
     activated by default for Windows Visual Studio
     x86/x64 builds. (Wengier)
+  - The DOSMID program has been built into DOSBox-X,
+    which can be found on the Z drive. You can use it
+    to play MIDI/RMI/MUS audios. (Wengier)
   - Added "Shared Windows clipboard functions" menu
     group under "Main", which allows you to enable
     or disable the different ways for DOSBox-X to
@@ -24,7 +27,11 @@
     to emulate the speed of a specific CPU class. The
     cycles to emulate are approximations of the actual
     CPU hardware, and they are available thanks to data
-    provided by the user maximum105. (Wengier)
+    provided by the user maximum105. Also added config
+    option "cycle emulation percentage adjust" in [cpu]
+    section for users who would like to make relative
+    percentage adjustments (between -25% and 25%) in
+    case it is necessary. (Wengier)
   - The command for showing the Configuration Tool has
     been renamed from "SHOWGUI" to "SHOWTOOL". A new
     command-line option -gui is added to CONFIG command
