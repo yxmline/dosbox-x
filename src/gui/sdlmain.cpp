@@ -3904,7 +3904,7 @@ static void GUI_StartUp() {
 	if (sdl.desktop.want_type == SCREEN_OPENGL) { /* OPENGL is requested */
 #if defined(C_SDL2)
 		GFX_SetResizeable(true);
-		if (!GFX_SetSDLSurfaceWindow(640,400)) {
+		if (!(sdl.window = GFX_SetSDLWindowMode(640,400, SCREEN_OPENGL)) || !(sdl_opengl.context = SDL_GL_CreateContext(sdl.window))) {
 #else
 		sdl.surface = SDL_SetVideoMode(640,400,0,SDL_OPENGL);
 		if (sdl.surface == NULL) {
