@@ -453,7 +453,7 @@ Bitu OUTPUT_OPENGL_SetSize()
                     return 0;
                 }
 #if DOSBOXMENU_TYPE == DOSBOXMENU_SDLDRAW
-                // Todo: Make menu work with custom GLSL shaders
+                // Todo: Make SDL-drawn menu work with custom GLSL shaders
                 if (!sdl.desktop.prevent_fullscreen) {
                     menu.toggle=false;
                     mainMenu.showMenu(false);
