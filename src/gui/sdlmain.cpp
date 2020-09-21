@@ -7513,7 +7513,7 @@ bool cpu_speed_emulate_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * 
     else if (!strcmp(mname, "cpu486-66"))
         cyclemu = 23880;
     else if (!strcmp(mname, "cpu586-66"))
-        cyclemu = 35618;
+        cyclemu = 35620;
     else if (!strcmp(mname, "cpu586-100"))
         cyclemu = 60000;
     else if (!strcmp(mname, "cpu586-120"))
