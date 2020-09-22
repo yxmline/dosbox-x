@@ -14,6 +14,7 @@
 #define SDL2_SUPPORT 1
 #define DSOUND_SUPPORT 1
 #define WINMIDI_SUPPORT 0
+#define AUFILE_SUPPORT 0
 #define WITH_FLOAT 1
 
 #if _MSC_VER < 1900
