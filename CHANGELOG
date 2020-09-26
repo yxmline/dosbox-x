@@ -1,4 +1,8 @@
 0.83.6
+  - Improved internal Voodoo card hardware emulation,
+    such as fixing the font issue with the 3dfx version
+    of Tomb Raider when using non-Glide mode. Portions
+    of the code are ported from DOSBox ECE. (Wengier)
   - Added OpenGL shader support by porting the feature
     from DOSBox SVN. GLSL shaders are now supported in
     both SDL1 and SDL2 builds, and this also allows
@@ -30,7 +34,8 @@
   - The mounting options "Mount as Hard Disk", "Mount
     as CD-ROM", "Mount as Floppy", "Mount disk image"
     and "Boot from disk image" (previously only for
-    Windows) in the "Drive" menu are now available
+    Windows) in the "Drive" menu and the "Quick launch
+    program..." in the "DOS" menu are now available
     for non-Windows platforms as well. (Wengier)
   - Added "Shared Windows clipboard functions" menu
     group under "Main", which allows you to enable
