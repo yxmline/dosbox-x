@@ -64,6 +64,8 @@
     section for users who would like to make relative
     percentage adjustments (between -25% and 25%) in
     case it is necessary. (Wengier)
+  - Added SORT command from FreeDOS. It can be used to
+    sort input, e.g. "TYPE FILE.TXT | SORT". (Wengier)
   - Added DELTREE command to delete a directory and all
     the subdirectories and files in it as in a real DOS
     system. Please use it with caution. (Wengier)
@@ -72,16 +74,19 @@
     command-line option -gui is added to CONFIG command
     to start the Configuration Tool as well. (Wengier)
   - DOSBox-X now includes ZIP.EXE and UNZIP.EXE from
-    InfoZip which will appear on the Z drive. (Wengier)
-  - The powerful SJGPLAY for DOS has been built into
-    DOSBox-X. You can now find the CDPLAY.EXE program
-    in the Z drive for playing Audio CDs in DOS, and a
-    text file named CDPLAY.TXT for a quick usage guide.
-    The zip package including full documentation and
-    some extras will also appear as SJGPLAY.ZIP in the
-    Z drive. This freeware program was written by Steve
-    Gray and is now included in DOSBox-X with explicit
-    permission of the author. (Wengier)
+    InfoZip for zipping and unzipping files in DOS.
+    Both programs will appear on the Z drive. (Wengier)
+  - The powerful DOS CD player called SJGPLAY has been
+    built into DOSBox-X. You can now find the program
+    CDPLAY.EXE in the Z drive for playing Audio CDs in
+    DOS, which supports both graphical and command-line
+    usage, and you will also find a text file named
+    CDPLAY.TXT in the Z drive for a quick usage guide.
+    A zip package including full documentation and some
+    extras will additionally appear as SJGPLAY.ZIP in
+    the Z drive. This freeware program was written by
+    Steve Gray and is now included in DOSBox-X with
+    explicit permission of the author. (Wengier)
   - DOSBox-X will now by default show a quit warning
     if a DOS program or game, or a guest system is
     running. The previous behavior can be set with
@@ -128,6 +133,8 @@
     section when DOSBox-X starts. Windows installer can
     also move such config options from existing config
     files automatically. (Wengier)
+  - Cleared modem phone book before parsing it. Thanks
+    NicknineTheEagle for the improvement.
   - Improved the help message of MOUNT command. Also
     added option -examples to show its usage examples,
     similar to IMGMOUNT and IMGMAKE commands. (Wengier)
@@ -605,6 +612,7 @@
     phone book file entries need to be in the format of:
     "<dummy number> <hostname/ip:port>" e.g.
     5551234 cavebbs.homeip.net:23
+    Thank NicknineTheEagle for implementing this feature.
   - Implemented the missing EMS subfunctions 52h and 59h by
     porting the patch that adds them (Wengier)
   - Fixed issues with the "config -wcd -all" command and other
