@@ -3,6 +3,8 @@
 
 **Be sure to also visit DOSBox-X's homepage at [https://dosbox-x.com](https://dosbox-x.com)**
 
+**Alternative domain of the project homepage: [http://dosbox-x.software](http://dosbox-x.software)**
+
 ## Table of Contents
 
 - [Introduction to DOSBox-X](#introduction-to-dosbox-x)
@@ -126,10 +128,10 @@ greatly appreciated:
     - Windows 1.0/2.x/3.x & Windows 9x/ME guest system support
     - Retro development
   - Bug fixes, patches, improvements, refinements
-  - Suggestions, ideas, general conversation
-  - Platform support (primarily Linux and Windows, but others are welcome)
-  - Documentation, language file translation
-  - Notes regarding games, applications, hacks, weird MS-DOS tricks, etc.
+  - Suggestions, ideas, assistance of other users, and/or general conversation
+  - Platform support (Windows, Linux, macOS, and DOS, but others are welcome)
+  - Documentation, language file translation, and software promotion
+  - Notes regarding DOS and Win3.x/9x games, applications, hacks or weird tricks, etc.
 
 See the [CONTRIBUTING](CONTRIBUTING.md) page for more contribution guidelines.
 If you want to tweak or write some code and you don't know what to work on,
