@@ -7538,7 +7538,7 @@ bool cpu_speed_emulate_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * 
         Section* sec = control->GetSection("cpu");
         if (sec) {
             double perc = static_cast<Section_prop *>(sec)->Get_int("cycle emulation percentage adjust");
-            cyclemu*=(100+perc)/100;
+            cyclemu*=(int)((100+perc)/100);
             std::string tmp("cycles="+std::to_string(cyclemu));
             sec->HandleInputline(tmp);
         }
@@ -8536,7 +8536,7 @@ bool help_open_url_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const me
     if (menuitem->get_name() == "help_homepage")
         url="https://dosbox-x.com/";
     else if (menuitem->get_name() == "help_wiki")
-        url="https://github.com/joncampbell123/dosbox-x/wiki";
+        url="https://dosbox-x.com/wiki";
     else if (menuitem->get_name() == "help_issue")
         url="https://github.com/joncampbell123/dosbox-x/issues";
     if (url.size()) {

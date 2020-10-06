@@ -2477,7 +2477,7 @@ public:
 
             uint32_t rom_base = PhysMake(0xf000, 0); // override regular dosbox bios
                     /* write buffer into ROM */
-            for (Bitu i = 0; i < data_read; i++) phys_writeb(rom_base + i, buffer[i]);
+            for (Bitu i = 0; i < data_read; i++) phys_writeb((PhysPt)(rom_base + i), buffer[i]);
 
             //Start executing this bios
             memset(&cpu_regs, 0, sizeof(cpu_regs));
@@ -6431,7 +6431,7 @@ void DOS_SetupPrograms(void) {
         "\n"
         "For more information about DOSBox-X, please take a look at its Wiki:\n"
         "\n"
-        "\033[34;1mhttps://github.com/joncampbell123/dosbox-x/wiki\033[0m\n"
+        "\033[34;1mhttps://dosbox-x.com/wiki\033[0m\n"
         );
     MSG_Add("PROGRAM_INTRO_MOUNT_START",
         "\033[32;1mHere are some commands to get you started:\033[0m\n"
