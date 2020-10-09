@@ -41,6 +41,7 @@ extern int enablelfn;
 extern bool dpi_aware_enable;
 extern bool log_int21;
 extern bool log_fileio;
+extern bool noremark_save_state;
 extern bool force_load_state;
 extern bool use_quick_reboot;
 extern bool enable_config_as_shell_commands;
@@ -3875,6 +3876,35 @@ static void GUI_StartUp() {
     sdl.overscan_width=(unsigned int)section->Get_int("overscan");
 //  sdl.overscan_color=section->Get_int("overscancolor");
 
+    // Getting window position (if configured)
+    int posx = -1;
+    int posy = -1;
+    const char* windowposition = section->Get_string("windowposition");
+    LOG_MSG("Configured windowposition: %s", windowposition);
+    if (windowposition && *windowposition) {
+        char result[100];
+        safe_strncpy(result, windowposition, sizeof(result));
+        char* y = strchr(result, ',');
+        if (y && *y) {
+            *y = 0;
+            posx = atoi(result);
+            posy = atoi(y + 1);
+        }
+    }
+
+    // Setting SDL1 window position before a call to SDL_SetVideoMode() is made. If the user provided
+    // SDL_VIDEO_WINDOW_POS environment variable then "windowposition" setting should have no effect.
+    // SDL2 position is set later, using SDL_SetWindowPosition()
+#if !defined(C_SDL2)
+    if (posx >= 0 && posy >= 0 && SDL_getenv("SDL_VIDEO_WINDOW_POS") == NULL) {
+        const char* windowposition = section->Get_string("windowposition");
+        char pos[100];
+        safe_strncpy(pos, "SDL_VIDEO_WINDOW_POS=", sizeof(pos));
+        safe_strcat(pos, windowposition);
+        SDL_putenv(pos);
+    }
+#endif
+
     bool initgl = false;
 #if C_OPENGL
     /*std::string f = (std::string)(static_cast<Section_prop *>(control->GetSection("render"))->Get_path("glshader")->GetValue());
@@ -3980,8 +4010,11 @@ static void GUI_StartUp() {
     GFX_LogSDLState();
     GFX_Stop();
 
+
 #if defined(C_SDL2)
     SDL_SetWindowTitle(sdl.window,"DOSBox-X");
+    if (posx >= 0 && posy >= 0)
+        SDL_SetWindowPosition(sdl.window, posx, posy);
 #else
     SDL_WM_SetCaption("DOSBox-X",VERSION);
 #endif
@@ -6409,6 +6442,10 @@ void SDL_SetupConfigSection() {
                       "  (output=surface does not!)");
     Pstring->SetBasic(true);
 
+    Pstring = sdl_sec->Add_string("windowposition", Property::Changeable::OnlyAtStart, "");
+    Pstring->Set_help("Set the window position at startup in the positionX,positionY format (e.g.: 1300,200)");
+    Pstring->SetBasic(true);
+
     const char* outputs[] = {
         "default", "surface", "overlay",
 #if C_OPENGL
@@ -8288,6 +8325,14 @@ bool shell_config_commands_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::it
     return true;
 }
 
+bool noremark_savestate_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    noremark_save_state = !noremark_save_state;
+    mainMenu.get_item("noremark_savestate").check(noremark_save_state).refresh_item(mainMenu);
+    return true;
+}
+
 bool force_loadstate_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
@@ -9942,6 +9987,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"shell_config_commands").set_text("Config options as commands").set_callback_function(shell_config_commands_menu_callback).check(enable_config_as_shell_commands);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"quick_reboot").set_text("Enable quick reboot").set_callback_function(quick_reboot_menu_callback).check(use_quick_reboot);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"list_drivenum").set_text("Show mounted drive numbers").set_callback_function(list_drivenum_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"noremark_savestate").set_text("No remark when saving state").set_callback_function(noremark_savestate_menu_callback).check(noremark_save_state);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"force_loadstate").set_text("Force load state mode").set_callback_function(force_loadstate_menu_callback).check(force_load_state);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"removestate").set_text("Remove state in slot").set_callback_function(remove_state_menu_callback);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"refreshslot").set_text("Refresh display status").set_callback_function(refresh_slots_menu_callback);

@@ -1,4 +1,8 @@
 0.83.7
+  - Save state feature now allows users to optionally
+    enter remarks when saving a state. A toggle menu
+    item "No remark when saving state" (in "Capture")
+    is added to disable input of remarks. (Wengier)
   - DOSBox-X will now use native dialog box to display
     quit warnings and save state errors. (Wengier)
   - Updated the Windows installer to default to the
@@ -10,16 +14,21 @@
     variable for config directory in Linux. (rderooy)
   - Added support for compiling with pcap for Windows
     MinGW builds. (Jookia)
+  - Added config option "windowposition" (in [sdl]
+    section) to set the window position at startup in
+    the positionX,positionY format. (tomba4)
   - Added config option "raw_mouse_input" (in [sdl]
     section; SDL2 builds only) to bypass the operating
     system's mouse acceleration & sensitivity settings.
     Implemented by NicknineTheEagle.
   - Integrated SVN commits (Allofich)
+    - r4371: Fix regression in Clue: Master Detective.
     - r4370: As an adjunct to r4369, make the reference
       counts of standard device handles equivalent to
       those of real DOS.
     - r4369: Compatible side-effect behavior of DOS in
       the file close function.
+    - r4368: Improve error codes for some DOS file functions.
     - r4367: Change FPU_FBST to only write 18 decimals
       instead of the wrongly 19, this makes it possible
       to switch 64 integers which in turn fixes some
