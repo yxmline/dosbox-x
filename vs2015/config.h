@@ -77,7 +77,7 @@
 /* The type of cpu this target has */
 # define C_TARGETCPU X86_64
 /* Define to 1 to use x86 dynamic cpu core */
-# undef C_DYNAMIC_X86
+# define C_DYNAMIC_X86 1
 # define C_DYNREC 1
 #elif defined (_M_ARM64) || defined (_M_ARM) /* Microsoft C++ amd64, arm32 and arm64 */
 # undef C_TARGETCPU
@@ -86,7 +86,7 @@
 #else
 # define C_TARGETCPU X86
 # define C_DYNAMIC_X86 1
-# undef C_DYNREC
+# define C_DYNREC 1
 #endif
 
 /* Define to 1 to enable fluidsynth MIDI synthesis */
