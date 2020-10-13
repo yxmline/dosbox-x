@@ -46,9 +46,9 @@ extern bool force_load_state;
 extern bool use_quick_reboot;
 extern bool enable_config_as_shell_commands;
 bool winrun=false;
+bool direct_mouse_clipboard=false;
 #if defined(WIN32)
 extern int dos_clipboard_device_access;
-bool direct_mouse_clipboard=false;
 #endif
 
 bool OpenGL_using(void);
@@ -4051,7 +4051,7 @@ static void GUI_StartUp() {
     item->set_text("Toggle fullscreen");
 
     MAPPER_AddHandler(PasteClipboard, MK_nothing, 0, "paste", "Paste Clip", &item); //end emendelson; improved by Wengier
-    item->set_text("Pasting from the Windows clipboard");
+    item->set_text("Pasting from the clipboard");
 #if C_DEBUG
     /* Pause binds with activate-debugger */
     MAPPER_AddHandler(&PauseDOSBox, MK_pause, MMOD1, "pause", "Pause");
@@ -4454,7 +4454,7 @@ static void HandleMouseMotion(SDL_MouseMotionEvent * motion) {
         inputToScreen = true;
     else {
         inputToScreen = GFX_CursorInOrNearScreen(motion->x,motion->y);
-#if defined (WIN32)
+#if defined (WIN32) || defined(C_SDL2)
 		if (mouse_start_x >= 0 && mouse_start_y >= 0) {
 			if (fx>=0 && fy>=0)
 				Restore_Text(mouse_start_x-sdl.clip.x,mouse_start_y-sdl.clip.y,fx-sdl.clip.x,fy-sdl.clip.y,(int)(currentWindowWidth-sdl.clip.x),(int)(currentWindowHeight-sdl.clip.y));
@@ -5132,7 +5132,7 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEven
     switch (button->state) {
     case SDL_PRESSED:
         if (inMenu || !inputToScreen) return;
-#if defined(WIN32)
+#if defined(WIN32) || defined(C_SDL2)
 		if (!sdl.mouse.locked && button->button == SDL_BUTTON_LEFT && !strcmp(modifier,"none") && mouse_start_x >= 0 && mouse_start_y >= 0 && fx >= 0 && fy >= 0) {
 			Restore_Text(mouse_start_x-sdl.clip.x,mouse_start_y-sdl.clip.y,fx-sdl.clip.x,fy-sdl.clip.y,(int)(currentWindowWidth-sdl.clip.x),(int)(currentWindowHeight-sdl.clip.y));
 			mouse_start_x = -1;
@@ -5143,9 +5143,9 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEven
 			fy = -1;
 		}
 		if (!sdl.mouse.locked && ((mbutton==2 && button->button == SDL_BUTTON_MIDDLE) || (mbutton==3 && button->button == SDL_BUTTON_RIGHT)) && (direct_mouse_clipboard || !strcmp(modifier,"none")
-			|| (!strcmp(modifier,"alt") || !strcmp(modifier,"lalt")) && sdl.laltstate==SDL_KEYDOWN || (!strcmp(modifier,"alt") || !strcmp(modifier,"ralt")) && sdl.raltstate==SDL_KEYDOWN
-			|| (!strcmp(modifier,"ctrl") || !strcmp(modifier,"lctrl")) && sdl.lctrlstate==SDL_KEYDOWN || (!strcmp(modifier,"ctrl") || !strcmp(modifier,"rctrl")) && sdl.rctrlstate==SDL_KEYDOWN
-			|| (!strcmp(modifier,"shift") || !strcmp(modifier,"lshift")) && sdl.lshiftstate==SDL_KEYDOWN || (!strcmp(modifier,"shift") || !strcmp(modifier,"rshift")) && sdl.rshiftstate==SDL_KEYDOWN
+			|| ((!strcmp(modifier,"alt") || !strcmp(modifier,"lalt")) && sdl.laltstate==SDL_KEYDOWN) || ((!strcmp(modifier,"alt") || !strcmp(modifier,"ralt")) && sdl.raltstate==SDL_KEYDOWN)
+			|| ((!strcmp(modifier,"ctrl") || !strcmp(modifier,"lctrl")) && sdl.lctrlstate==SDL_KEYDOWN) || ((!strcmp(modifier,"ctrl") || !strcmp(modifier,"rctrl")) && sdl.rctrlstate==SDL_KEYDOWN)
+			|| ((!strcmp(modifier,"shift") || !strcmp(modifier,"lshift")) && sdl.lshiftstate==SDL_KEYDOWN) || ((!strcmp(modifier,"shift") || !strcmp(modifier,"rshift")) && sdl.rshiftstate==SDL_KEYDOWN)
 			)) {
 			mouse_start_x=motion->x;
 			mouse_start_y=motion->y;
@@ -5215,7 +5215,7 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEven
         }
         break;
     case SDL_RELEASED:
-#if defined(WIN32)
+#if defined(WIN32) || defined(C_SDL2)
 		if (!sdl.mouse.locked && ((mbutton==2 && button->button == SDL_BUTTON_MIDDLE) || (mbutton==3 && button->button == SDL_BUTTON_RIGHT)) && mouse_start_x >= 0 && mouse_start_y >= 0) {
 			mouse_end_x=motion->x;
 			mouse_end_y=motion->y;
@@ -5726,7 +5726,7 @@ void GFX_Events() {
 				}
 			}
 			break;
-#if defined (WIN32)
+#if defined (WIN32) || defined(C_SDL2)
         case SDL_KEYDOWN:
         case SDL_KEYUP:
             if (event.key.keysym.sym==SDLK_LALT) sdl.laltstate = event.key.type;
@@ -6027,6 +6027,182 @@ void GFX_Events() {
         PasteClipboardNext();   // end added emendelson from dbDOS; improved by Wengier
 }
 
+void Null_Init(Section *sec);
+
+void SDL_SetupConfigSection() {
+    Section_prop * sdl_sec=control->AddSection_prop("sdl",&Null_Init);
+
+    Prop_bool* Pbool;
+    Prop_string* Pstring;
+    Prop_int* Pint;
+    Prop_multival* Pmulti;
+
+    Pbool = sdl_sec->Add_bool("fullscreen",Property::Changeable::Always,false);
+    Pbool->Set_help("Start DOSBox-X directly in fullscreen. (Press [F11/F12]+F to go back)");
+    Pbool->SetBasic(true);
+
+    Pbool = sdl_sec->Add_bool("fulldouble",Property::Changeable::Always,false);
+    Pbool->Set_help("Use double buffering in fullscreen. It can reduce screen flickering, but it can also result in a slow DOSBox-X.");
+    Pbool->SetBasic(true);
+
+    //Pbool = sdl_sec->Add_bool("sdlresize",Property::Changeable::Always,false);
+    //Pbool->Set_help("Makes window resizable (depends on scalers)");
+
+    Pstring = sdl_sec->Add_string("fullresolution",Property::Changeable::Always,"desktop");
+    Pstring->Set_help("What resolution to use for fullscreen: original, desktop or a fixed size (e.g. 1024x768).\n"
+                      "  Using your monitor's native resolution with aspect=true might give the best results.\n"
+              "  If you end up with small window on a large screen, try an output different from surface.");
+    Pstring->SetBasic(true);
+
+    Pstring = sdl_sec->Add_string("windowresolution",Property::Changeable::Always,"original");
+    Pstring->Set_help("Scale the window to this size IF the output device supports hardware scaling.\n"
+                      "  (output=surface does not!)");
+    Pstring->SetBasic(true);
+
+    Pstring = sdl_sec->Add_string("windowposition", Property::Changeable::OnlyAtStart, "");
+    Pstring->Set_help("Set the window position at startup in the positionX,positionY format (e.g.: 1300,200)");
+    Pstring->SetBasic(true);
+
+    const char* outputs[] = {
+        "default", "surface", "overlay",
+#if C_OPENGL
+        "opengl", "openglnb", "openglhq",
+#endif
+        "ddraw",
+#if C_DIRECT3D
+        "direct3d",
+#endif
+        0 };
+	Pstring = sdl_sec->Add_string("output", Property::Changeable::Always, "default");
+    Pstring->Set_help("What video system to use for output.");
+    Pstring->Set_values(outputs);
+    Pstring->SetBasic(true);
+
+    Pbool = sdl_sec->Add_bool("autolock",Property::Changeable::Always, false);
+    Pbool->Set_help("Mouse will automatically lock, if you click on the screen. (Press CTRL-F10 to unlock)");
+    Pbool->SetBasic(true);
+
+    const char* feeds[] = { "none", "beep", "flash", nullptr};
+    Pstring = sdl_sec->Add_string("autolock_feedback", Property::Changeable::Always, feeds[1]);
+    Pstring->Set_help("Autolock status feedback type, i.e. visual, auditive, none.");
+    Pstring->Set_values(feeds);
+
+	const char* clipboardbutton[] = { "none", "middle", "right", 0};
+	Pstring = sdl_sec->Add_string("clip_mouse_button",Property::Changeable::Always, "right");
+	Pstring->Set_values(clipboardbutton);
+	Pstring->Set_help("Select the mouse button for the shared clipboard copy/paste function.\n"
+		"The default mouse button is \"right\". Set to \"middle\" if the middle mouse button is desired, or \"none\" to disable this feature.");
+    Pstring->SetBasic(true);
+
+	const char* clipboardmodifier[] = { "none", "alt", "lalt", "ralt", "ctrl", "lctrl", "rctrl", "shift", "lshift", "rshift", 0};
+	Pstring = sdl_sec->Add_string("clip_key_modifier",Property::Changeable::Always, "shift");
+	Pstring->Set_values(clipboardmodifier);
+	Pstring->Set_help("Change the keyboard modifier for the shared clipboard copy/paste function using the right mouse button.\n"
+		"The default modifier is \"shift\" (both left and right shift keys). Set to \"none\" if no modifier is desired.");
+    Pstring->SetBasic(true);
+
+    Pint = sdl_sec->Add_int("clip_paste_speed", Property::Changeable::WhenIdle, 20);
+    Pint->Set_help("Set keyboard speed for pasting from the shared clipboard.\n"
+        "If the default setting of 20 causes lost keystrokes, increase the number.\n"
+        "Or experiment with decreasing the number for applications that accept keystrokes quickly.");
+    Pint->SetBasic(true);
+
+    Pmulti = sdl_sec->Add_multi("sensitivity",Property::Changeable::Always, ",");
+    Pmulti->Set_help("Mouse sensitivity. The optional second parameter specifies vertical sensitivity (e.g. 100,-50).");
+    Pmulti->SetValue("100");
+    Pmulti->SetBasic(true);
+    Pint = Pmulti->GetSection()->Add_int("xsens",Property::Changeable::Always,100);
+    Pint->SetMinMax(-1000,1000);
+    Pint = Pmulti->GetSection()->Add_int("ysens",Property::Changeable::Always,100);
+    Pint->SetMinMax(-1000,1000);
+
+#if defined(C_SDL2)
+    Pbool = sdl_sec->Add_bool("raw_mouse_input", Property::Changeable::OnlyAtStart, false);
+    Pbool->Set_help("Enable this setting to bypass your operating system's mouse acceleration and sensitivity settings.\n"
+        "This works in fullscreen or when the mouse is captured in window mode (SDL2 builds only).");
+#endif
+
+    const char * emulation[] = {"integration", "locked", "always", "never", nullptr};
+    Pstring  = sdl_sec->Add_string("mouse_emulation", Property::Changeable::Always, emulation[1]);
+    Pstring->Set_help(
+        "When is mouse emulated ?\n"
+        "integration: when not locked\n"
+        "locked:      when locked\n"
+        "always:      every time\n"
+        "never:       at no time\n"
+        "If disabled, the mouse position in DOSBox-X is exactly where the host OS reports it.\n"
+        "When using a high DPI mouse, the emulation of mouse movement can noticeably reduce the\n"
+        "sensitiveness of your device, i.e. the mouse is slower but more precise.");
+    Pstring->Set_values(emulation);
+    Pstring->SetBasic(true);
+
+    Pint = sdl_sec->Add_int("mouse_wheel_key", Property::Changeable::WhenIdle, -1);
+    Pint->SetMinMax(-3,3);
+    Pint->Set_help("Convert mouse wheel movements into keyboard presses such as arrow keys.\n"
+        "0: disabled; 1: up/down arrows; 2: left/right arrows; 3: PgUp/PgDn keys.\n"
+        "Putting a minus sign in front will disable the conversion for guest systems.");
+    Pint->SetBasic(true);
+
+    Pbool = sdl_sec->Add_bool("waitonerror",Property::Changeable::Always, true);
+    Pbool->Set_help("Wait before closing the console if DOSBox-X has an error.");
+    Pbool->SetBasic(true);
+
+    Pmulti = sdl_sec->Add_multi("priority", Property::Changeable::Always, ",");
+    Pmulti->SetValue("higher,normal",/*init*/true);
+    Pmulti->Set_help("Priority levels for DOSBox-X. Second entry behind the comma is for when DOSBox-X is not focused/minimized.\n"
+                     "  pause is only valid for the second entry.");
+    Pmulti->SetBasic(true);
+
+    const char* actt[] = { "lowest", "lower", "normal", "higher", "highest", "pause", 0};
+    Pstring = Pmulti->GetSection()->Add_string("active",Property::Changeable::Always,"higher");
+    Pstring->Set_values(actt);
+
+    const char* inactt[] = { "lowest", "lower", "normal", "higher", "highest", "pause", 0};
+    Pstring = Pmulti->GetSection()->Add_string("inactive",Property::Changeable::Always,"normal");
+    Pstring->Set_values(inactt);
+
+    Pstring = sdl_sec->Add_path("mapperfile",Property::Changeable::Always,MAPPERFILE_SDL1);
+    Pstring->Set_help("File used to load/save the key/event mappings from. Resetmapper only works with the default value.");
+    Pstring->SetBasic(true);
+
+    Pstring = sdl_sec->Add_path("mapperfile_sdl2",Property::Changeable::Always,MAPPERFILE_SDL2);
+    Pstring->Set_help("File used to load/save the key/event mappings from (SDL2 builds). Resetmapper only works with the default value.");
+    Pstring->SetBasic(true);
+
+#if C_DIRECT3D && C_D3DSHADERS
+    Pmulti = sdl_sec->Add_multi("pixelshader",Property::Changeable::Always," ");
+    Pmulti->SetValue("none",/*init*/true);
+    Pmulti->Set_help("Pixelshader program (effect file must be in Shaders subdirectory). If 'forced' is appended,\n"
+        "then the shader will be used even if the result might not be desired.");
+
+    Pstring = Pmulti->GetSection()->Add_string("type",Property::Changeable::Always,"none");
+    Pstring = Pmulti->GetSection()->Add_string("force",Property::Changeable::Always,"");
+#endif
+
+	const char* truefalseautoopt[] = { "true", "false", "auto", 0};
+    Pstring = sdl_sec->Add_string("usescancodes",Property::Changeable::OnlyAtStart,"auto");
+    Pstring->Set_values(truefalseautoopt);
+    Pstring->Set_help("Avoid usage of symkeys, might not work on all operating systems.\n"
+        "If set to \"auto\" (default), it is enabled for SDL1 and non-US keyboards.");
+    Pstring->SetBasic(true);
+
+    Pint = sdl_sec->Add_int("overscan",Property::Changeable::Always, 0);
+    Pint->SetMinMax(0,10);
+    Pint->Set_help("Width of overscan border (0 to 10). (works only if output=surface)");
+
+    Pstring = sdl_sec->Add_string("titlebar", Property::Changeable::Always, "");
+    Pstring->Set_help("Change the string displayed in the DOSBox-X title bar.");
+    Pstring->SetBasic(true);
+
+    Pbool = sdl_sec->Add_bool("showmenu", Property::Changeable::Always, true);
+    Pbool->Set_help("Whether to show the menu bar (if supported). Default true.");
+    Pstring->SetBasic(true);
+
+//  Pint = sdl_sec->Add_int("overscancolor",Property::Changeable::Always, 0);
+//  Pint->SetMinMax(0,1000);
+//  Pint->Set_help("Value of overscan color.");
+}
+
 // added emendelson from dbDos; improved by Wengier
 #if defined(WIN32) && !defined(C_SDL2) && !defined(__MINGW32__)
 #include <cassert>
@@ -6320,8 +6496,8 @@ void PasteClipboard(bool bPressed)
 }
 /// TODO: add menu items here 
 #else // end emendelson from dbDOS; improved by Wengier
-#if defined(WIN32) // SDL2, MinGW / Added by Wengier
 static std::string strPasteBuffer;
+#if defined(WIN32) // SDL2, MinGW / Added by Wengier
 extern uint8_t* clipAscii;
 extern uint32_t clipSize;
 extern void Unicode2Ascii(const uint16_t* unicode);
@@ -6350,6 +6526,92 @@ void PasteClipboard(bool bPressed) {
 		clipSize=0;
     }
 	CloseClipboard();
+}
+
+bool PasteClipboardNext() {
+    if (strPasteBuffer.length() == 0) return false;
+	BIOS_AddKeyToBuffer(strPasteBuffer[0]<0?strPasteBuffer[0]&0xff:strPasteBuffer[0]);
+    strPasteBuffer = strPasteBuffer.substr(1, strPasteBuffer.length());
+	return true;
+}
+#elif defined(C_SDL2)
+void removeChar(char *str, char c);
+void PasteClipboard(bool bPressed) {
+	if (!bPressed) return;
+    char* text = SDL_GetClipboardText();
+    removeChar(text, 0x0A);
+    strPasteBuffer.append(text);
+}
+
+bool PasteClipboardNext() {
+    if (strPasteBuffer.length() == 0) return false;
+	BIOS_AddKeyToBuffer(strPasteBuffer[0]<0?strPasteBuffer[0]&0xff:strPasteBuffer[0]);
+    strPasteBuffer = strPasteBuffer.substr(1, strPasteBuffer.length());
+	return true;
+}
+#elif defined(LINUX) && C_X11
+#include <X11/Xlib.h>
+
+void paste_utf8_prop(Display *dpy, Window w, Atom p)
+{
+    Atom da, incr, type;
+    int di;
+    unsigned long size, dul;
+    unsigned char *prop_ret = NULL;
+
+    XGetWindowProperty(dpy, w, p, 0, 0, False, AnyPropertyType, &type, &di, &dul, &size, &prop_ret);
+    XFree(prop_ret);
+
+    incr = XInternAtom(dpy, "INCR", False);
+    if (type == incr) return;
+
+    XGetWindowProperty(dpy, w, p, 0, size, False, AnyPropertyType, &da, &di, &dul, &dul, &prop_ret);
+    char *text=(char *)prop_ret;
+    for (unsigned int i=0; i<strlen(text); i++) if (text[i]==0x0A) text[i]=0x0D;
+    strPasteBuffer.append(text);
+    fflush(stdout);
+    XFree(prop_ret);
+    XDeleteProperty(dpy, w, p);
+}
+
+void PasteClipboard(bool bPressed) {
+	if (!bPressed) return;
+    Display *dpy;
+    Window owner, target_window, root;
+    int screen;
+    Atom sel, target_property, utf8;
+    XEvent ev;
+    XSelectionEvent *sev;
+
+    dpy = XOpenDisplay(NULL);
+    if (!dpy) return;
+
+    screen = DefaultScreen(dpy);
+    root = RootWindow(dpy, screen);
+
+    sel = XInternAtom(dpy, "CLIPBOARD", False);
+    utf8 = XInternAtom(dpy, "UTF8_STRING", False);
+
+    owner = XGetSelectionOwner(dpy, sel);
+    if (owner == None) return;
+
+    target_window = XCreateSimpleWindow(dpy, root, -10, -10, 1, 1, 0, 0, 0);
+    target_property = XInternAtom(dpy, "PENGUIN", False);
+    XConvertSelection(dpy, sel, utf8, target_property, target_window,
+                      CurrentTime);
+    for (;;) {
+        XNextEvent(dpy, &ev);
+        switch (ev.type) {
+            case SelectionNotify:
+                sev = (XSelectionEvent*)&ev.xselection;
+                if (sev->property == None) return;
+                else {
+                    paste_utf8_prop(dpy, target_window, target_property);
+                    return;
+                }
+                break;
+        }
+    }
 }
 
 bool PasteClipboardNext() {
@@ -6403,9 +6665,14 @@ static BOOL WINAPI ConsoleEventHandler(DWORD event) {
         return FALSE;
     }
 }
-#endif
 
-void Null_Init(Section *sec);
+#elif defined(C_SDL2)
+void CopyClipboard(void) {
+	uint16_t len=0;
+	const char* text = Mouse_GetSelected(mouse_start_x-sdl.clip.x,mouse_start_y-sdl.clip.y,mouse_end_x-sdl.clip.x,mouse_end_y-sdl.clip.y,(int)(currentWindowWidth-sdl.clip.x),(int)(currentWindowHeight-sdl.clip.y), &len);
+    SDL_SetClipboardText(text);
+}
+#endif
 
 void SDL_OnSectionPropChange(Section *x) {
     (void)x;//UNUSED
@@ -6420,180 +6687,6 @@ void SDL_OnSectionPropChange(Section *x) {
         else
             DOSBox_NoMenu();
     }
-}
-
-void SDL_SetupConfigSection() {
-    Section_prop * sdl_sec=control->AddSection_prop("sdl",&Null_Init);
-
-    Prop_bool* Pbool;
-    Prop_string* Pstring;
-    Prop_int* Pint;
-    Prop_multival* Pmulti;
-
-    Pbool = sdl_sec->Add_bool("fullscreen",Property::Changeable::Always,false);
-    Pbool->Set_help("Start DOSBox-X directly in fullscreen. (Press [F11/F12]+F to go back)");
-    Pbool->SetBasic(true);
-     
-    Pbool = sdl_sec->Add_bool("fulldouble",Property::Changeable::Always,false);
-    Pbool->Set_help("Use double buffering in fullscreen. It can reduce screen flickering, but it can also result in a slow DOSBox-X.");
-    Pbool->SetBasic(true);
-
-    //Pbool = sdl_sec->Add_bool("sdlresize",Property::Changeable::Always,false);
-    //Pbool->Set_help("Makes window resizable (depends on scalers)");
-
-    Pstring = sdl_sec->Add_string("fullresolution",Property::Changeable::Always,"desktop");
-    Pstring->Set_help("What resolution to use for fullscreen: original, desktop or a fixed size (e.g. 1024x768).\n"
-                      "  Using your monitor's native resolution with aspect=true might give the best results.\n"
-              "  If you end up with small window on a large screen, try an output different from surface.");
-    Pstring->SetBasic(true);
-
-    Pstring = sdl_sec->Add_string("windowresolution",Property::Changeable::Always,"original");
-    Pstring->Set_help("Scale the window to this size IF the output device supports hardware scaling.\n"
-                      "  (output=surface does not!)");
-    Pstring->SetBasic(true);
-
-    Pstring = sdl_sec->Add_string("windowposition", Property::Changeable::OnlyAtStart, "");
-    Pstring->Set_help("Set the window position at startup in the positionX,positionY format (e.g.: 1300,200)");
-    Pstring->SetBasic(true);
-
-    const char* outputs[] = {
-        "default", "surface", "overlay",
-#if C_OPENGL
-        "opengl", "openglnb", "openglhq",
-#endif
-        "ddraw",
-#if C_DIRECT3D
-        "direct3d",
-#endif
-        0 };
-	Pstring = sdl_sec->Add_string("output", Property::Changeable::Always, "default");
-    Pstring->Set_help("What video system to use for output.");
-    Pstring->Set_values(outputs);
-    Pstring->SetBasic(true);
-
-    Pbool = sdl_sec->Add_bool("autolock",Property::Changeable::Always, false);
-    Pbool->Set_help("Mouse will automatically lock, if you click on the screen. (Press CTRL-F10 to unlock)");
-    Pbool->SetBasic(true);
-
-    const char* feeds[] = { "none", "beep", "flash", nullptr};
-    Pstring = sdl_sec->Add_string("autolock_feedback", Property::Changeable::Always, feeds[1]);
-    Pstring->Set_help("Autolock status feedback type, i.e. visual, auditive, none.");
-    Pstring->Set_values(feeds);
-
-	const char* clipboardbutton[] = { "none", "middle", "right", 0};
-	Pstring = sdl_sec->Add_string("clip_mouse_button",Property::Changeable::Always, "right");
-	Pstring->Set_values(clipboardbutton);
-	Pstring->Set_help("Select the mouse button for the Windows clipboard copy/paste function.\n"
-		"The default mouse button is \"right\". Set to \"middle\" if the middle mouse button is desired, or \"none\" to disable this feature.");
-    Pstring->SetBasic(true);
-
-	const char* clipboardmodifier[] = { "none", "alt", "lalt", "ralt", "ctrl", "lctrl", "rctrl", "shift", "lshift", "rshift", 0};
-	Pstring = sdl_sec->Add_string("clip_key_modifier",Property::Changeable::Always, "shift");
-	Pstring->Set_values(clipboardmodifier);
-	Pstring->Set_help("Change the keyboard modifier for the Windows clipboard copy/paste function using the right mouse button.\n"
-		"The default modifier is \"shift\" (both left and right shift keys). Set to \"none\" if no modifier is desired.");
-    Pstring->SetBasic(true);
-
-    Pint = sdl_sec->Add_int("clip_paste_speed", Property::Changeable::WhenIdle, 20);
-    Pint->Set_help("Set keyboard speed for pasting from the Windows clipboard.\n"
-        "If the default setting of 20 causes lost keystrokes, increase the number.\n"
-        "Or experiment with decreasing the number for applications that accept keystrokes quickly.");
-    Pint->SetBasic(true);
-
-    Pmulti = sdl_sec->Add_multi("sensitivity",Property::Changeable::Always, ",");
-    Pmulti->Set_help("Mouse sensitivity. The optional second parameter specifies vertical sensitivity (e.g. 100,-50).");
-    Pmulti->SetValue("100");
-    Pmulti->SetBasic(true);
-    Pint = Pmulti->GetSection()->Add_int("xsens",Property::Changeable::Always,100);
-    Pint->SetMinMax(-1000,1000);
-    Pint = Pmulti->GetSection()->Add_int("ysens",Property::Changeable::Always,100);
-    Pint->SetMinMax(-1000,1000);
-
-#if defined(C_SDL2)
-    Pbool = sdl_sec->Add_bool("raw_mouse_input", Property::Changeable::OnlyAtStart, false);
-    Pbool->Set_help("Enable this setting to bypass your operating system's mouse acceleration and sensitivity settings.\n"
-        "This works in fullscreen or when the mouse is captured in window mode (SDL2 builds only).");
-#endif
-
-    const char * emulation[] = {"integration", "locked", "always", "never", nullptr};
-    Pstring  = sdl_sec->Add_string("mouse_emulation", Property::Changeable::Always, emulation[1]);
-    Pstring->Set_help(
-        "When is mouse emulated ?\n"
-        "integration: when not locked\n"
-        "locked:      when locked\n"
-        "always:      every time\n"
-        "never:       at no time\n"
-        "If disabled, the mouse position in DOSBox-X is exactly where the host OS reports it.\n"
-        "When using a high DPI mouse, the emulation of mouse movement can noticeably reduce the\n"
-        "sensitiveness of your device, i.e. the mouse is slower but more precise.");
-    Pstring->Set_values(emulation);
-    Pstring->SetBasic(true);
-
-    Pint = sdl_sec->Add_int("mouse_wheel_key", Property::Changeable::WhenIdle, -1);
-    Pint->SetMinMax(-3,3);
-    Pint->Set_help("Convert mouse wheel movements into keyboard presses such as arrow keys.\n"
-        "0: disabled; 1: up/down arrows; 2: left/right arrows; 3: PgUp/PgDn keys.\n"
-        "Putting a minus sign in front will disable the conversion for guest systems.");
-    Pint->SetBasic(true);
-
-    Pbool = sdl_sec->Add_bool("waitonerror",Property::Changeable::Always, true);
-    Pbool->Set_help("Wait before closing the console if DOSBox-X has an error.");
-    Pbool->SetBasic(true);
-
-    Pmulti = sdl_sec->Add_multi("priority", Property::Changeable::Always, ",");
-    Pmulti->SetValue("higher,normal",/*init*/true);
-    Pmulti->Set_help("Priority levels for DOSBox-X. Second entry behind the comma is for when DOSBox-X is not focused/minimized.\n"
-                     "  pause is only valid for the second entry.");
-    Pmulti->SetBasic(true);
-
-    const char* actt[] = { "lowest", "lower", "normal", "higher", "highest", "pause", 0};
-    Pstring = Pmulti->GetSection()->Add_string("active",Property::Changeable::Always,"higher");
-    Pstring->Set_values(actt);
-
-    const char* inactt[] = { "lowest", "lower", "normal", "higher", "highest", "pause", 0};
-    Pstring = Pmulti->GetSection()->Add_string("inactive",Property::Changeable::Always,"normal");
-    Pstring->Set_values(inactt);
-
-    Pstring = sdl_sec->Add_path("mapperfile",Property::Changeable::Always,MAPPERFILE_SDL1);
-    Pstring->Set_help("File used to load/save the key/event mappings from. Resetmapper only works with the default value.");
-    Pstring->SetBasic(true);
-
-    Pstring = sdl_sec->Add_path("mapperfile_sdl2",Property::Changeable::Always,MAPPERFILE_SDL2);
-    Pstring->Set_help("File used to load/save the key/event mappings from (SDL2 builds). Resetmapper only works with the default value.");
-    Pstring->SetBasic(true);
-
-#if C_DIRECT3D && C_D3DSHADERS
-    Pmulti = sdl_sec->Add_multi("pixelshader",Property::Changeable::Always," ");
-    Pmulti->SetValue("none",/*init*/true);
-    Pmulti->Set_help("Pixelshader program (effect file must be in Shaders subdirectory). If 'forced' is appended,\n"
-        "then the shader will be used even if the result might not be desired.");
-
-    Pstring = Pmulti->GetSection()->Add_string("type",Property::Changeable::Always,"none");
-    Pstring = Pmulti->GetSection()->Add_string("force",Property::Changeable::Always,"");
-#endif
-
-	const char* truefalseautoopt[] = { "true", "false", "auto", 0};
-    Pstring = sdl_sec->Add_string("usescancodes",Property::Changeable::OnlyAtStart,"auto");
-    Pstring->Set_values(truefalseautoopt);
-    Pstring->Set_help("Avoid usage of symkeys, might not work on all operating systems.\n"
-        "If set to \"auto\" (default), it is enabled for SDL1 and non-US keyboards.");
-    Pstring->SetBasic(true);
-
-    Pint = sdl_sec->Add_int("overscan",Property::Changeable::Always, 0);
-    Pint->SetMinMax(0,10);
-    Pint->Set_help("Width of overscan border (0 to 10). (works only if output=surface)");
-
-    Pstring = sdl_sec->Add_string("titlebar", Property::Changeable::Always, "");
-    Pstring->Set_help("Change the string displayed in the DOSBox-X title bar.");
-    Pstring->SetBasic(true);
-
-    Pbool = sdl_sec->Add_bool("showmenu", Property::Changeable::Always, true);
-    Pbool->Set_help("Whether to show the menu bar (if supported). Default true.");
-    Pstring->SetBasic(true);
-
-//  Pint = sdl_sec->Add_int("overscancolor",Property::Changeable::Always, 0);
-//  Pint->SetMinMax(0,1000);
-//  Pint->Set_help("Value of overscan color.");
 }
 
 static void show_warning(char const * const message) {
@@ -8264,7 +8357,7 @@ bool autolock_mouse_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * co
     return true;
 }
 
-#if defined (WIN32)
+#if defined (WIN32) || defined(C_SDL2)
 bool direct_mouse_clipboard_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
@@ -8290,7 +8383,9 @@ bool middle_mouse_clipboard_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::i
     mainMenu.get_item("clipboard_middle").check(true).refresh_item(mainMenu);
     return true;
 }
+#endif
 
+#if defined (WIN32)
 bool dos_clipboard_api_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
@@ -9441,7 +9536,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             }
             {
                 DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"SharedClipboard");
-                item.set_text("Shared Windows clipboard functions");
+                item.set_text("Shared clipboard functions");
             }
         }
         {
@@ -9972,10 +10067,12 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 #endif
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"wait_on_error").set_text("Wait on error").set_callback_function(wait_on_error_menu_callback).check(sdl.wait_on_error);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"auto_lock_mouse").set_text("Autolock mouse").set_callback_function(autolock_mouse_menu_callback).check(sdl.mouse.autoenable);
-#if defined (WIN32)
+#if defined (WIN32) || defined(C_SDL2)
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_quick").set_text("Quick edit: copy on select and paste with mouse button").set_callback_function(direct_mouse_clipboard_menu_callback).check(direct_mouse_clipboard);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_right").set_text("Via right mouse button").set_callback_function(right_mouse_clipboard_menu_callback).check(mbutton==3);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_middle").set_text("Via middle mouse button").set_callback_function(middle_mouse_clipboard_menu_callback).check(mbutton==2);
+#endif
+#if defined (WIN32)
         if (control->SecureMode()) clipboard_dosapi = false;
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_device").set_text("Enable DOS clipboard device access").set_callback_function(dos_clipboard_device_menu_callback).check(dos_clipboard_device_access==4&&!control->SecureMode());
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_dosapi").set_text("Enable DOS clipboard API for applications").set_callback_function(dos_clipboard_api_menu_callback).check(clipboard_dosapi);
