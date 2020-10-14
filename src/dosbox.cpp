@@ -310,6 +310,8 @@ unsigned long long update_clockdom_from_now(ClockDomain &dst) {
 
 #include "paging.h"
 
+extern std::string savefilename;
+extern bool use_save_file;
 extern bool rom_bios_vptable_enable;
 extern bool rom_bios_8x8_cga_font;
 extern bool allow_port_92_reset;
@@ -783,7 +785,11 @@ void notifyError(const std::string& message, bool log=true)
 {
     if (log) LOG_MSG("%s",message.c_str());
 #if !defined(HX_DOS)
+    MAPPER_ReleaseAllKeys();
+    GFX_LosingFocus();
     tinyfd_messageBox("Error",message.c_str(),"ok","error", 1);
+    MAPPER_ReleaseAllKeys();
+    GFX_LosingFocus();
 #endif
 }
 
@@ -5060,8 +5066,9 @@ void SaveState::save(size_t slot) { //throw (Error)
          *      has been changed to const char* and the return value of tinyfd_inputBox() is given to
          *      a local temporary char* string where the modification can be made, and *then* assigned
          *      to the const char* string for the rest of this function. */
-        char *new_remark = tinyfd_inputBox("Save state", "Please enter remark for the state (optional; 30 characters maximum). Click the 'Cancel' button to cancel the saving.", NULL);
+        char *new_remark = tinyfd_inputBox("Save state", "Please enter remark for the state (optional; 30 characters maximum). Click the 'Cancel' button to cancel the saving.", " ");
         if (new_remark==NULL) return;
+        new_remark=trim(new_remark);
         if (strlen(new_remark)>30) new_remark[30]=0;
         save_remark = new_remark;
     }
@@ -5095,7 +5102,7 @@ void SaveState::save(size_t slot) { //throw (Error)
 	std::stringstream slotname;
 	slotname << slot+1;
 	temp=path;
-	std::string save=temp+slotname.str()+".sav";
+	std::string save=use_save_file&&savefilename.size()?savefilename:temp+slotname.str()+".sav";
 	remove(save.c_str());
 	std::ofstream file (save.c_str());
 	file << "";
@@ -5224,7 +5231,11 @@ delete_all:
 void savestatecorrupt(const char* part) {
     LOG_MSG("Save state corrupted! Program in inconsistent state! - %s", part);
 #if !defined(HX_DOS)
+    MAPPER_ReleaseAllKeys();
+    GFX_LosingFocus();
     tinyfd_messageBox("Error","Save state corrupted! Program may not work.","ok","error", 1);
+    MAPPER_ReleaseAllKeys();
+    GFX_LosingFocus();
 #endif
 }
 
@@ -5276,12 +5287,12 @@ void SaveState::load(size_t slot) const { //throw (Error)
 	temp = path;
 	std::stringstream slotname;
 	slotname << slot+1;
-	std::string save=temp+slotname.str()+".sav";
+	std::string save=use_save_file&&savefilename.size()?savefilename:temp+slotname.str()+".sav";
 	std::ifstream check_slot;
 	check_slot.open(save.c_str(), std::ifstream::in);
 	if(check_slot.fail()) {
 		LOG_MSG("No saved slot - %d (%s)",(int)slot+1,save.c_str());
-		notifyError("The selected save slot is an empty slot.", false);
+		notifyError(use_save_file&&savefilename.size()?"The selected save file is currently empty.":"The selected save slot is an empty slot.", false);
 		load_err=true;
 		return;
 	}
@@ -5548,7 +5559,7 @@ void SaveState::removeState(size_t slot) const {
     }
 }
 
-std::string SaveState::getName(size_t slot) const {
+std::string SaveState::getName(size_t slot, bool nl) const {
 	if (slot >= SLOT_COUNT*MAX_PAGE) return "[Empty slot]";
 	std::string path;
 	bool Get_Custom_SaveDir(std::string& savedir);
@@ -5570,10 +5581,10 @@ std::string SaveState::getName(size_t slot) const {
 	temp = path;
 	std::stringstream slotname;
 	slotname << slot+1;
-	std::string save=temp+slotname.str()+".sav";
+	std::string save=nl&&use_save_file&&savefilename.size()?savefilename:temp+slotname.str()+".sav";
 	std::ifstream check_slot;
 	check_slot.open(save.c_str(), std::ifstream::in);
-	if (check_slot.fail()) return "[Empty slot]";
+	if (check_slot.fail()) return nl?"(Empty state)":"[Empty slot]";
 	my_miniunz((char **)save.c_str(),"Program_Name",temp.c_str());
 	std::ifstream check_title;
 	int length = 8;
@@ -5591,7 +5602,7 @@ std::string SaveState::getName(size_t slot) const {
 	check_title.close();
 	remove(tempname.c_str());
 	buffer1[length]='\0';
-    std::string ret="[Program: "+std::string(buffer1)+"]";
+    std::string ret=nl?"Program: "+(!strlen(buffer1)?"-":std::string(buffer1))+"\n":"[Program: "+std::string(buffer1)+"]";
 	my_miniunz((char **)save.c_str(),"Time_Stamp",temp.c_str());
     length=18;
 	tempname = temp+"Time_Stamp";
@@ -5608,7 +5619,7 @@ std::string SaveState::getName(size_t slot) const {
 	check_title.close();
 	remove(tempname.c_str());
 	buffer2[length]='\0';
-    if (strlen(buffer2)) ret+=" ("+std::string(buffer2);
+    if (strlen(buffer2)) ret+=nl?"Timestamp: "+(!strlen(buffer2)?"-":std::string(buffer2))+"\n":" ("+std::string(buffer2);
 	my_miniunz((char **)save.c_str(),"Save_Remark",temp.c_str());
     length=30;
 	tempname = temp+"Save_Remark";
@@ -5625,6 +5636,6 @@ std::string SaveState::getName(size_t slot) const {
 	check_title.close();
 	remove(tempname.c_str());
 	buffer3[length]='\0';
-    if (strlen(buffer3)) ret+=" - "+std::string(buffer3)+")";
+    if (strlen(buffer3)) ret+=nl?"Remark: "+(!strlen(buffer3)?"-":std::string(buffer3))+"\n":" - "+std::string(buffer3)+")";
 	return ret;
 }
