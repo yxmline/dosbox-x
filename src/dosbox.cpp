@@ -5066,8 +5066,9 @@ void SaveState::save(size_t slot) { //throw (Error)
          *      has been changed to const char* and the return value of tinyfd_inputBox() is given to
          *      a local temporary char* string where the modification can be made, and *then* assigned
          *      to the const char* string for the rest of this function. */
-        char *new_remark = tinyfd_inputBox("Save state", "Please enter remark for the state (optional; 30 characters maximum). Click the 'Cancel' button to cancel the saving.", NULL);
+        char *new_remark = tinyfd_inputBox("Save state", "Please enter remark for the state (optional; 30 characters maximum). Click the 'Cancel' button to cancel the saving.", " ");
         if (new_remark==NULL) return;
+        new_remark=trim(new_remark);
         if (strlen(new_remark)>30) new_remark[30]=0;
         save_remark = new_remark;
     }
