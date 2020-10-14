@@ -5637,5 +5637,6 @@ std::string SaveState::getName(size_t slot, bool nl) const {
 	remove(tempname.c_str());
 	buffer3[length]='\0';
     if (strlen(buffer3)) ret+=nl?"Remark: "+(!strlen(buffer3)?"-":std::string(buffer3))+"\n":" - "+std::string(buffer3)+")";
+    else if (!nl) ret+=")";
 	return ret;
 }
