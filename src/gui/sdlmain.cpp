@@ -44,6 +44,7 @@ extern bool log_fileio;
 extern bool noremark_save_state;
 extern bool force_load_state;
 extern bool use_quick_reboot;
+extern bool pc98_force_ibm_layout;
 extern bool enable_config_as_shell_commands;
 bool winrun=false, use_save_file=false;
 bool direct_mouse_clipboard=false;
@@ -6535,12 +6536,18 @@ bool PasteClipboardNext() {
 	return true;
 }
 #elif defined(C_SDL2)
+typedef char host_cnv_char_t;
+char *CodePageHostToGuest(const host_cnv_char_t *s);
 void removeChar(char *str, char c);
 void PasteClipboard(bool bPressed) {
 	if (!bPressed) return;
     char* text = SDL_GetClipboardText();
-    removeChar(text, 0x0A);
-    strPasteBuffer.append(text);
+    removeChar((char *)text, 0x0A);
+    const char* asc = CodePageHostToGuest(text);
+    if (asc != NULL)
+        strPasteBuffer.append(asc);
+    else
+        strPasteBuffer.append(text);
 }
 
 bool PasteClipboardNext() {
@@ -6551,7 +6558,8 @@ bool PasteClipboardNext() {
 }
 #elif defined(LINUX) && C_X11
 #include <X11/Xlib.h>
-
+typedef char host_cnv_char_t;
+char *CodePageHostToGuest(const host_cnv_char_t *s);
 void paste_utf8_prop(Display *dpy, Window w, Atom p)
 {
     Atom da, incr, type;
@@ -6568,7 +6576,11 @@ void paste_utf8_prop(Display *dpy, Window w, Atom p)
     XGetWindowProperty(dpy, w, p, 0, size, False, AnyPropertyType, &da, &di, &dul, &dul, &prop_ret);
     char *text=(char *)prop_ret;
     for (unsigned int i=0; i<strlen(text); i++) if (text[i]==0x0A) text[i]=0x0D;
-    strPasteBuffer.append(text);
+    const char* asc = CodePageHostToGuest(text);
+    if (asc != NULL)
+        strPasteBuffer.append(asc);
+    else
+        strPasteBuffer.append(text);
     fflush(stdout);
     XFree(prop_ret);
     XDeleteProperty(dpy, w, p);
@@ -8405,6 +8417,14 @@ bool dos_clipboard_device_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::ite
 }
 #endif
 
+bool pc98_force_uskb_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    pc98_force_ibm_layout = !pc98_force_ibm_layout;
+    mainMenu.get_item("pc98_use_uskb").check(pc98_force_ibm_layout).refresh_item(mainMenu);
+    return true;
+}
+
 bool doublebuf_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
@@ -8487,7 +8507,7 @@ bool show_save_state_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * c
     MAPPER_ReleaseAllKeys();
     GFX_LosingFocus();
     std::string message = "Save to: "+(use_save_file&&savefilename.size()?"File "+savefilename:"Slot "+std::to_string(GetGameState_Run()+1))+"\n"+SaveState::instance().getName(GetGameState_Run(), true);
-    bool ret=tinyfd_messageBox("Saved state information", message.c_str(), "ok","info", 1);
+    tinyfd_messageBox("Saved state information", message.c_str(), "ok","info", 1);
     MAPPER_ReleaseAllKeys();
     GFX_LosingFocus();
     return true;
@@ -9804,9 +9824,9 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                 item.set_text("PC-98 PIT master clock");
 
                 {
-                    mainMenu.alloc_item(DOSBoxMenu::item_type_id,"dos_pc98_pit_4mhz").set_text("4MHz/8MHz").
+                    mainMenu.alloc_item(DOSBoxMenu::item_type_id,"dos_pc98_pit_4mhz").set_text("4MHz/8MHz PIT master clock").
                         set_callback_function(dos_pc98_clock_menu_callback);
-                    mainMenu.alloc_item(DOSBoxMenu::item_type_id,"dos_pc98_pit_5mhz").set_text("5MHz/10MHz").
+                    mainMenu.alloc_item(DOSBoxMenu::item_type_id,"dos_pc98_pit_5mhz").set_text("5MHz/10MHz PIT master clock").
                         set_callback_function(dos_pc98_clock_menu_callback);
                 }
             }
@@ -10154,6 +10174,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"removestate").set_text("Remove state in slot").set_callback_function(remove_state_menu_callback);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"refreshslot").set_text("Refresh display status").set_callback_function(refresh_slots_menu_callback);
 
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"pc98_use_uskb").set_text("Use US keyboard layout").set_callback_function(pc98_force_uskb_menu_callback).check(pc98_force_ibm_layout);
         mainMenu.get_item("debug_blankrefreshtest").set_text("Refresh test (blank display)").set_callback_function(refreshtest_menu_callback).refresh_item(mainMenu);
 
         mainMenu.get_item("wheel_updown").check(wheel_key==1).refresh_item(mainMenu);
@@ -10186,6 +10207,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.get_item("pc98_enable_188user").enable(IS_PC98_ARCH);
         mainMenu.get_item("pc98_clear_text").enable(IS_PC98_ARCH);
         mainMenu.get_item("pc98_clear_graphics").enable(IS_PC98_ARCH);
+        mainMenu.get_item("pc98_use_uskb").enable(IS_PC98_ARCH);
         mainMenu.get_item("dos_pc98_pit_4mhz").enable(IS_PC98_ARCH);
         mainMenu.get_item("dos_pc98_pit_5mhz").enable(IS_PC98_ARCH);
 
