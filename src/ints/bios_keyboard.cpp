@@ -569,6 +569,7 @@ irq1_end:
     if (leds_orig != leds) KEYBOARD_SetLEDs(leds);
 
     /* update insert cursor */
+    /* FIXME: Wait a second... I doubt the BIOS IRQ1 handler does this! The program (or DOS prompt) decides whether INS changes cursor shape! */
     extern bool dos_program_running;
     if (!dos_program_running)
     {
@@ -1343,7 +1344,6 @@ static Bitu PCjr_NMI_Keyboard_Handler(void) {
 }
 
 static Bitu IRQ1_CtrlBreakAfterInt1B(void) {
-    BIOS_AddKeyToBuffer(0x0000);
     return CBRET_NONE;
 }
 
