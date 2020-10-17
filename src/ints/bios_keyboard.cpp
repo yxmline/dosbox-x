@@ -592,6 +592,8 @@ irq1_end:
     return CBRET_NONE;
 }
 
+bool CPU_PUSHF(Bitu use32);
+void CPU_Push16(uint16_t value);
 unsigned char AT_read_60(void);
 extern bool pc98_force_ibm_layout;
 
@@ -1281,7 +1283,29 @@ static Bitu IRQ1_Handler_PC98(void) {
                 break;
 
             case 0x60: // STOP
-                // does not pass it on
+                // does not pass it on.
+                // According to Neko Project II source code, STOP invokes INT 6h
+                // which is PC-98's version of the break interrupt IBM maps to INT 1Bh.
+                // Obviously defined before Intel decided that INT 6h is the Invalid
+                // Opcode exception. Booting PC-98 MS-DOS and looking at the INT 6h
+                // interrupt handler in the debugger confirms this.
+                if (pressed) {
+                    /* push an IRET frame pointing at INT 06h. */
+
+                    /* we can't just CALLBACK_RunRealInt() here because we're in the
+                     * middle of an ISR and we need to acknowledge the interrupt to
+                     * the PIC before we call INT 06h. Funny things happen otherwise,
+                     * including an unresponsive keyboard. */
+
+                    /* I noticed that Neko Project II has the code to emulate this,
+                     * as a direct call to run a CPU interrupt, but it's commented
+                     * out for probably the same issue. */
+                    const uint32_t cb = real_readd(0,0x06u * 4u);
+
+                    CPU_PUSHF(0);
+                    CPU_Push16((uint16_t)(cb >> 16u));
+                    CPU_Push16((uint16_t)(cb & 0xFFFFu));
+                }
                 break;
 
             case 0x62: // F1            f･1     ???     ???     ???     ???
@@ -1378,6 +1402,8 @@ static bool IsEnhancedKey(uint16_t &key) {
     return false;
 }
 
+extern bool DOS_BreakFlag;
+
 bool int16_unmask_irq1_on_read = true;
 bool int16_ah_01_cf_undoc = true;
 
@@ -1387,6 +1413,12 @@ Bitu INT16_Handler(void) {
     case 0x00: /* GET KEYSTROKE */
         if (int16_unmask_irq1_on_read)
             PIC_SetIRQMask(1,false); /* unmask keyboard */
+
+        // HACK: Make STOP key work
+        if (IS_PC98_ARCH && DOS_BreakFlag) {
+            reg_ax=0;
+            return CBRET_NONE;
+        }
 
         if ((get_key(temp)) && (!IsEnhancedKey(temp))) {
             /* normal key found, return translated key in ax */
@@ -1399,6 +1431,12 @@ Bitu INT16_Handler(void) {
     case 0x10: /* GET KEYSTROKE (enhanced keyboards only) */
         if (int16_unmask_irq1_on_read)
             PIC_SetIRQMask(1,false); /* unmask keyboard */
+
+        // HACK: Make STOP key work
+        if (IS_PC98_ARCH && DOS_BreakFlag) {
+            reg_ax=0;
+            return CBRET_NONE;
+        }
 
         if (get_key(temp)) {
             if (!IS_PC98_ARCH && ((temp&0xff)==0xf0) && (temp>>8)) {
