@@ -234,6 +234,7 @@ void ShutDownMemHandles(Section * sec);
 SDL_Block sdl;
 Bitu frames = 0;
 unsigned int page=0;
+unsigned int sendkeymap=0;
 
 ScreenSizeInfo          screen_size_info;
 
@@ -6478,7 +6479,12 @@ void PasteClipboard(bool bPressed)
         char* szFilteredText = reinterpret_cast<char*>(alloca(clipSize + 1));
         char* szFilterNextChar = szFilteredText;
         for (size_t i = 0; i < clipSize; ++i)
-            if (clipAscii[i] != 0x0A) // Skip linefeeds
+            if (clipAscii[i] == 9) // Tab to spaces
+                for (int k=0; k<4; k++) {
+                    *szFilterNextChar = ' ';
+                    ++szFilterNextChar;
+                }
+            else if (clipAscii[i] != 0x0A) // Skip linefeeds
             {
                 *szFilterNextChar = clipAscii[i];
                 ++szFilterNextChar;
@@ -6511,7 +6517,12 @@ void PasteClipboard(bool bPressed) {
         char* szFilteredText = reinterpret_cast<char*>(alloca(clipSize + 1));
         char* szFilterNextChar = szFilteredText;
         for (size_t i = 0; i < clipSize; ++i)
-            if (clipAscii[i] != 0x0A) // Skip linefeeds
+            if (clipAscii[i] == 9) // Tab to spaces
+                for (int k=0; k<4; k++) {
+                    *szFilterNextChar = ' ';
+                    ++szFilterNextChar;
+                }
+            else if (clipAscii[i] != 0x0A) // Skip linefeeds
             {
                 *szFilterNextChar = clipAscii[i];
                 ++szFilterNextChar;
@@ -6540,6 +6551,7 @@ void PasteClipboard(bool bPressed) {
     std::string result="", pre="";
     for (unsigned int i=0; i<strlen(text); i++) {
         if (text[i]==0x0A) continue;
+        else if (text[i]==9) result+="    ";
         else if (text[i]<0) {
             char c=text[i];
             int n=1;
@@ -6595,6 +6607,7 @@ void paste_utf8_prop(Display *dpy, Window w, Atom p)
     std::string result="", pre="";
     for (unsigned int i=0; i<strlen(text); i++) {
         if (text[i]==0x0A) text[i]=0x0D;
+        else if (text[i]==9) result+="    ";
         else if (text[i]<0) {
             char c=text[i];
             int n=1;
@@ -7697,8 +7710,16 @@ bool cpu_speed_emulate_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * 
         cyclemu = 12010;
     else if (!strcmp(mname, "cpu486-66"))
         cyclemu = 23880;
+    else if (!strcmp(mname, "cpu486-100"))
+        cyclemu = 33445;
+    else if (!strcmp(mname, "cpu486-133"))
+        cyclemu = 47810;
     else if (!strcmp(mname, "cpu586-66"))
         cyclemu = 35620;
+    else if (!strcmp(mname, "cpu586-75"))
+        cyclemu = 43500;
+    else if (!strcmp(mname, "cpu586-90"))
+        cyclemu = 52000;
     else if (!strcmp(mname, "cpu586-100"))
         cyclemu = 60000;
     else if (!strcmp(mname, "cpu586-120"))
@@ -8729,48 +8750,68 @@ bool highdpienable_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * con
     return true;
 }
 
-void SendCAD(bool pressed) {
-    if (!pressed) return;
-
-	KEYBOARD_AddKey(KBD_leftctrl, true);
-	KEYBOARD_AddKey(KBD_leftalt, true);
-	KEYBOARD_AddKey(KBD_delete, true);
-	KEYBOARD_AddKey(KBD_leftctrl, false);
-	KEYBOARD_AddKey(KBD_leftalt, false);
-	KEYBOARD_AddKey(KBD_delete, false);
-}
-
-bool sendkey_preset_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    if (menuitem->get_name() == "sendkey_alttab") {
+void SendKey(std::string key) {
+    if (key == "sendkey_winlogo") {
+        KEYBOARD_AddKey(KBD_lwindows, true);
+        KEYBOARD_AddKey(KBD_lwindows, false);
+    } else if (key == "sendkey_winmenu") {
+        KEYBOARD_AddKey(KBD_rwinmenu, true);
+        KEYBOARD_AddKey(KBD_rwinmenu, false);
+    } else if (key == "sendkey_alttab") {
         KEYBOARD_AddKey(KBD_leftalt, true);
         KEYBOARD_AddKey(KBD_tab, true);
         KEYBOARD_AddKey(KBD_leftalt, false);
         KEYBOARD_AddKey(KBD_tab, false);
-    }
-    else if (menuitem->get_name() == "sendkey_ctrlesc") {
+    } else if (key == "sendkey_ctrlesc") {
         KEYBOARD_AddKey(KBD_leftctrl, true);
         KEYBOARD_AddKey(KBD_esc, true);
         KEYBOARD_AddKey(KBD_leftctrl, false);
         KEYBOARD_AddKey(KBD_esc, false);
-    }
-    else if (menuitem->get_name() == "sendkey_ctrlbreak") {
+    } else if (key == "sendkey_ctrlbreak") {
         KEYBOARD_AddKey(KBD_leftctrl, true);
         KEYBOARD_AddKey(KBD_pause, true);
         KEYBOARD_AddKey(KBD_leftctrl, false);
         KEYBOARD_AddKey(KBD_pause, false);
+    } else if (key == "sendkey_cad") {
+        KEYBOARD_AddKey(KBD_leftctrl, true);
+        KEYBOARD_AddKey(KBD_leftalt, true);
+        KEYBOARD_AddKey(KBD_delete, true);
+        KEYBOARD_AddKey(KBD_leftctrl, false);
+        KEYBOARD_AddKey(KBD_leftalt, false);
+        KEYBOARD_AddKey(KBD_delete, false);
     }
-    else if (menuitem->get_name() == "sendkey_winlogo") {
-        KEYBOARD_AddKey(KBD_lwindows, true);
-        KEYBOARD_AddKey(KBD_lwindows, false);
-    }
-    else if (menuitem->get_name() == "sendkey_winmenu") {
-        KEYBOARD_AddKey(KBD_rwinmenu, true);
-        KEYBOARD_AddKey(KBD_rwinmenu, false);
-    }
-    else if (menuitem->get_name() == "sendkey_cad")
-        SendCAD(true);
+}
 
+void Sendkeymapper(bool pressed) {
+    if (!pressed) return;
+    if (sendkeymap==1) SendKey("sendkey_winlogo");
+    else if (sendkeymap==2) SendKey("sendkey_winmenu");
+    else if (sendkeymap==3) SendKey("sendkey_alttab");
+    else if (sendkeymap==4) SendKey("sendkey_ctrlesc");
+    else if (sendkeymap==5) SendKey("sendkey_ctrlbreak");
+    else SendKey("sendkey_cad");
+}
+
+bool sendkey_mapper_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    if (menuitem->get_name()=="sendkey_mapper_winlogo") sendkeymap=1;
+    else if (menuitem->get_name()=="sendkey_mapper_winmenu") sendkeymap=2;
+    else if (menuitem->get_name()=="sendkey_mapper_alttab") sendkeymap=3;
+    else if (menuitem->get_name()=="sendkey_mapper_ctrlesc") sendkeymap=4;
+    else if (menuitem->get_name()=="sendkey_mapper_ctrlbreak") sendkeymap=5;
+    else if (menuitem->get_name()=="sendkey_mapper_cad") sendkeymap=0;
+    mainMenu.get_item("sendkey_mapper_winlogo").check(menuitem->get_name()=="sendkey_mapper_winlogo").refresh_item(mainMenu);
+    mainMenu.get_item("sendkey_mapper_winmenu").check(menuitem->get_name()=="sendkey_mapper_winmenu").refresh_item(mainMenu);
+    mainMenu.get_item("sendkey_mapper_alttab").check(menuitem->get_name()=="sendkey_mapper_alttab").refresh_item(mainMenu);
+    mainMenu.get_item("sendkey_mapper_ctrlesc").check(menuitem->get_name()=="sendkey_mapper_ctrlesc").refresh_item(mainMenu);
+    mainMenu.get_item("sendkey_mapper_ctrlbreak").check(menuitem->get_name()=="sendkey_mapper_ctrlbreak").refresh_item(mainMenu);
+    mainMenu.get_item("sendkey_mapper_cad").check(menuitem->get_name()=="sendkey_mapper_cad").refresh_item(mainMenu);
+    return true;
+}
+
+bool sendkey_preset_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    SendKey(menuitem->get_name());
     return true;
 }
 
@@ -9672,7 +9713,11 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu386-33").set_text("386DX 33MHz (~6075 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
             mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu486-33").set_text("486DX 33MHz (~12010 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
             mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu486-66").set_text("486DX2 66MHz (~23880 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
+            mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu486-100").set_text("486DX4 100MHz (~33445 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
+            mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu486-133").set_text("486DX5 133MHz (~47810 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
             mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu586-66").set_text("Pentium 66MHz (~35620 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
+            mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu586-75").set_text("Pentium 75MHz (~43500 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
+            mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu586-90").set_text("Pentium 90MHz (~52000 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
             mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu586-100").set_text("Pentium 100MHz (~60000 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
             mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu586-120").set_text("Pentium 120MHz (~74000 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
             mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu586-133").set_text("Pentium 133MHz (~80000 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
@@ -10112,8 +10157,8 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         {
             DOSBoxMenu::item *item;
 
-            MAPPER_AddHandler(SendCAD, MK_delete, MMODHOST, "sendkey_cad", "CtrlAltDel", &item);
-            item->set_text("Ctrl+Alt+Del");
+            MAPPER_AddHandler(Sendkeymapper, MK_delete, MMODHOST, "sendkey_mapper", "SendKey", &item);
+            item->set_text("Send key");
         }
         CPU_Init();
 #if C_FPU
@@ -10200,12 +10245,18 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_device").set_text("Enable DOS clipboard device access").set_callback_function(dos_clipboard_device_menu_callback).check(dos_clipboard_device_access==4&&!control->SecureMode());
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_dosapi").set_text("Enable DOS clipboard API for applications").set_callback_function(dos_clipboard_api_menu_callback).check(clipboard_dosapi);
 #endif
-        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_alttab").set_text("Alt+Tab").set_callback_function(sendkey_preset_menu_callback);
-        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_ctrlesc").set_text("Ctrl+Esc").set_callback_function(sendkey_preset_menu_callback);
-        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_ctrlbreak").set_text("Ctrl+Break").set_callback_function(sendkey_preset_menu_callback);
-        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_winlogo").set_text("Logo key").set_callback_function(sendkey_preset_menu_callback);
-        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_winmenu").set_text("Menu key").set_callback_function(sendkey_preset_menu_callback);
-        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_cad").set_text("Ctrl+Alt+Del").set_callback_function(sendkey_preset_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_winlogo").set_text("Send logo key").set_callback_function(sendkey_preset_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_winmenu").set_text("Send menu key").set_callback_function(sendkey_preset_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_alttab").set_text("Send Alt+Tab").set_callback_function(sendkey_preset_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_ctrlesc").set_text("Send Ctrl+Esc").set_callback_function(sendkey_preset_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_ctrlbreak").set_text("Send Ctrl+Break").set_callback_function(sendkey_preset_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_cad").set_text("Send Ctrl+Alt+Del").set_callback_function(sendkey_preset_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_mapper_winlogo").set_text("Mapper SendKey: logo key").set_callback_function(sendkey_mapper_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_mapper_winmenu").set_text("Mapper SendKey: menu key").set_callback_function(sendkey_mapper_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_mapper_alttab").set_text("Mapper SendKey: Alt+Tab").set_callback_function(sendkey_mapper_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_mapper_ctrlesc").set_text("Mapper SendKey: Send Ctrl+Esc").set_callback_function(sendkey_mapper_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_mapper_ctrlbreak").set_text("Mapper SendKey: Send Ctrl+Break").set_callback_function(sendkey_mapper_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_mapper_cad").set_text("Mapper SendKey: Send Ctrl+Alt+Del").set_callback_function(sendkey_mapper_menu_callback);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"wheel_updown").set_text("Convert to up/down arrows").set_callback_function(wheel_updown_menu_callback);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"wheel_leftright").set_text("Convert to left/right arrows").set_callback_function(wheel_leftright_menu_callback);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"wheel_pageupdown").set_text("Convert to PgUp/PgDn keys").set_callback_function(wheel_pageupdown_menu_callback);
@@ -10231,6 +10282,12 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.get_item("wheel_pageupdown").check(wheel_key==3).refresh_item(mainMenu);
         mainMenu.get_item("wheel_none").check(wheel_key==0).refresh_item(mainMenu);
         mainMenu.get_item("wheel_guest").check(wheel_guest).refresh_item(mainMenu);
+        mainMenu.get_item("sendkey_mapper_winlogo").check(sendkeymap==1).refresh_item(mainMenu);
+        mainMenu.get_item("sendkey_mapper_winmenu").check(sendkeymap==2).refresh_item(mainMenu);
+        mainMenu.get_item("sendkey_mapper_alttab").check(sendkeymap==3).refresh_item(mainMenu);
+        mainMenu.get_item("sendkey_mapper_ctrlesc").check(sendkeymap==4).refresh_item(mainMenu);
+        mainMenu.get_item("sendkey_mapper_ctrlbreak").check(sendkeymap==5).refresh_item(mainMenu);
+        mainMenu.get_item("sendkey_mapper_cad").check(!sendkeymap).refresh_item(mainMenu);
 
         bool MENU_get_swapstereo(void);
         mainMenu.get_item("mixer_swapstereo").check(MENU_get_swapstereo()).refresh_item(mainMenu);

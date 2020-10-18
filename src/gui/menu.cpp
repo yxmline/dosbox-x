@@ -156,13 +156,19 @@ static const char *def_menu_main[] =
 /* main -> send key menu ("MenuSendKey") */
 static const char *def_menu_main_sendkey[] =
 {
+    "sendkey_winlogo",
+    "sendkey_winmenu",
     "sendkey_alttab",
     "sendkey_ctrlesc",
     "sendkey_ctrlbreak",
-    "sendkey_winlogo",
-    "sendkey_winmenu",
-    "--",
     "sendkey_cad",
+    "--",
+    "sendkey_mapper_winlogo",
+    "sendkey_mapper_winmenu",
+    "sendkey_mapper_alttab",
+    "sendkey_mapper_ctrlesc",
+    "sendkey_mapper_ctrlbreak",
+    "sendkey_mapper_cad",
     NULL
 };
 
@@ -189,7 +195,7 @@ static const char *def_menu_main_clipboard[] =
     "clipboard_device",
     "clipboard_dosapi",
 #endif
-#if !defined(LINUX) || !C_X11
+#if !defined(LINUX) || !C_X11 || defined(C_SDL2)
     "--",
     "mapper_paste",
 #endif
@@ -205,7 +211,11 @@ static const char *def_menu_cpu_speed[] =
     "cpu386-33",
     "cpu486-33",
     "cpu486-66",
+    "cpu486-100",
+    "cpu486-133",
     "cpu586-66",
+    "cpu586-75",
+    "cpu586-90",
     "cpu586-100",
     "cpu586-120",
     "cpu586-133",
