@@ -578,7 +578,7 @@ const char *drive_opts[][2] = {
 	{ "mounthd",                "Mount folder as hard drive" },
 	{ "mountcd",                "Mount folder as CD drive" },
 	{ "mountfd",                "Mount folder as floppy drive" },
-	{ "mountimg",               "Mount disk or CD image file" },
+	{ "mountimg",               "Mount a disk or CD image file" },
 	{ "mountimgs",              "Mount multiple disk/CD images" },
     { "unmount",                "Unmount drive" },
     { "rescan",                 "Rescan drive" },
