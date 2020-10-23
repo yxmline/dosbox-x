@@ -37,7 +37,7 @@
 # define INCL_WIN
 #endif
 
-extern int enablelfn;
+extern int enablelfn, socknum;
 extern bool dpi_aware_enable;
 extern bool log_int21;
 extern bool log_fileio;
@@ -7138,6 +7138,7 @@ bool DOSBOX_parse_argv() {
             fprintf(stderr,"  -nomenu                                 Do not show menu\n");
             fprintf(stderr,"  -showcycles                             Show cycles count\n");
             fprintf(stderr,"  -showrt                                 Show emulation speed relative to realtime\n");
+            fprintf(stderr,"  -socket <socketnum>                     Specify the socket number for the nullmodem emulation\n");
             fprintf(stderr,"  -savedir <path>                         Set save path\n");
             fprintf(stderr,"  -defaultdir <path>                      Set the default working path\n");
             fprintf(stderr,"  -defaultconf                            Use the default config settings\n");
@@ -7342,7 +7343,10 @@ bool DOSBOX_parse_argv() {
             control->opt_earlydebug = true;
             control->opt_console = true;
         }
-        else {
+        else if (optname == "socket") {
+            if (!control->cmdline->NextOptArgv(tmp)) return false;
+            socknum = std::stoi(tmp);
+        } else {
             printf("WARNING: Unknown option %s (first parsing stage)\n",optname.c_str());
         }
     }
@@ -7733,6 +7737,22 @@ bool mixer_info_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const m
     GFX_LosingFocus();
     return true;
 }
+
+bool midi_device_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    MAPPER_ReleaseAllKeys();
+
+    GFX_LosingFocus();
+
+    GUI_Shortcut(21);
+
+    MAPPER_ReleaseAllKeys();
+
+    GFX_LosingFocus();
+    return true;
+}
+
 
 bool cpu_speed_emulate_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
@@ -9911,6 +9931,8 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                     set_callback_function(mixer_mute_menu_callback);
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"mixer_info").set_text("Show sound levels").
                     set_callback_function(mixer_info_menu_callback);
+                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"midi_info").set_text("Show MIDI device").
+                    set_callback_function(midi_device_menu_callback);
             }
         }
         {
