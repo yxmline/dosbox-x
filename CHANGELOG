@@ -30,8 +30,10 @@
   - Changed some DOS error messages (such as "Illegal
     command" which now reads "Bad command or filename")
     similar to real DOS systems. (Wengier)
-  - There is now a dosbox-x.commonref.conf file to act
-    as the common config reference file. (Wengier)
+  - The full dosbox-x.reference.conf file is renamed to
+    dosbox-x.reference.full.conf. The original file
+    dosbox-x.reference.conf now contains common config
+    options instead of all config options. (Wengier)
   - The CONFIG command and Configuration Tool will now
     save common and modified config optons by default.
     The -all command-line option (or "Save all options
