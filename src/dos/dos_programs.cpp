@@ -72,6 +72,7 @@ bool force_nocachedir = false;
 bool wpcolon = true;
 bool startcmd = false;
 bool startwait = true;
+bool startquiet = false;
 bool mountwarning = true;
 bool qmount = false;
 
@@ -627,7 +628,7 @@ void MenuBrowseProgramFile() {
         if (!tinyfd_messageBox("Warning",drive_warn.c_str(),"yesno", "question", 1)) {return;}
         drv='C';
     }
-    mainMenu.get_item("quick_launch").enable(false).refresh_item(mainMenu);
+    mainMenu.get_item("mapper_quickrun").enable(false).refresh_item(mainMenu);
 
     char CurrentDir[512];
     char * Temp_CurrentDir = CurrentDir;
@@ -681,7 +682,7 @@ void MenuBrowseProgramFile() {
 		if (!Drives[drv-'A']) {
 			drive_warn="Drive "+std::string(1, drv)+": failed to mount.";
             tinyfd_messageBox("Error",drive_warn.c_str(),"ok","error", 1);
-            if (!dos_kernel_disabled) mainMenu.get_item("quick_launch").enable(true).refresh_item(mainMenu);
+            if (!dos_kernel_disabled) mainMenu.get_item("mapper_quickrun").enable(true).refresh_item(mainMenu);
 			return;
         }
         uint8_t olddrv=DOS_GetDefaultDrive();
@@ -739,7 +740,7 @@ void MenuBrowseProgramFile() {
 	}
 
 	chdir( Temp_CurrentDir );
-    if (!dos_kernel_disabled) mainMenu.get_item("quick_launch").enable(true).refresh_item(mainMenu);
+    if (!dos_kernel_disabled) mainMenu.get_item("mapper_quickrun").enable(true).refresh_item(mainMenu);
 #endif
 }
 
@@ -6071,7 +6072,7 @@ static void LS_ProgramStart(Program * * make) {
 #if defined (WIN32) && !defined(HX_DOS)
 #include <sstream>
 #include <shellapi.h>
-extern bool ctrlbrk, startwait;
+extern bool ctrlbrk;
 extern std::string startincon;
 SHELLEXECUTEINFO lpExecInfo;
 
@@ -6200,7 +6201,7 @@ public:
             strcat(winDirNew, Drives[DOS_GetDefaultDrive()]->curdir);
             if (SetCurrentDirectory(winDirNew)) setdir=true;
         }
-        WriteOut("Starting %s...\n", cmd);
+        if (!startquiet) WriteOut("Starting %s...\n", cmd);
         ShellExecuteEx(&lpExecInfo);
         int ErrorCode = GetLastError();
         if (setdir) SetCurrentDirectory(winDirCur);
@@ -6220,7 +6221,7 @@ public:
                     exitCode=0;
                     break;
                 }
-                if (++count==20000&&ret&&exitCode==STILL_ACTIVE) WriteOut("(Press Ctrl+C to exit immediately)\n");
+                if (++count==20000&&ret&&exitCode==STILL_ACTIVE&&!startquiet) WriteOut("(Press Ctrl+C to exit immediately)\n");
             } while (ret!=0&&exitCode==STILL_ACTIVE);
             ErrorCode = GetLastError();
             CloseHandle(lpExecInfo.hProcess);

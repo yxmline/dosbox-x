@@ -52,8 +52,9 @@
     to mount more than one disk/CD images to a drive,
     swappable from the menu. (Wengier)
   - Added new CPU types to the "Emulate CPU speed" menu
-    group, namely 486DX4-100, 486DX5-133, Pentium-75,
-    and Pentium-90. Thanks again for the data provided
+    group namely 286-25MHz, 386DX-25MHz, 486DX4-100MHz,
+    486DX5-133MHz, Pentium-60MHz, Pentium-75MHz, and
+    Pentium-90MHz. Thanks again for the data provided
     by the user maximus105. (Wengier)
   - You can now select a special key (e.g. Alt+Tab,
     Ctrl+Break, Ctrl+Alt+Del, etc) to be sent from the
@@ -69,6 +70,13 @@
     ("Send special key" under "Main") is added. Also,
     the PC-98 STOP key now functions the same as the
     Ctrl+C and Ctrl+Break keys in IBM PC mode.
+  - Added functions "CopyToClipboard" and "QuickRun" to
+    the mapper editor so that you can use shortcuts to
+    activate them (default shortcuts: HOST(F11/F12)+A
+    and HOST(F11/F12)+Q respectively), and a default
+    shortcut HOST(F11/F12)+V is added to the clipboard
+    paste function. Meanwhile, FullCore and SimpleCore
+    shortcuts are removed from the mapper. (Wengier)
   - Added two new menu items in the "Shared clipboard
     functions" menu group under "Main", including "Copy
     all text on the DOS screen" which will copy all
@@ -123,6 +131,12 @@
     section; SDL2 builds only) to bypass the operating
     system's mouse acceleration & sensitivity settings.
     Implemented by NicknineTheEagle.
+  - Added config option "startquiet" (in [dos] section)
+    which when set to true will silence the information
+    messages before launching Windows programs to run
+    on the Windows host. A toggle menu item "Quiet mode
+    (no start messages)" is added to the "Windows host
+    applications" menu group in "DOS" menu. (Wengier)
   - Integrated SVN commits (Allofich)
     - r4371: Fix regression in Clue: Master Detective.
     - r4370: As an adjunct to r4369, make the reference
