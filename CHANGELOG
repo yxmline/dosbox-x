@@ -7,10 +7,12 @@
     or the dynamic_rec core. The dynamic_x86 core will
     be used by default for x86 and x86_64 platforms and
     if "core=dynamic" is set, and Windows 9x can be run
-    in this dynamic core. You can also explicit specify
-    "core=dynamic_x86" or "core=dynamic_rec" for either
-    the dynamic_x86 core or the dynamic_rec core. Also
-    thank joncampbell123 for the 64-bit fix. (Wengier)
+    in this dynamic core (although at this time may
+    encounter some issue with the S3 driver). You can
+    also explicit specify setting "core=dynamic_x86" or
+    "core=dynamic_rec" for either the dynamic_x86 core
+    or the dynamic_rec core. Also thank joncampbell123
+    for the 64-bit fix. (Wengier)
   - You can now use your own save file (in addition to
     save slots! There are now a "Use save file" toggle
     item and "Browse save file..." for browsing save
@@ -30,17 +32,6 @@
   - Changed some DOS error messages (such as "Illegal
     command" which now reads "Bad command or filename")
     similar to real DOS systems. (Wengier)
-  - The full dosbox-x.reference.conf file is renamed to
-    dosbox-x.reference.full.conf. The original file
-    dosbox-x.reference.conf now contains common config
-    options instead of all config options. (Wengier)
-  - The CONFIG command and Configuration Tool will now
-    save common and modified config optons by default.
-    The -all command-line option (or "Save all options
-    to the configuration file" checkbox) will force to
-    save all config options. A new -mod command-line
-    option is added to CONFIG command to save modified
-    config options only. (Wengier)
   - Improved the -z (move virtual drive Z:) function of
     MOUNT command. You can move the virtual drive as
     many times as you want, and save/load states will
@@ -105,15 +96,30 @@
     layout" config option in [pc98] section. Also moved
     the "PC-98 PIT master clock" options from the "DOS"
     menu to this menu group. (Wengier)
-  - Updated MPXPLAY to latest version 1.65. (Wengier)
+  - The full dosbox-x.reference.conf file is renamed to
+    dosbox-x.reference.full.conf. The original file
+    dosbox-x.reference.conf now contains common config
+    options instead of all config options. (Wengier)
+  - The CONFIG command and Configuration Tool will now
+    save common and modified config optons by default.
+    The -all command-line option (or "Save all options
+    to the configuration file" checkbox) will force to
+    save all config options. A new -mod command-line
+    option is added to CONFIG command to save modified
+    config options only. (Wengier)
   - Updated the Windows installer to default to the
     "typical" installation. For the full installation
     start menu items will be added for DOSBox-X builds
-    copied to subdirectories. In both cases the Windows
-    installer now also copy the DLL files inpout32.dll
-    (32-bit) and inpoutx64.dll (64-bit) to the DOSBox-X
-    install directory for use with the direct parallel
-    port passthrough feature. (Wengier)
+    copied to subdirectories. A new checkbox "Write
+    common config options (instead of all) to the
+    configuration file" is added which when checked
+    will only write common and modified advanced config
+    options to the config file. Furthermore, for both
+    "typical" and "full" installations the Windows
+    installer will now also copies the DLL files
+    inpout32.dll (32-bit) and inpoutx64.dll (64-bit) to
+    the DOSBox-X install directory for use with the
+    direct parallel port passthrough feature. (Wengier)
   - Improved Flatpak support for Linux. (rderooy)
   - Improved message for the -help command-line option,
     adding for example the -socket option. (Wengier)
@@ -121,6 +127,9 @@
     the nullmodem feature. (Wengier)
   - Fixed shelling from programs may not work when the
     shell config option is set. (Wengier)
+  - Improved Gravis Ultrasound (GUS) implementation to
+    make it more accurately represent the GUS DMA state
+    as expected by the running DOS software.
   - The archive attribute will no longer automatically
     be applied to directories on non-Windows systems.
     This fixed issue with PLAYMIDI.EXE from Gravis
@@ -148,6 +157,7 @@
     on the Windows host. A toggle menu item "Quiet mode
     (no start messages)" is added to the "Windows host
     applications" menu group in "DOS" menu. (Wengier)
+  - Updated MPXPLAY to latest version 1.65. (Wengier)
   - Integrated SVN commits (Allofich)
     - r4371: Fix regression in Clue: Master Detective.
     - r4370: As an adjunct to r4369, make the reference
