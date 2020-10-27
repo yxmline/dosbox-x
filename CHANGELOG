@@ -46,9 +46,12 @@
     included in the MinGW builds by default just like
     Visual Studio builds. Set "mididevice=fluidsynth"
     and a soundfont file to use it. (Wengier)
-  - Added menu item "Show MIDI device" under "Sound"
-    menu to show the current MIDI device and soundfont
-    file (or ROM path for MT32) in use. (Wengier)
+  - Added menu item "Show Sound Blaster configuration"
+    under "Sound" menu to show the current information
+    about Sound Blaster, and also menu item "Show MIDI
+    device configuration" (also under "Sound" menu)
+    to show information about the current MIDI device
+    such as the soundfont file in use. (Wengier)
   - Added "Mount multiple disk/CD images" option to the
     mounting options of the Drive menu to allow users
     to mount more than one disk/CD images to a drive,
@@ -161,6 +164,10 @@
     on the Windows host. A toggle menu item "Quiet mode
     (no start messages)" is added to the "Windows host
     applications" menu group in "DOS" menu. (Wengier)
+  - Added zip package TEXTUTIL.ZIP to the Z drive that
+    contains various utilities (e.g. CGA.COM, EGA.COM,
+    132X25.COM, 132X43.COM, etc) to change the video
+    setting in the text mode. (Wengier)
   - Updated MPXPLAY to latest version 1.65. (Wengier)
   - Integrated SVN commits (Allofich)
     - r4371: Fix regression in Clue: Master Detective.
