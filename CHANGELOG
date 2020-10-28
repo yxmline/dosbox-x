@@ -43,7 +43,8 @@
     free disk size will also change relative to the
     change of the free disk size ever since. (Wengier)
   - Added support for OPUS CD tracks by porting and
-    cleaning up the code from other projects. (Wengier)
+    cleaning up the source code from other projects.
+    Many thanks to Marty Shepard and kcgen. (Wengier)
   - Support for FluidSynth MIDI Synthesizer is now
     included in the MinGW builds by default just like
     Visual Studio builds. Set "mididevice=fluidsynth"
@@ -166,12 +167,29 @@
     on the Windows host. A toggle menu item "Quiet mode
     (no start messages)" is added to the "Windows host
     applications" menu group in "DOS" menu. (Wengier)
-  - Added zip package TEXTUTIL.ZIP to the Z drive that
-    contains various utilities (e.g. CGA.COM, EGA.COM,
-    132X25.COM, 132X43.COM, etc) to change the video
-    setting in the text mode. (Wengier)
+  - Add menu group "Text-mode" under "Video" menu to
+    change some text-mode related video settings, such
+    as changing the number of rows and columns. A zip
+    package named TEXTUTIL.ZIP is added to the Z drive
+    that contains various utilities (such as CGA.COM,
+    EGA.COM, 132X25.COM, 132X43.COM) to change current
+    video setting from the command line. Also added a
+    config option "high intensity blinking" which when
+    set will display high intensity background colors
+    instad of blinking foreground text. (Wengier)
   - Updated MPXPLAY to latest version 1.65. (Wengier)
   - Integrated SVN commits (Allofich)
+    - r4384: ICW1 on the PIC clears the Interrupt Mask
+    Register. Fixes Antagony and quite a few demos that
+    expect IRQs to be unmasked.
+    - r4382: Refine adlib timers a bit more and make
+    reading the Adlib take a bit more time.
+    - r4378: Prevent some possible deadlocks with sti
+    in dynrec core.
+    - r4375: Improve compatibility with older Intel
+    chipsets
+    - r4374: Add a bit of hack so cycles=max/auto 90%
+    keeps on working inside batch files after r3925.
     - r4371: Fix regression in Clue: Master Detective.
     - r4370: As an adjunct to r4369, make the reference
       counts of standard device handles equivalent to
