@@ -5896,9 +5896,11 @@ void GFX_Events() {
                             GFX_CaptureMouse();
                         SetPriority(sdl.priority.focus);
                         CPU_Disable_SkipAutoAdjust();
-                        BIOS_SynchronizeNumLock();
-                        BIOS_SynchronizeCapsLock();
-                        BIOS_SynchronizeScrollLock();
+                        if (strcmp(RunningProgram, "LOADLIN")) {
+                            BIOS_SynchronizeNumLock();
+                            BIOS_SynchronizeCapsLock();
+                            BIOS_SynchronizeScrollLock();
+                        }
                     } else {
                         if (sdl.mouse.locked)
                         {
@@ -10119,7 +10121,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                     set_callback_function(mixer_swapstereo_menu_callback);
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"mixer_mute").set_text("Mute").
                     set_callback_function(mixer_mute_menu_callback);
-                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"mixer_info").set_text("Show current sound levels").
+                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"mixer_info").set_text("Show sound mixer volumes").
                     set_callback_function(mixer_info_menu_callback);
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sb_info").set_text("Show Sound Blaster configuration").
                     set_callback_function(sb_device_menu_callback);
