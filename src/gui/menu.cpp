@@ -184,10 +184,10 @@ static const char *def_menu_main_clipboard[] =
     "clipboard_device",
     "clipboard_dosapi",
 #endif
-#if !defined(LINUX) || !C_X11 || defined(C_SDL2)
+#if defined(WIN32) || defined(C_SDL2)
     "--",
-#endif
     "mapper_copyall",
+#endif
     "mapper_paste",
     "clipboard_paste_stop",
     NULL
@@ -310,6 +310,8 @@ static const char *def_menu_video_output[] =
     "output_opengl",
     "output_openglnb",
 #endif
+    "--",
+    "doublescan",
     NULL
 };
 
@@ -317,6 +319,7 @@ static const char *def_menu_video_output[] =
 static const char *def_menu_video_textmode[] =
 {
     "clear_screen",
+    "vga_9widetext",
     "--",
     "text_background",
     "text_blinking",
@@ -362,20 +365,16 @@ static const char *def_menu_video_overscan[] =
     NULL
 };
 
-/* video output menu ("VideoCompatMenu") */
-static const char *def_menu_video_compat[] =
-{
-    "vga_9widetext",
-    "doublescan",
-    NULL
-};
-
 /* video output menu ("VideoPC98Menu") */
 static const char *def_menu_video_pc98[] =
 {
     "pc98_use_uskb",
     "pc98_allow_200scanline",
     "pc98_allow_4partitions",
+    "pc98_5mhz_gdc",
+    "--",
+    "dos_pc98_pit_4mhz",
+    "dos_pc98_pit_5mhz",
     "--",
     "pc98_enable_egc",
     "pc98_enable_grcg",
@@ -385,10 +384,6 @@ static const char *def_menu_video_pc98[] =
     "--",
     "pc98_clear_text",
     "pc98_clear_graphics",
-    "pc98_5mhz_gdc",
-    "--",
-    "dos_pc98_pit_4mhz",
-    "dos_pc98_pit_5mhz",
     NULL
 };
 
@@ -396,7 +391,6 @@ static const char *def_menu_video_pc98[] =
 static const char *def_menu_video[] =
 {
     "mapper_aspratio",
-    "--",
 #if !defined(HX_DOS)
     "mapper_fullscr",
     "--",
@@ -413,15 +407,10 @@ static const char *def_menu_video[] =
 #endif
 #ifndef MACOSX
     "mapper_togmenu",
-# if !defined(HX_DOS)
-    "--",
-# endif
 #endif
 #if !defined(HX_DOS)
     "mapper_resetsize",
 #endif
-    "--",
-    "VideoFrameskipMenu",
     "--",
     "scaler_forced",
     "VideoScalerMenu",
@@ -429,9 +418,10 @@ static const char *def_menu_video[] =
 #if !defined(C_SDL2)
     "VideoVsyncMenu",
 #endif
+    "--",
     "VideoOverscanMenu",
+    "VideoFrameskipMenu",
     "VideoTextmodeMenu",
-    "VideoCompatMenu",
     "VideoPC98Menu",
 #ifdef C_D3DSHADERS
     "--",
@@ -1402,9 +1392,6 @@ void ConstructMenu(void) {
 
     /* video overscan menu */
     ConstructSubMenu(mainMenu.get_item("VideoOverscanMenu").get_master_id(), def_menu_video_overscan);
-
-    /* video compat menu */
-    ConstructSubMenu(mainMenu.get_item("VideoCompatMenu").get_master_id(), def_menu_video_compat);
 
     /* video PC-98 menu */
     ConstructSubMenu(mainMenu.get_item("VideoPC98Menu").get_master_id(), def_menu_video_pc98);

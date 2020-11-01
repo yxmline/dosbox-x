@@ -42,7 +42,7 @@
     be similar to the setting "fixed" but the reported
     free disk size will also change relative to the
     change of the free disk size ever since. (Wengier)
-  - Added support for OPUS CD tracks by porting and
+  - Added support for Opus CD-DA tracks by porting and
     cleaning up the source code from other projects.
     Many thanks to Marty Shepard and kcgen. (Wengier)
   - Support for FluidSynth MIDI Synthesizer is now
@@ -60,7 +60,8 @@
   - Added "Mount multiple disk/CD images" option to the
     mounting options of the Drive menu to allow users
     to mount more than one disk/CD images to a drive,
-    swappable from the menu. (Wengier)
+    swappable from the menu. Also added separators to
+    the Drive submenu to make it look better. (Wengier)
   - Added new CPU types to the "Emulate CPU speed" menu
     group namely 286-25MHz, 386DX-25MHz, 486DX4-100MHz,
     486DX5-133MHz, Pentium-60MHz, Pentium-75MHz, and
@@ -141,6 +142,8 @@
   - Fixed issue that aspect ratio not being respected
     in full-screen mode when a GLSL shader is enabled
     with an OpenGL output. (Wengier)
+  - Fixed toggle in the "Frameskip" menu group did not
+    change when selecting a different option. (Wengier)
   - Fixed shelling from programs may not work when the
     shell config option is set. (Wengier)
   - The default country setting ("country" option in
@@ -183,6 +186,8 @@
     on the Windows host. A toggle menu item "Quiet mode
     (no start messages)" is added to the "Windows host
     applications" menu group in "DOS" menu. (Wengier)
+  - The menu "Show details" (under "Main") is renamed
+    to "Show FPS and RT speed in title bar". (Wengier)
   - Add menu group "Text-mode" under "Video" menu to
     change some text-mode related video settings, such
     as changing the number of rows and columns. A zip
@@ -192,8 +197,10 @@
     video setting from the command line. Also added a
     config option "high intensity blinking" which when
     set will display high intensity background colors
-    instad of blinking foreground text. (Wengier)
-  - Added "Debug" menu group under "Help" menu, and
+    instad of blinking foreground text. The menu item
+    "Allow 9-pixel wide fonts" is moved from the menu
+    group "Compatibility" to here. (Wengier)
+  - Added "Debugging" menu group under "Help" menu, and
     moved items from the "Video" Debug and "DOS" Debug
     menus and the debugger here (debug builds only).
     Also allowed to hide/show the console or debugger
@@ -203,6 +210,10 @@
     itself after an E_EXIT occurs. (Wengier)
   - Updated MPXPLAY to latest version 1.65. (Wengier)
   - Integrated SVN commits (Allofich)
+    - r4386: Correct MPU-401 clock-to-host function to
+    operate independently of playing. Fixes hang at
+    exit when playing Roland music in demos by The
+    Phoney Coders. Clamp tempo to valid range.
     - r4384: ICW1 on the PIC clears the Interrupt Mask
     Register. Fixes Antagony and quite a few demos that
     expect IRQs to be unmasked.

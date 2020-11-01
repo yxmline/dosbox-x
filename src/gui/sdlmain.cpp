@@ -551,12 +551,15 @@ const DOSBoxMenu::callback_t drive_callbacks[] = {
     drive_mounthd_menu_callback,
     drive_mountcd_menu_callback,
     drive_mountfd_menu_callback,
+    NULL,
     drive_mountimg_menu_callback,
     drive_mountimgs_menu_callback,
+    NULL,
     drive_unmount_menu_callback,
     drive_swap_menu_callback,
     drive_rescan_menu_callback,
     drive_info_menu_callback,
+    NULL,
     drive_boot_menu_callback,
     drive_bootimg_menu_callback,
     NULL
@@ -580,12 +583,15 @@ const char *drive_opts[][2] = {
 	{ "mounthd",                "Mount folder as hard drive" },
 	{ "mountcd",                "Mount folder as CD drive" },
 	{ "mountfd",                "Mount folder as floppy drive" },
+	{ "div1",                   "--" },
 	{ "mountimg",               "Mount a disk or CD image file" },
 	{ "mountimgs",              "Mount multiple disk/CD images" },
+    { "div2",                   "--" },
     { "unmount",                "Unmount drive" },
     { "rescan",                 "Rescan drive" },
     { "swap",                   "Swap disk" },
     { "info",                   "Drive information" },
+    { "div3",                   "--" },
     { "boot",                   "Boot from drive" },
     { "bootimg",                "Boot from disk image" },
     { NULL, NULL }
@@ -999,8 +1005,8 @@ void UpdateWindowDimensions(void)
     PrintScreenSizeInfo();
 }
 
-#define MAPPERFILE_SDL1         "mapper-" VERSION ".map"
-#define MAPPERFILE_SDL2         "mapper-" VERSION ".sdl2.map"
+#define MAPPERFILE_SDL1         "mapper-dosbox-x.sdl1.map"
+#define MAPPERFILE_SDL2         "mapper-dosbox-x.sdl2.map"
 #if defined(C_SDL2)
 # define MAPPERFILE             MAPPERFILE_SDL2
 #else
@@ -4078,11 +4084,15 @@ static void GUI_StartUp() {
     MAPPER_AddHandler(SwitchFullScreen,MK_f,MMODHOST,"fullscr","Fullscreen", &item);
     item->set_text("Toggle fullscreen");
 
+#if defined(WIN32) || defined(C_SDL2)
     MAPPER_AddHandler(CopyAllClipboard,MK_a,MMODHOST,"copyall", "CopyToClip", &item);
     item->set_text("Copy all text on the DOS screen");
+#endif
 
+#if defined(WIN32) || defined(C_SDL2) || defined(LINUX) && C_X11
     MAPPER_AddHandler(PasteClipboard,MK_v,MMODHOST,"paste", "Paste Clip", &item); //end emendelson; improved by Wengier
     item->set_text("Pasting from the clipboard");
+#endif
 
     MAPPER_AddHandler(&PauseDOSBox, MK_pause, MMODHOST, "pause", "Pause");
 
@@ -8428,7 +8438,7 @@ bool output_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menui
 bool clear_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     const char *mname = menuitem->get_name().c_str();
-    if (CurMode->mode>7)
+    if (CurMode->mode>7&&CurMode->mode!=0x0043&&CurMode->mode!=0x0054&&CurMode->mode!=0x0055&&CurMode->mode!=0x0064)
         return true;
     if (CurMode->type==M_TEXT || dos_kernel_disabled) {
         const auto rows = real_readb(BIOSMEM_SEG, BIOSMEM_NB_ROWS);
@@ -8458,7 +8468,7 @@ bool intensity_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const me
     (void)menu;//UNUSED
     const char *mname = menuitem->get_name().c_str();
     uint16_t oldax=reg_ax, oldbx=reg_bx;
-    if (CurMode->mode>7)
+    if (IS_PC98_ARCH||(CurMode->mode>7&&CurMode->mode!=0x0043&&CurMode->mode!=0x0054&&CurMode->mode!=0x0055&&CurMode->mode!=0x0064))
         return true;
     if (!strcmp(mname, "text_background"))
         reg_bl = 0;
@@ -8476,7 +8486,7 @@ bool lines_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuit
     (void)menu;//UNUSED
     clear_menu_callback(menu, menuitem);
     const char *mname = menuitem->get_name().c_str();
-    if (IS_PC98_ARCH||CurMode->mode>7)
+    if (IS_PC98_ARCH||(CurMode->mode>7&&CurMode->mode!=0x0043&&CurMode->mode!=0x0054&&CurMode->mode!=0x0055&&CurMode->mode!=0x0064))
         return true;
     uint16_t oldax=reg_ax, oldbx=reg_bx, oldcx=reg_cx;
     if (!strcmp(mname, "line_80x25")) {
@@ -8605,17 +8615,21 @@ bool video_frameskip_common_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::it
     (void)menu;//UNUSED
 
     int f = atoi(menuitem->get_text().c_str()); /* Off becomes 0 */
-    char tmp[64];
+    char tmp1[64], tmp2[64];
 
-    sprintf(tmp,"%d",f);
-    SetVal("render", "frameskip", tmp);
+    sprintf(tmp1,"%d",f);
+    SetVal("render", "frameskip", tmp1);
+    for (unsigned int i=0;i<=10;i++) {
+        sprintf(tmp2,"frameskip_%u",i);
+        mainMenu.get_item(tmp2).check(f==i).refresh_item(mainMenu);
+    }
     return true;
 }
 
 bool show_console_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
-#if !defined(C_EMSCRIPTEN) && defined(WIN32) && !defined(HX_DOS)
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
+#if !defined(C_EMSCRIPTEN) && defined(WIN32) && !defined(HX_DOS)
 #if C_DEBUG
     if (DEBUG_IsDebuggerConsoleVisible())
         return true;
@@ -10013,15 +10027,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                 }
             }
             {
-                DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"VideoCompatMenu");
-                item.set_text("Compatibility");
-
-                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"vga_9widetext").set_text("Allow 9-pixel wide text mode").
-                    set_callback_function(vga_9widetext_menu_callback);
-                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"doublescan").set_text("Doublescan").
-                    set_callback_function(doublescan_menu_callback);
-            }
-            {
                 DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"VideoOutputMenu");
                 item.set_text("Output");
 
@@ -10033,6 +10038,8 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                     set_callback_function(output_menu_callback);
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"output_openglnb").set_text("OpenGL NB").
                     set_callback_function(output_menu_callback);
+                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"doublescan").set_text("Doublescan").
+                    set_callback_function(doublescan_menu_callback);
             }
             {
                 DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"VideoVsyncMenu");
@@ -10071,6 +10078,8 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clear_screen").set_text("Clear the screen").
                     set_callback_function(clear_menu_callback);
+                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"vga_9widetext").set_text("Allow 9-pixel wide fonts").
+                    set_callback_function(vga_9widetext_menu_callback);
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"text_background").set_text("High intensity: background color").
                     set_callback_function(intensity_menu_callback);
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"text_blinking").set_text("High intensity: blinking text").
@@ -10092,7 +10101,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             }
             {
                 DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"VideoPC98Menu");
-                item.set_text("PC-98");
+                item.set_text("PC-98 options");
 
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"pc98_5mhz_gdc").set_text("5MHz GDC clock").
                     set_callback_function(vid_pc98_5mhz_gdc_menu_callback);
@@ -10306,11 +10315,12 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                 ditem.set_text(dmenut.c_str());
 
                 for (size_t i=0;drive_opts[i][0] != NULL;i++) {
-					if ((!strcmp(drive_opts[i][0], "boot")||!strcmp(drive_opts[i][0], "bootimg"))&&(c!='A'&&c!='C'&&c!='D')) continue;
                     const std::string name = std::string("drive_") + c + "_" + drive_opts[i][0];
-
-                    mainMenu.alloc_item(DOSBoxMenu::item_type_id,name).set_text(drive_opts[i][1]).
-                        set_callback_function(drive_callbacks[i]);
+                    if ((!strcmp(drive_opts[i][0], "boot")||!strcmp(drive_opts[i][0], "bootimg")||!strcmp(drive_opts[i][0], "div3"))&&(c!='A'&&c!='C'&&c!='D')) continue;
+                    if (!strcmp(drive_opts[i][1], "--"))
+                        mainMenu.alloc_item(DOSBoxMenu::separator_type_id,name);
+                    else
+                        mainMenu.alloc_item(DOSBoxMenu::item_type_id,name).set_text(drive_opts[i][1]).set_callback_function(drive_callbacks[i]);
                 }
             }
         }
@@ -10339,7 +10349,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             {
                 DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"HelpDebugMenu");
 
-                item.set_text("Debug");
+                item.set_text("Debugging");
 
                 {
                     mainMenu.alloc_item(DOSBoxMenu::item_type_id,"debug_blankrefreshtest").set_text("Refresh test (blank display)").set_callback_function(refreshtest_menu_callback);
@@ -10516,7 +10526,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 
         /* more */
         std::string doubleBufString = std::string("desktop.doublebuf");
-        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"showdetails").set_text("Show FPS and RT speed in the title").set_callback_function(showdetails_menu_callback).check(!menu.hidecycles && !menu.showrt);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"showdetails").set_text("Show FPS and RT speed in title bar").set_callback_function(showdetails_menu_callback).check(!menu.hidecycles && !menu.showrt);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"auto_lock_mouse").set_text("Autolock mouse").set_callback_function(autolock_mouse_menu_callback).check(sdl.mouse.autoenable);
 #if defined (WIN32) || defined(C_SDL2)
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_quick").set_text("Quick edit: copy on select and paste with mouse button").set_callback_function(direct_mouse_clipboard_menu_callback).check(direct_mouse_clipboard);
