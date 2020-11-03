@@ -9,7 +9,9 @@
   Translated to C by Peter Hanappe, Mai 2001
 */
 
-#if !C_FLUIDSYNTH && defined(WIN32)
+#define FLUIDINC
+#include "config.h"
+#if !C_FLUIDSYNTH && defined(WIN32) && !defined(C_HX_DOS)
 #include "fluid_rev.h"
 
 /***************************************************************
