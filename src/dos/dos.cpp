@@ -383,6 +383,7 @@ extern bool dos_a20_disable_on_exec;
 
 static Bitu DOS_21Handler(void);
 void XMS_DOS_LocalA20DisableIfNotEnabled(void);
+void XMS_DOS_LocalA20DisableIfNotEnabled_XMSCALL(void);
 void DOS_Int21_7139(char *name1, const char *name2);
 void DOS_Int21_713a(char *name1, const char *name2);
 void DOS_Int21_713b(char *name1, const char *name2);
@@ -535,6 +536,7 @@ bool disk_io_unmask_irq0 = true;
 bool dos_program_running = false;
 
 void XMS_DOS_LocalA20EnableIfNotEnabled(void);
+void XMS_DOS_LocalA20EnableIfNotEnabled_XMSCALL(void);
 
 typedef struct {
 	UINT16 size_of_structure;
@@ -566,8 +568,12 @@ static Bitu DOS_21Handler(void) {
      *   If HIMEM.SYS is loaded and CONFIG.SYS says DOS=HIGH, DOS will load itself into the HMA area.
      *   To prevent crashes, the INT 21h handler down below will enable the A20 gate before executing
      *   the DOS kernel. */
-    if (DOS_IS_IN_HMA())
-        XMS_DOS_LocalA20EnableIfNotEnabled();
+    if (DOS_IS_IN_HMA()) {
+        if (cpu.pmode && ((GETFLAG_IOPL<cpu.cpl) || GETFLAG(VM))) /* virtual 8086 mode */
+            XMS_DOS_LocalA20EnableIfNotEnabled_XMSCALL();
+        else
+            XMS_DOS_LocalA20EnableIfNotEnabled();
+    }
 
     if (((reg_ah != 0x50) && (reg_ah != 0x51) && (reg_ah != 0x62) && (reg_ah != 0x64)) && (reg_ah<0x6c)) {
         DOS_PSP psp(dos.psp());
@@ -1615,7 +1621,18 @@ static Bitu DOS_21Handler(void) {
 
                 /* A20 hack for EXEPACK'd executables */
                 if (dos_a20_disable_on_exec) {
-                    XMS_DOS_LocalA20DisableIfNotEnabled();
+                    if (cpu.pmode && ((GETFLAG_IOPL<cpu.cpl) || GETFLAG(VM))) {
+                        /* We're running in virtual 8086 mode. Ideally the protected mode kernel would virtualize
+                         * port 92h, but it seems Windows 3.1 does not do that. Shutting off the A20 gate in protected
+                         * mode will cause the kernel to CRASH. However Windows 3.1 does intercept HIMEM.SYS calls
+                         * to enable/disable the A20 gate, so we can accomplish the same effect that way instead and
+                         * remain compatible with Windows 3.1. */
+                        XMS_DOS_LocalA20DisableIfNotEnabled_XMSCALL();
+                    }
+                    else {
+                        /* We're in real mode. Do it directly. */
+                        XMS_DOS_LocalA20DisableIfNotEnabled();
+                    }
                     dos_a20_disable_on_exec=false;
                 }
 

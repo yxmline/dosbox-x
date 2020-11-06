@@ -398,6 +398,24 @@ Bitu XMS_LocalDisableA20(void) {
     return 0;
 }
 
+/* Same as XMS_DOS_LocalA20DisableIfNotEnabled() but this version works by making
+ * a call through the XMS entry point. This version must be used if the guest application
+ * or shell is calling INT 21h from 80386 virtual 8086 mode (i.e. a Windows 3.1 "DOS Box")
+ * because directly touching port 92h might cause the protected mode kernel to crash.
+ * Windows 3.1 does not appear to virtualize port 92h. */
+void XMS_DOS_LocalA20DisableIfNotEnabled_XMSCALL(void) {
+    uint32_t old_eax = reg_eax;
+    uint32_t old_ebx = reg_ebx;
+
+    LOG(LOG_DOSMISC,LOG_DEBUG)("Temporarily disabling A20 gate by calling XMS entry point. Hopefully the vm86 protected mode kernel will do it's job");
+
+    reg_ah = 0x06; /* local disable */
+    CALLBACK_RunRealFar((uint16_t)(xms_callback>>16ul),(uint16_t)(xms_callback&0xFFFFul));
+
+    reg_eax = old_eax;
+    reg_ebx = old_ebx;
+}
+
 void XMS_DOS_LocalA20DisableIfNotEnabled(void) {
     /* This is one of two hacks to deal with EXEPACK'd executables loaded too low */
     if (XMS_GetEnabledA20()) {
@@ -405,6 +423,30 @@ void XMS_DOS_LocalA20DisableIfNotEnabled(void) {
         xms_local_enable_count = 1;
         XMS_LocalDisableA20();
     }
+}
+
+/* Same as XMS_DOS_LocalA20EnableIfNotEnabled() but this version works by making
+ * a call through the XMS entry point. This version must be used if the guest application
+ * or shell is calling INT 21h from 80386 virtual 8086 mode (i.e. a Windows 3.1 "DOS Box")
+ * because directly touching port 92h might cause the protected mode kernel to crash.
+ * Windows 3.1 does not appear to virtualize port 92h. */
+void XMS_DOS_LocalA20EnableIfNotEnabled_XMSCALL(void) {
+    uint32_t old_eax = reg_eax;
+    uint32_t old_ebx = reg_ebx;
+
+    reg_ah = 0x07; /* query A20 */
+    CALLBACK_RunRealFar((uint16_t)(xms_callback>>16ul),(uint16_t)(xms_callback&0xFFFFul));
+
+    if (reg_ax == 0) {
+        /* A20 is not enabled */
+        LOG(LOG_DOSMISC,LOG_DEBUG)("DOS=HIGH, XMS enabled, A20 gate disabled. Reenabling A20 gate on INT 21h call via XMS driver.");
+
+        reg_ah = 0x05; /* Local enable A20 */
+        CALLBACK_RunRealFar((uint16_t)(xms_callback>>16ul),(uint16_t)(xms_callback&0xFFFFul));
+    }
+
+    reg_eax = old_eax;
+    reg_ebx = old_ebx;
 }
 
 void XMS_DOS_LocalA20EnableIfNotEnabled(void) {
