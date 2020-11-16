@@ -2392,9 +2392,19 @@ bool firstsize = true;
 static Bitu OUTPUT_TTF_SetSize() {
     bool text=CurMode&&(CurMode->type==0||CurMode->type==2||CurMode->type==M_TEXT||IS_PC98_ARCH);
     if (text) {
-        sdl.draw.width = ttf.cols*ttf.width;
-        sdl.draw.height = ttf.lins*ttf.height;
+        sdl.clip.x = sdl.clip.y = 0;
+        sdl.draw.width = sdl.clip.w = ttf.cols*ttf.width;
+        sdl.draw.height = sdl.clip.h = ttf.lins*ttf.height;
         ttf.inUse = true;
+
+#if DOSBOXMENU_TYPE == DOSBOXMENU_SDLDRAW /* SDL drawn menus */
+        if (mainMenu.isVisible() && !ttf.fullScrn) {
+            sdl.clip.y += mainMenu.menuBox.h;
+            // hack
+            ttf.offX = sdl.clip.x;
+            ttf.offY = sdl.clip.y;
+        }
+#endif
     } else
         ttf.inUse = false;
     if (ttf.inUse && ttf.fullScrn) {
@@ -2408,14 +2418,14 @@ static Bitu OUTPUT_TTF_SetSize() {
     } else {
 #if defined(C_SDL2)
         GFX_SetResizeable(false);
-        sdl.window = GFX_SetSDLSurfaceWindow(sdl.draw.width, sdl.draw.height);
+        sdl.window = GFX_SetSDLSurfaceWindow(sdl.draw.width + sdl.clip.x, sdl.draw.height + sdl.clip.y);
         sdl.surface = sdl.window?SDL_GetWindowSurface(sdl.window):NULL;
         if (firstsize && (posx < 0 || posy < 0) && text) {
             firstsize=false;
             SDL_SetWindowPosition(sdl.window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
         }
 #else
-        sdl.surface = SDL_SetVideoMode(sdl.draw.width, sdl.draw.height, 32, SDL_SWSURFACE);
+        sdl.surface = SDL_SetVideoMode(sdl.draw.width + sdl.clip.x, sdl.draw.height + sdl.clip.y, 32, SDL_SWSURFACE);
 #endif
     }
 	if (!sdl.surface)
@@ -4202,6 +4212,11 @@ void OUTPUT_TTF_Select() {
 
     int maxWidth = sdl.desktop.full.width;
     int maxHeight = sdl.desktop.full.height;
+
+#if DOSBOXMENU_TYPE == DOSBOXMENU_SDLDRAW /* SDL drawn menus */
+    maxHeight -= mainMenu.menuBarHeightBase * 2;
+#endif
+
 #if defined(WIN32)
     maxWidth = GetSystemMetrics(SM_CXSCREEN);
     maxHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -10472,7 +10487,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                 ""
 #endif
         " %s)",VERSION,SDL_STRING);
-        LOG(LOG_MISC,LOG_NORMAL)(("Copyright 2011-"+std::string(COPYRIGHT_END_YEAR)+" The DOSBox-X Team. Project maintainer: joncampbell123 (The Great Codeholio). DOSBox-X published under GNU GPL.").c_str());
+        LOG(LOG_MISC,LOG_NORMAL)(("Copyright 2011-%s The DOSBox-X Team. Project maintainer: joncampbell123 (The Great Codeholio). DOSBox-X published under GNU GPL."),std::string(COPYRIGHT_END_YEAR).c_str());
 
 #if defined(MACOSX)
         LOG_MSG("macOS EXE path: %s",MacOSXEXEPath.c_str());
