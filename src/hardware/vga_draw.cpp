@@ -2998,9 +2998,89 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
 		vga.draw.cursor.address = vga.config.cursor_start*2;
 		Bitu vidstart = vga.config.real_start + vga.draw.bytes_skip;
 		vidstart *= 2;
+
+		uint16_t* draw = (uint16_t*)newAttrChar;
+
+        if (IS_EGAVGA_ARCH) {
+            for (Bitu row=0;row < ttf.lins;row++) {
+                const uint32_t* vidmem = ((uint32_t*)vga.draw.linear_base)+vidstart;	// pointer to chars+attribs (EGA/VGA planar memory)
+
+                for (Bitu col=0;col < ttf.cols;col++) {
+                    // NTS: Note this assumes EGA/VGA text mode that uses the "Odd/Even" mode memory mapping scheme to present video memory
+                    //      to the CPU as if CGA compatible text mode. Character data on plane 0, attributes on plane 1.
+                    *draw++ = *vidmem;
+                    Bitu attr = *((uint8_t*)vidmem+1);
+                    vidmem+=2;
+                    Bitu background = attr >> 4;
+                    if (vga.draw.blinking)									// if blinking is enabled bit7 is not mapped to attributes
+                        background &= 7;
+                    // choose foreground color if blinking not set for this cell or blink on
+                    Bitu foreground = (vga.draw.blink || (!(attr&0x80))) ? (attr&0xf) : background;
+                    // How about underline?
+                    *draw++ = (background<<4) + foreground;
+                }
+
+                vidstart += vga.draw.address_add;
+            }
+        }
+        else if (machine==MCH_AMSTRAD||machine==MCH_CGA||machine==MCH_MDA||machine==MCH_HERC) {
+            for (Bitu row=0;row < ttf.lins;row++) {
+                const uint16_t* vidmem = (uint16_t*)&vga.draw.linear_base[vidstart];	// pointer to chars+attribs (EGA/VGA planar memory)
+
+                for (Bitu col=0;col < ttf.cols;col++) {
+                    *draw++ = *vidmem;
+                    Bitu attr = *((uint8_t*)vidmem+1);
+                    vidmem++;
+                    Bitu background = attr >> 4;
+                    if (vga.draw.blinking)									// if blinking is enabled bit7 is not mapped to attributes
+                        background &= 7;
+                    // choose foreground color if blinking not set for this cell or blink on
+                    Bitu foreground = (vga.draw.blink || (!(attr&0x80))) ? (attr&0xf) : background;
+                    // How about underline?
+                    *draw++ = (background<<4) + foreground;
+                }
+
+                vidstart += vga.draw.address_add;
+            }
+        }
+        else if (IS_PC98_ARCH) {
+            const uint16_t* charram = (uint16_t*)&vga.draw.linear_base[0x0000];         // character data
+            const uint16_t* attrram = (uint16_t*)&vga.draw.linear_base[0x2000];         // attribute data
+
+            for (Bitu blocks = ttf.cols * ttf.lins; blocks; blocks--) {
+                if (*charram & 0xFF80u)
+                    *draw = 0x20; // not properly handled YET
+                else
+                    *draw = *charram & 0xFF;
+
+                Bitu attr = *attrram;
+                charram++;
+                attrram++;
+                // for simplicity at this time, just map PC-98 attributes to VGA colors. Wengier and I can clean this up later --J.C.
+                Bitu background = 0;
+                Bitu foreground = (attr>>5)&7;
+                if (attr & 8) {//underline
+                    // TODO
+                }
+                if (attr & 4) {//reverse
+                    background = foreground;
+                    foreground = 0;
+                }
+                if (attr & 2) {//blink
+                    // TODO
+                }
+                if (!(attr & 1)) {//invisible
+                    *draw = 0x20;
+                }
+                // FIXME: Wengier's code seems to take foreground/background from the upper bits of the char code, NOT the next explicit encoding of foreground/background.
+                // FIXME: The TTF output code does not render foreground/background correctly if foreground == 0 and background != 0 (inverse text does not render)
+                *draw++ |= (background<<12) + (foreground<<8);
+                *draw++ = (background<<4) + foreground;
+            }
+        }
+# if 0//old code---rewriting
 		const uint32_t* vidmem = (uint32_t*)&vga.draw.linear_base[vidstart];		// pointer to chars+attribs
 		const uint16_t* vidmem8 = (uint16_t*)&vga.draw.linear_base[vidstart];		// pointer to chars+attribs
-		uint16_t* draw = (uint16_t*)newAttrChar;
 		bool cga=machine==MCH_AMSTRAD||machine==MCH_CGA||machine==MCH_MDA||machine==MCH_HERC||machine==MCH_PC98;
         int i=0;
 		for (Bitu blocks = ttf.cols * ttf.lins; blocks; blocks--) {
@@ -3017,6 +3097,7 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
 			// How about underline?
 			*draw++ = (background<<4) + foreground;
 		}
+# endif
 		render.cache.past_y = 1;
 		RENDER_EndUpdate(false);
 		return;
