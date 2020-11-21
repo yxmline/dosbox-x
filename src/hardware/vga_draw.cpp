@@ -3015,6 +3015,10 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
             const uint16_t* attrram = (uint16_t*)&vga.draw.linear_base[0x2000];         // attribute data
             uint16_t uname[4];
 
+            // TTF output only looks at VGA emulation state for cursor status,
+            // which PC-98 mode does not update.
+            vga.draw.cursor.enabled = pc98_gdc[GDC_MASTER].cursor_enable;
+
             for (Bitu blocks = ttf.cols * ttf.lins; blocks; blocks--) {
                 bool dbw=false;
 
@@ -3028,7 +3032,21 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
                     if ((*charram & 0x7Cu) == 0x08u) {
                         /* Single wide, yet DBCS encoding.
                          * This includes proprietary box characters specific to PC-98 */
-                        (*draw).chr=' ';
+                        // Manually convert box characters to Unicode for now
+                        if (*charram==0x330B) // ASCII 201
+                            (*draw).chr=0x250C;
+                        else if (*charram==0x250B) // ASCII 205
+                            (*draw).chr=0x2500;
+                        else if (*charram==0x370B) // ASCII 187
+                            (*draw).chr=0x2510;
+                        else if (*charram==0x270B) // ASCII 186
+                            (*draw).chr=0x2502;
+                        else if (*charram==0x3B0B) // ASCII 200
+                            (*draw).chr=0x2514;
+                        else if (*charram==0x3F0B) // ASCII 188
+                            (*draw).chr=0x2518;
+                        else
+                            (*draw).chr=' ';
                         (*draw).unicode=1;
                     }
                     else {
@@ -3055,10 +3073,8 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
                             (*draw).chr=' ';
                         }
                     }
-                }
-                else {
+                } else
                     (*draw).chr = *charram & 0xFF;
-                }
                 charram++;
 
                 Bitu attr = *attrram;
