@@ -1,5 +1,5 @@
 dnl Init.
-AC_INIT(dosbox-x,0.83.8,[https://github.com/joncampbell123/dosbox-x/issues],[],[https://dosbox-x.com])
+AC_INIT(dosbox-x,0.83.9,[https://github.com/joncampbell123/dosbox-x/issues],[],[https://dosbox-x.com])
 AC_PREREQ(2.60)
 AC_CONFIG_SRCDIR(README.md)
 
@@ -287,6 +287,24 @@ dnl Check for mprotect. Needed for 64 bits linux
 AH_TEMPLATE(C_HAVE_MPROTECT,[Define to 1 if you have the mprotect function])
 AC_CHECK_HEADER([sys/mman.h], [
 AC_CHECK_FUNC([mprotect],[AC_DEFINE(C_HAVE_MPROTECT,1)])
+])
+
+dnl Check for memfd_create, for dynamic core. You need the glibc version, not just the syscall.
+AH_TEMPLATE(C_HAVE_MEMFD_CREATE,[Define to 1 if you have the memfd_create function])
+AC_CHECK_HEADER([sys/mman.h], [
+AC_CHECK_FUNC([memfd_create],[AC_DEFINE(C_HAVE_MEMFD_CREATE,1)])
+])
+
+dnl Check for posix_memalign
+AH_TEMPLATE(C_HAVE_POSIX_MEMALIGN,[Define to 1 if you have the posix_memalign function])
+AC_CHECK_HEADER([stdlib.h], [
+AC_CHECK_FUNC([posix_memalign],[AC_DEFINE(C_HAVE_POSIX_MEMALIGN,1)])
+])
+
+dnl Check for mmap
+AH_TEMPLATE(C_HAVE_MMAP,[Define to 1 if you have the mmap function])
+AC_CHECK_HEADER([sys/mman.h], [
+AC_CHECK_FUNC([mmap],[AC_DEFINE(C_HAVE_MMAP,1)])
 ])
 
 dnl Check for realpath. Used on Linux

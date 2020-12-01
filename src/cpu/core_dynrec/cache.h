@@ -579,15 +579,18 @@ static INLINE void cache_addq(uint64_t val) {
 static void dyn_return(BlockReturn retcode,bool ret_exception);
 static void dyn_run_code(void);
 
-
-/* Define temporary pagesize so the MPROTECT case and the regular case share as much code as possible */
-#if (C_HAVE_MPROTECT)
-#define PAGESIZE_TEMP PAGESIZE
-#else 
-#define PAGESIZE_TEMP 4096
-#endif
-
 static bool cache_initialized = false;
+
+#include "cpu/dynamic_alloc_common.h"
+
+static void cache_ensure_allocation(void) {
+	if (cache_code_start_ptr==NULL) {
+        cache_dynamic_common_alloc(CACHE_TOTAL+CACHE_MAXSIZE); /* sets cache_code_start_ptr/cache_code */
+ 
+		cache_code_link_blocks=cache_code;
+		cache_code+=PAGESIZE_TEMP;
+	}
+}
 
 static void cache_reset(void) {
 	if (cache_initialized) {
@@ -613,42 +616,7 @@ static void cache_reset(void) {
 			cache_blocks[i].cache.next=&cache_blocks[i+1];
 		}
 
-		if (cache_code_start_ptr==NULL) {
-#if defined (WIN32)
-			cache_code_start_ptr=(uint8_t*)VirtualAlloc(0,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP,
-				MEM_COMMIT,PAGE_EXECUTE_READWRITE);
-			if (!cache_code_start_ptr)
-				cache_code_start_ptr=(uint8_t*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
-#else
-			cache_code_start_ptr=(uint8_t*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
-#endif
-			if (!cache_code_start_ptr) E_Exit("Allocating dynamic cache failed");
-
-			cache_code=(uint8_t*)(((Bitu)cache_code_start_ptr + PAGESIZE_TEMP-1) & ~(PAGESIZE_TEMP-1)); //Bitu is same size as a pointer.
-
-			cache_code_link_blocks=cache_code;
-			cache_code+=PAGESIZE_TEMP;
-
-#if (C_HAVE_MPROTECT)
-			if (mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_WRITE|PROT_READ|PROT_EXEC)) {
-				if (errno == EPERM || errno == EACCES) { /* Hm... might be a W^X policy */
-					errno = 0;
-					/* Apparently we cannot map read/write/execute.
-					   If we can mprotect as read/execute, and read/write, then it's probably a W^X policy.
-					   This is to differentiate from SELinux which will probably not allow ANY PROT_EXEC mapping at all. */
-					if (mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_READ|PROT_EXEC) == 0) {
-						if (mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_WRITE|PROT_READ) == 0) {
-							LOG_MSG("dynrec: Your system appears to have a W^X (write-xor-execute) policy");
-							w_xor_x = true;
-						}
-					}
-				}
-
-				if (errno != 0)
-					LOG_MSG("Setting execute permission on the code cache has failed! err=%s",strerror(errno));
-			}
-#endif
-		}
+		cache_ensure_allocation();
 
 		CacheBlockDynRec * block=cache_getblock();
 		cache.block.first=block;
@@ -673,13 +641,6 @@ static void cache_reset(void) {
 			newpage->next=cache.free_pages;
 			cache.free_pages=newpage;
 		}
-
-#if (C_HAVE_MPROTECT)
-		if (w_xor_x) {
-			if (mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_READ|PROT_EXEC))
-				LOG_MSG("Setting execute permission on the code cache has failed! err=%s",strerror(errno));
-		}
-#endif
 	}
 }
 
@@ -707,43 +668,10 @@ static void cache_init(bool enable) {
                 }
             }
 		}
+
 		if (cache_code_start_ptr==NULL) {
-			// allocate the code cache memory
-#if defined (WIN32)
-			cache_code_start_ptr=(uint8_t*)VirtualAlloc(0,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP,
-				MEM_COMMIT,PAGE_EXECUTE_READWRITE);
-			if (!cache_code_start_ptr)
-				cache_code_start_ptr=(uint8_t*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
-#else
-			cache_code_start_ptr=(uint8_t*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
-#endif
-			if(!cache_code_start_ptr) E_Exit("Allocating dynamic cache failed");
+			cache_ensure_allocation();
 
-			// align the cache at a page boundary
-			cache_code=(uint8_t*)(((Bitu)cache_code_start_ptr + (Bitu)(PAGESIZE_TEMP-1)) & ~((Bitu)(PAGESIZE_TEMP-1)));//Bitu is same size as a pointer.
-
-			cache_code_link_blocks=cache_code;
-			cache_code=cache_code+PAGESIZE_TEMP;
-
-#if (C_HAVE_MPROTECT)
-			if (mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_WRITE|PROT_READ|PROT_EXEC)) {
-				if (errno == EPERM || errno == EACCES) { /* Hm... might be a W^X policy */
-					errno = 0;
-					/* Apparently we cannot map read/write/execute.
-					   If we can mprotect as read/execute, and read/write, then it's probably a W^X policy.
-					   This is to differentiate from SELinux which will probably not allow ANY PROT_EXEC mapping at all. */
-					if (mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_READ|PROT_EXEC) == 0) {
-						if (mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_WRITE|PROT_READ) == 0) {
-							LOG_MSG("dynrec: Your system appears to have a W^X (write-xor-execute) policy");
-							w_xor_x = true;
-						}
-					}
-				}
-
-				if (errno != 0)
-					LOG_MSG("Setting execute permission on the code cache has failed! err=%s",strerror(errno));
-			}
-#endif
 			CacheBlockDynRec * block=cache_getblock();
 			cache.block.first=block;
 			cache.block.active=block;
@@ -775,13 +703,6 @@ static void cache_init(bool enable) {
 			newpage->next=cache.free_pages;
 			cache.free_pages=newpage;
 		}
-
-#if (C_HAVE_MPROTECT)
-		if (w_xor_x) {
-			if (mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_READ|PROT_EXEC))
-				LOG_MSG("Setting execute permission on the code cache has failed! err=%s",strerror(errno));
-		}
-#endif
 	}
 }
 
