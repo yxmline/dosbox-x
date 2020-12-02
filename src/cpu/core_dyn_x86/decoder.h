@@ -1867,7 +1867,7 @@ static void dyn_exit_link(Bits eip_change) {
 	gen_dop_word_imm(DOP_ADD,decode.big_op,DREG(EIP),(decode.code-decode.code_start)+eip_change);
 	dyn_reduce_cycles();
 	dyn_save_critical_regs();
-	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlock,cache.start));
+	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlock,cache.xstart));
 	dyn_closeblock();
 }
 
@@ -1891,7 +1891,7 @@ static void dyn_branched_exit(BranchTypes btype,int32_t eip_add) {
  	gen_dop_word_imm(DOP_ADD,decode.big_op,DREG(EIP),eip_base);
 	gen_releasereg(DREG(CYCLES));
  	gen_releasereg(DREG(EIP));
- 	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlock,cache.start));
+ 	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlock,cache.xstart));
  	gen_fill_branch(data);
 
  	/* Branch taken */
@@ -1901,7 +1901,7 @@ static void dyn_branched_exit(BranchTypes btype,int32_t eip_add) {
  	gen_dop_word_imm(DOP_ADD,decode.big_op,DREG(EIP),eip_base+eip_add);
 	gen_releasereg(DREG(CYCLES));
  	gen_releasereg(DREG(EIP));
- 	gen_jmp_ptr(&decode.block->link[1].to,offsetof(CacheBlock,cache.start));
+ 	gen_jmp_ptr(&decode.block->link[1].to,offsetof(CacheBlock,cache.xstart));
  	dyn_closeblock();
 }
 
@@ -1942,7 +1942,7 @@ static void dyn_loop(LoopTypes type) {
 	}
 	gen_lea(DREG(EIP),DREG(EIP),0,0,eip_base+eip_add);
 	gen_releasereg(DREG(EIP));
-	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlock,cache.start));
+	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlock,cache.xstart));
 	if (branch1) {
 		gen_fill_branch(branch1);
 		gen_sop_word(SOP_DEC,decode.big_addr,DREG(ECX));
@@ -1952,7 +1952,7 @@ static void dyn_loop(LoopTypes type) {
 	gen_fill_branch(branch2);
 	gen_lea(DREG(EIP),DREG(EIP),0,0,eip_base);
 	gen_releasereg(DREG(EIP));
-	gen_jmp_ptr(&decode.block->link[1].to,offsetof(CacheBlock,cache.start));
+	gen_jmp_ptr(&decode.block->link[1].to,offsetof(CacheBlock,cache.xstart));
 	dyn_closeblock();
 }
 
@@ -1977,7 +1977,7 @@ static void dyn_call_near_imm(void) {
 	else gen_extend_word(false,DREG(EIP),DREG(TMPW));
 	dyn_reduce_cycles();
 	dyn_save_critical_regs();
-	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlock,cache.start));
+	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlock,cache.xstart));
 	dyn_closeblock();
 }
 
@@ -2120,6 +2120,9 @@ static void dyn_larlsl(bool islar) {
 
 static CacheBlock * CreateCacheBlock(CodePageHandler * codepage,PhysPt start,Bitu max_opcodes) {
 	Bits i;
+
+	cache_remap_rw();
+
 /* Init a load of variables */
 	decode.code_start=start;
 	decode.code=start;
@@ -2857,7 +2860,7 @@ restart_prefix:
 	dyn_set_eip_end();
 	dyn_reduce_cycles();
 	dyn_save_critical_regs();
-	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlock,cache.start));
+	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlock,cache.xstart));
 	dyn_closeblock();
 	goto finish_block;
 core_close_block:
@@ -2885,5 +2888,6 @@ finish_block:
 	/* Setup the correct end-address */
 	decode.active_block->page.end=--decode.page.index;
 //	LOG_MSG("Created block size %d start %d end %d",decode.block->cache.size,decode.block->page.start,decode.block->page.end);
+	cache_remap_rx();
 	return decode.block;
 }

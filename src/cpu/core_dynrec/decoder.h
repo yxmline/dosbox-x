@@ -32,6 +32,8 @@
 */
 
 static CacheBlockDynRec * CreateCacheBlock(CodePageHandlerDynRec * codepage,PhysPt start,Bitu max_opcodes) {
+	cache_remap_rw();
+
 	// initialize a load of variables
 	decode.code_start=start;
 	decode.code=start;
@@ -591,7 +593,7 @@ restart_prefix:
 	// link to next block because the maximum number of opcodes has been reached
 	dyn_set_eip_end();
 	dyn_reduce_cycles();
-	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlockDynRec,cache.start));
+	gen_jmp_ptr(&decode.block->link[0].to,offsetof(CacheBlockDynRec,cache.xstart));
 	dyn_closeblock();
     goto finish_block;
 core_close_block:
@@ -612,6 +614,8 @@ finish_block:
 	decode.page.index--;
 	decode.active_block->page.end=(uint16_t)decode.page.index;
 //	LOG_MSG("Created block size %d start %d end %d",decode.block->cache.size,decode.block->page.start,decode.block->page.end);
+
+	cache_remap_rx();
 
 	return decode.block;
 }

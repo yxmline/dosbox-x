@@ -119,7 +119,7 @@ private:
 			case 0:
 				if ((modrm&7)==5) {
 					// update offset to be RIP relative
-					Bits diff = offset - (Bits)cache.pos - 4 - imm_size;
+					Bits diff = offset - (Bits)cache_rwtox(cache.pos) - 4 - imm_size;
 					if ((int32_t)diff == diff) offset = diff;
 					else { // try 32-bit absolute address
 						if ((int32_t)offset != offset) IllegalOption("opcode::Emit: bad RIP address");
@@ -275,7 +275,7 @@ static BlockReturn (*gen_runcode)(uint8_t *code) = gen_runcodeInit;
 static BlockReturn gen_runcodeInit(uint8_t *code) {
 	uint8_t* oldpos = cache.pos;
 	cache.pos = &cache_code_link_blocks[128];
-	gen_runcode = (BlockReturn(*)(uint8_t*))cache.pos;
+	gen_runcode = (BlockReturn(*)(uint8_t*))cache_rwtox(cache.pos);
 
 	opcode(5).Emit8Reg(0x50);  // push rbp
 	opcode(15).Emit8Reg(0x50); // push r15
@@ -1028,7 +1028,7 @@ static void gen_call_ptr(void *func=NULL, uint8_t ptr=0) {
 
 	/* Do the actual call to the procedure */
 	if (func!=NULL) {
-		Bits diff = (Bits)func - (Bits)cache.pos - 5;
+		Bits diff = (Bits)func - (Bits)cache_rwtox(cache.pos) - 5;
 		if ((int32_t)diff == diff) {
 			opcode(0).setimm(diff,4).Emit8Reg(0xE8); // call rel32
 			return;
@@ -1319,7 +1319,7 @@ static void (*gen_dh_fpu_save)(void)  = gen_dh_fpu_saveInit;
 static void gen_dh_fpu_saveInit(void) {
 	uint8_t* oldpos = cache.pos;
 	cache.pos = &cache_code_link_blocks[64];
-	gen_dh_fpu_save = (void(*)(void))cache.pos;
+	gen_dh_fpu_save = (void(*)(void))cache_rwtox(cache.pos);
 
 	Bitu addr = (Bitu)&dyn_dh_fpu;
 	// mov RAX, &dyn_dh_fpu
