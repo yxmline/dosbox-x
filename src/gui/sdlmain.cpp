@@ -659,6 +659,12 @@ const char *drive_opts[][2] = {
     { NULL, NULL }
 };
 
+void LoadMapFile(bool bPressed) {
+    if (!bPressed) return;
+    void Load_mapper_file();
+    Load_mapper_file();
+}
+
 void QuickLaunch(bool bPressed) {
     if (!bPressed) return;
     if (dos_kernel_disabled) return;
@@ -928,9 +934,10 @@ void FreeBIOSDiskList();
 void GFX_ShutDown(void);
 void MAPPER_Shutdown();
 void SHELL_Init(void);
+void CopyClipboard(bool all);
 void CopyAllClipboard(bool bPressed);
 void PasteClipboard(bool bPressed);
-void CopyClipboard(bool all);
+void PasteClipStop(bool bPressed);
 
 #if C_DYNAMIC_X86
 void CPU_Core_Dyn_X86_Shutdown(void);
@@ -1090,13 +1097,9 @@ void UpdateWindowDimensions(void)
     PrintScreenSizeInfo();
 }
 
+#define MAPPERFILE              "mapper-dosbox-x.map"
 #define MAPPERFILE_SDL1         "mapper-dosbox-x.sdl1.map"
 #define MAPPERFILE_SDL2         "mapper-dosbox-x.sdl2.map"
-#if defined(C_SDL2)
-# define MAPPERFILE             MAPPERFILE_SDL2
-#else
-# define MAPPERFILE             MAPPERFILE_SDL1
-#endif
 
 void                        GUI_ResetResize(bool);
 void                        GUI_LoadFonts();
@@ -3148,6 +3151,21 @@ void res_input(bool type, const char * res) {
 void GFX_SelectFontByPoints(int ptsize);
 bool lastmenu = true, initttf = false;
 int lastfontsize = 0;
+void setVGADAC() {
+    if (ttf.inUse&&CurMode&&IS_VGA_ARCH) {
+        std::map<uint8_t,int> imap;
+        for (uint8_t i = 0; i < 0x10; i++) {
+            IO_ReadB(mem_readw(BIOS_VIDEO_PORT)+6);
+            IO_WriteB(VGAREG_ACTL_ADDRESS, i+32);
+            imap[i]=IO_ReadB(VGAREG_ACTL_READ_DATA);
+            IO_WriteB(VGAREG_DAC_WRITE_ADDRESS, imap[i]);
+            IO_WriteB(VGAREG_DAC_DATA, altBGR1[i].red*63/255);
+            IO_WriteB(VGAREG_DAC_DATA, altBGR1[i].green*63/255);
+            IO_WriteB(VGAREG_DAC_DATA, altBGR1[i].blue*63/255);
+        }
+    }
+}
+
 bool setColors(const char *colorArray, int n) {
     if (IS_PC98_ARCH) return false;
 	const char * nextRGB = colorArray;
@@ -3181,18 +3199,7 @@ bool setColors(const char *colorArray, int n) {
 		altBGR0[i].green = (altBGR1[i].green*2 + 128)/4;
 		altBGR0[i].red = (altBGR1[i].red*2 + 128)/4;
 	}
-    if (ttf.inUse&&CurMode&&IS_VGA_ARCH) {
-        std::map<uint8_t,int> imap;
-        for (uint8_t i = 0; i < 0x10; i++) {
-            IO_ReadB(mem_readw(BIOS_VIDEO_PORT)+6);
-            IO_WriteB(VGAREG_ACTL_ADDRESS, i+32);
-            imap[i]=IO_ReadB(VGAREG_ACTL_READ_DATA);
-            IO_WriteB(VGAREG_DAC_WRITE_ADDRESS, imap[i]);
-            IO_WriteB(VGAREG_DAC_DATA, altBGR1[i].red*63/255);
-            IO_WriteB(VGAREG_DAC_DATA, altBGR1[i].green*63/255);
-            IO_WriteB(VGAREG_DAC_DATA, altBGR1[i].blue*63/255);
-        }
-    }
+    setVGADAC();
     colorChanged=true;
 	return true;
 }
@@ -3392,12 +3399,9 @@ void OUTPUT_TTF_Select(int fsize=-1) {
                 if (ttf.cols != c || ttf.lins != r) alter_vmode = true;
             }
             if (alter_vmode) {
-                for (Bitu i = 0; ModeList_VGA[i].mode != 0xffff; i++) {										// set the cols and lins in video mode 3
-                    if (ModeList_VGA[i].mode <= 7) {
-                        ModeList_VGA[i].twidth = ttf.cols;
-                        ModeList_VGA[i].theight = ttf.lins;
-                        break;
-                    }
+                for (Bitu i = 0; ModeList_VGA[i].mode <= 7; i++) {								// Set the cols and lins in video mode 2,3,7
+                    ModeList_VGA[i].twidth = ttf.cols;
+                    ModeList_VGA[i].theight = ttf.lins;
                 }
                 if (!IS_PC98_ARCH) {
                     real_writeb(BIOSMEM_SEG,BIOSMEM_NB_COLS,ttf.cols);
@@ -5136,6 +5140,9 @@ static void GUI_StartUp() {
     item->set_text("Reboot guest system");
 
 #if !defined(HX_DOS)
+    MAPPER_AddHandler(LoadMapFile, MK_nothing, 0, "loadmap", "Load mapper file", &item);
+    item->set_text("Load mapper file...");
+
     MAPPER_AddHandler(QuickLaunch, MK_q, MMODHOST, "quickrun", "Quick launch program", &item);
     item->set_text("Quick launch program...");
 #endif
@@ -5159,6 +5166,9 @@ static void GUI_StartUp() {
 #if defined(C_SDL2) || defined(WIN32) || defined(MACOSX) || defined(LINUX) && C_X11
     MAPPER_AddHandler(PasteClipboard,MK_v,MMODHOST,"paste", "Paste from clipboard", &item); //end emendelson; improved by Wengier
     item->set_text("Pasting from the clipboard");
+
+    MAPPER_AddHandler(PasteClipStop,MK_nothing, 0,"pasteend", "Stop clipboard paste", &item);
+    item->set_text("Stop clipboard pasting");
 #endif
 
     MAPPER_AddHandler(&PauseDOSBox, MK_pause, MMODHOST, "pause", "Pause emulation");
@@ -7348,13 +7358,15 @@ void SDL_SetupConfigSection() {
     Pstring = Pmulti->GetSection()->Add_string("inactive",Property::Changeable::Always,"normal");
     Pstring->Set_values(inactt);
 
-    Pstring = sdl_sec->Add_path("mapperfile",Property::Changeable::Always,MAPPERFILE_SDL1);
+    Pstring = sdl_sec->Add_path("mapperfile",Property::Changeable::Always,MAPPERFILE);
     Pstring->Set_help("File used to load/save the key/event mappings from. Resetmapper only works with the default value.");
     Pstring->SetBasic(true);
 
-    Pstring = sdl_sec->Add_path("mapperfile_sdl2",Property::Changeable::Always,MAPPERFILE_SDL2);
-    Pstring->Set_help("File used to load/save the key/event mappings from (SDL2 builds). Resetmapper only works with the default value.");
-    Pstring->SetBasic(true);
+    Pstring = sdl_sec->Add_path("mapperfile_sdl1",Property::Changeable::Always,"");
+    Pstring->Set_help("File used to load/save the key/event mappings from DOSBox-X SDL1 builds. If set it will override \"mapperfile\" for SDL1 builds.");
+
+    Pstring = sdl_sec->Add_path("mapperfile_sdl2",Property::Changeable::Always,"");
+    Pstring->Set_help("File used to load/save the key/event mappings from DOSBox-X SDL2 builds. If set it will override \"mapperfile\" for SDL2 builds.");
 
 	const char* truefalseautoopt[] = { "true", "false", "auto", 0};
     Pstring = sdl_sec->Add_string("usescancodes",Property::Changeable::OnlyAtStart,"auto");
@@ -7941,6 +7953,13 @@ void CopyClipboard(bool all) {
     }
     if (result.size()&&result.back()==10) result.pop_back();
     SDL_SetClipboardText(result.c_str());
+}
+#endif
+
+#if defined(C_SDL2) || defined (WIN32) || defined(MACOSX) || defined(LINUX) && C_X11
+void PasteClipStop(bool bPressed) {
+    if (!bPressed) return;
+    strPasteBuffer = "";
 }
 #endif
 
@@ -9600,10 +9619,7 @@ bool vid_select_ttf_font_menu_callback(DOSBoxMenu* const menu, DOSBoxMenu::item*
 }
 #endif
 
-bool vid_select_mapper_file_menu_callback(DOSBoxMenu* const menu, DOSBoxMenu::item* const menuitem) {
-    (void)menu;//UNUSED
-    (void)menuitem;//UNUSED
-
+void Load_mapper_file() {
     Section_prop* section = static_cast<Section_prop*>(control->GetSection("sdl"));
     assert(section != NULL);
 
@@ -9631,19 +9647,27 @@ bool vid_select_mapper_file_menu_callback(DOSBoxMenu* const menu, DOSBoxMenu::it
         }
 
         if (*name) {
+            Prop_path* pp;
 #if defined(C_SDL2)
-			SetVal("sdl", "mapperfile_sdl2", name);
+            pp = section->Get_path("mapperfile_sdl2");
 #else
-            SetVal("sdl", "mapperfile", name);
+            pp = section->Get_path("mapperfile_sdl1");
 #endif
+            if (pp->realpath=="")
+                SetVal("sdl", "mapperfile", name);
+            else {
+#if defined(C_SDL2)
+                SetVal("sdl", "mapperfile_sdl2", name);
+#else
+                SetVal("sdl", "mapperfile_sdl1", name);
+#endif
+            }
             void ReloadMapper(Section_prop *sec, bool init);
             ReloadMapper(section,true);
         }
     }
     chdir( Temp_CurrentDir );
 #endif
-
-    return true;
 }
 
 bool vid_pc98_graphics_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
@@ -9850,8 +9874,6 @@ void GetMaxWidthHeight(int *pmaxWidth, int *pmaxHeight) {
 }
 
 void ttf_setlines(int cols, int lins) {
-    (void)cols;
-    (void)lins;
     SetVal("render", "ttf.cols", std::to_string(cols));
     SetVal("render", "ttf.lins", std::to_string(lins));
     firstset=true;
@@ -10181,15 +10203,6 @@ bool dos_clipboard_device_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::ite
     if (dos_clipboard_device_access == 4) dos_clipboard_device_access=1;
     else if (dos_clipboard_device_access) dos_clipboard_device_access=4;
     mainMenu.get_item("clipboard_device").check(dos_clipboard_device_access==4&&!control->SecureMode()).refresh_item(mainMenu);
-    return true;
-}
-#endif
-
-#if defined(C_SDL2) || defined (WIN32) || defined(MACOSX) || defined(LINUX) && C_X11
-bool clipboard_paste_stop_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    (void)menuitem;//UNUSED
-    strPasteBuffer = "";
     return true;
 }
 #endif
@@ -10533,7 +10546,7 @@ bool sendkey_preset_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * co
     return true;
 }
 
-void update_all_shortcuts();
+void update_all_shortcuts(), DOSBox_SetSysMenu();
 bool hostkey_preset_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     if (menuitem->get_name()=="hostkey_ctrlalt") hostkeyalt=1;
@@ -10547,6 +10560,9 @@ bool hostkey_preset_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * co
     update_all_shortcuts();
 #if DOSBOXMENU_TYPE == DOSBOXMENU_SDLDRAW
     mainMenu.rebuild();
+#endif
+#if defined(WIN32) && !defined(HX_DOS)
+    DOSBox_SetSysMenu();
 #endif
     return true;
 }
@@ -12140,7 +12156,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         /* more */
         std::string doubleBufString = std::string("desktop.doublebuf");
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"showdetails").set_text("Show FPS and RT speed in title bar").set_callback_function(showdetails_menu_callback).check(!menu.hidecycles && !menu.showrt);
-        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"load_mapper_file").set_text("Load mapper file...").set_callback_function(vid_select_mapper_file_menu_callback);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"auto_lock_mouse").set_text("Autolock mouse").set_callback_function(autolock_mouse_menu_callback).check(sdl.mouse.autoenable);
 #if defined (WIN32) || defined(C_SDL2)
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_quick").set_text("Quick edit: copy on select and paste with mouse button").set_callback_function(direct_mouse_clipboard_menu_callback).check(direct_mouse_clipboard);
@@ -12152,9 +12167,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         if (control->SecureMode()) clipboard_dosapi = false;
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_device").set_text("Enable DOS clipboard device access").set_callback_function(dos_clipboard_device_menu_callback).check(dos_clipboard_device_access==4&&!control->SecureMode());
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_dosapi").set_text("Enable DOS clipboard API for applications").set_callback_function(dos_clipboard_api_menu_callback).check(clipboard_dosapi);
-#endif
-#if defined (WIN32) || defined(C_SDL2) || defined(MACOSX) || defined(LINUX) && C_X11
-        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"clipboard_paste_stop").set_text("Stop clipboard pasting").set_callback_function(clipboard_paste_stop_menu_callback);
 #endif
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_winlogo").set_text("Send logo key").set_callback_function(sendkey_preset_menu_callback);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"sendkey_winmenu").set_text("Send menu key").set_callback_function(sendkey_preset_menu_callback);

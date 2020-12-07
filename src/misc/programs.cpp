@@ -551,7 +551,7 @@ private:
 	}
 };
 
-void dos_ver_menu(bool start), ReloadMapper(Section_prop *sec, bool init), SetGameState_Run(int value), update_dos_ems_menu(void);
+void dos_ver_menu(bool start), ReloadMapper(Section_prop *sec, bool init), SetGameState_Run(int value), update_dos_ems_menu(void), MountAllDrives(Program * program);
 bool set_ver(char *s);
 void CONFIG::Run(void) {
 	static const char* const params[] = {
@@ -1103,8 +1103,17 @@ void CONFIG::Run(void) {
 #if defined(C_SDL2)
 							if (!strcasecmp(inputline.substr(0, 16).c_str(), "mapperfile_sdl2=")) ReloadMapper(section,true);
 #else
-							if (!strcasecmp(inputline.substr(0, 11).c_str(), "mapperfile=")) ReloadMapper(section,true);
+							if (!strcasecmp(inputline.substr(0, 16).c_str(), "mapperfile_sdl1=")) ReloadMapper(section,true);
 #if !defined(HAIKU) && !defined(RISCOS)
+							if (!strcasecmp(inputline.substr(0, 11).c_str(), "mapperfile=")) {
+                                Prop_path* pp;
+#if defined(C_SDL2)
+                                pp = section->Get_path("mapperfile_sdl2");
+#else
+                                pp = section->Get_path("mapperfile_sdl1");
+#endif
+                                if (pp->realpath=="") ReloadMapper(section,true);
+                            }
 							if (!strcasecmp(inputline.substr(0, 13).c_str(), "usescancodes=")) {
 								void setScanCode(Section_prop * section), loadScanCode(), GFX_LosingFocus(), MAPPER_Init();
 								setScanCode(section);
@@ -1143,6 +1152,8 @@ void CONFIG::Run(void) {
 								enable_config_as_shell_commands = section->Get_bool("shell configuration as commands");
 								mainMenu.get_item("shell_config_commands").check(enable_config_as_shell_commands).enable(true).refresh_item(mainMenu);
 #if defined(WIN32) && !defined(HX_DOS)
+                            } else if (!strcasecmp(inputline.substr(0, 13).c_str(), "automountall=")) {
+                                if (section->Get_bool("automountall")) MountAllDrives(this);
                             } else if (!strcasecmp(inputline.substr(0, 9).c_str(), "dos clipboard api=")) {
                                 clipboard_dosapi = section->Get_bool("dos clipboard api");          
 							} else if (!strcasecmp(inputline.substr(0, 9).c_str(), "startcmd=")) {
