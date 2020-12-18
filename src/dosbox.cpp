@@ -1798,7 +1798,7 @@ void DOSBOX_SetupConfigSections(void) {
 
     secprop=control->AddSection_prop("video",&Null_Init);
     Pint = secprop->Add_int("vmemdelay", Property::Changeable::WhenIdle,0);
-    Pint->SetMinMax(-1,100000);
+    Pint->SetMinMax(-1,1000000);
     Pint->Set_help( "VGA Memory I/O delay in nanoseconds. Set to -1 to use default, 0 to disable.\n"
             "Default off. Enable this option (-1 or nonzero) if you are running a game or\n"
             "demo that needs slower VGA memory (like that of older ISA hardware) to work properly.\n"
@@ -3457,6 +3457,41 @@ void DOSBOX_SetupConfigSections(void) {
     Pmulti_remain->GetSection()->Add_string("parameters",Property::Changeable::WhenIdle,"");
     Pmulti_remain->Set_help("see serial1");
     Pmulti_remain->SetBasic(true);
+
+    Pmulti_remain = secprop->Add_multiremain("serial5",Property::Changeable::WhenIdle," ");
+    Pstring = Pmulti_remain->GetSection()->Add_string("type",Property::Changeable::WhenIdle,"disabled");
+    Pmulti_remain->SetValue("disabled",/*init*/true);
+    Pstring->Set_values(serials);
+    Pmulti_remain->GetSection()->Add_string("parameters",Property::Changeable::WhenIdle,"");
+    Pmulti_remain->Set_help("see serial1");
+
+    Pmulti_remain = secprop->Add_multiremain("serial6",Property::Changeable::WhenIdle," ");
+    Pstring = Pmulti_remain->GetSection()->Add_string("type",Property::Changeable::WhenIdle,"disabled");
+    Pmulti_remain->SetValue("disabled",/*init*/true);
+    Pstring->Set_values(serials);
+    Pmulti_remain->GetSection()->Add_string("parameters",Property::Changeable::WhenIdle,"");
+    Pmulti_remain->Set_help("see serial1");
+
+    Pmulti_remain = secprop->Add_multiremain("serial7",Property::Changeable::WhenIdle," ");
+    Pstring = Pmulti_remain->GetSection()->Add_string("type",Property::Changeable::WhenIdle,"disabled");
+    Pmulti_remain->SetValue("disabled",/*init*/true);
+    Pstring->Set_values(serials);
+    Pmulti_remain->GetSection()->Add_string("parameters",Property::Changeable::WhenIdle,"");
+    Pmulti_remain->Set_help("see serial1");
+
+    Pmulti_remain = secprop->Add_multiremain("serial8",Property::Changeable::WhenIdle," ");
+    Pstring = Pmulti_remain->GetSection()->Add_string("type",Property::Changeable::WhenIdle,"disabled");
+    Pmulti_remain->SetValue("disabled",/*init*/true);
+    Pstring->Set_values(serials);
+    Pmulti_remain->GetSection()->Add_string("parameters",Property::Changeable::WhenIdle,"");
+    Pmulti_remain->Set_help("see serial1");
+
+    Pmulti_remain = secprop->Add_multiremain("serial9",Property::Changeable::WhenIdle," ");
+    Pstring = Pmulti_remain->GetSection()->Add_string("type",Property::Changeable::WhenIdle,"disabled");
+    Pmulti_remain->SetValue("disabled",/*init*/true);
+    Pstring->Set_values(serials);
+    Pmulti_remain->GetSection()->Add_string("parameters",Property::Changeable::WhenIdle,"");
+    Pmulti_remain->Set_help("see serial1");
 
     Pstring = secprop->Add_path("phonebookfile", Property::Changeable::OnlyAtStart, "phonebook-dosbox-x.txt");
     Pstring->Set_help("File used to map fake phone numbers to addresses.");
