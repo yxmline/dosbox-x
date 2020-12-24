@@ -99,6 +99,7 @@ bool MEM_map_ROM_alias_physmem(Bitu start,Bitu end);
 void MOUSE_Startup(Section *sec);
 void runBoot(const char *str);
 #if defined(USE_TTF)
+bool TTF_using(void);
 void ttf_switch_on(bool ss), ttf_switch_off(bool ss);
 #endif
 
@@ -5306,7 +5307,7 @@ static Bitu INT11_Handler(void) {
 #define DOSBOX_CLOCKSYNC 0
 #endif
 
-void BIOS_HostTimeSync() {
+uint32_t BIOS_HostTimeSync(uint32_t ticks) {
     uint32_t milli = 0;
 #if defined(DB_HAVE_CLOCK_GETTIME) && ! defined(WIN32)
     struct timespec tp;
@@ -5337,12 +5338,17 @@ void BIOS_HostTimeSync() {
     dos.date.month=(uint8_t)loctime->tm_mon+1;
     dos.date.year=(uint16_t)loctime->tm_year+1900;
 
-    uint32_t ticks=(uint32_t)(((double)(
+    uint32_t nticks=(uint32_t)(((double)(
         (unsigned int)loctime->tm_hour*3600u*1000u+
         (unsigned int)loctime->tm_min*60u*1000u+
         (unsigned int)loctime->tm_sec*1000u+
         milli))*(((double)PIT_TICK_RATE/65536.0)/1000.0));
-    mem_writed(BIOS_TIMER,ticks);
+
+    /* avoid stepping back from off by one errors */
+    if (nticks == (ticks - 1u))
+        nticks = ticks;
+
+    return nticks;
 }
 
 // TODO: make option
@@ -5394,6 +5400,11 @@ static Bitu INT8_PC98_Handler(void) {
     return CBRET_NONE;
 }
 
+extern bool sync_time, manualtime;
+bool sync_time_timerrate_warning = false;
+
+uint32_t PIT0_GetAssignedCounter(void);
+
 static Bitu INT8_Handler(void) {
     /* Increase the bios tick counter */
     uint32_t value = mem_readd(BIOS_TIMER) + 1;
@@ -5419,26 +5430,58 @@ static Bitu INT8_Handler(void) {
             BIOS_KEYBOARD_SetLEDs(should_be);
     }
 
+    if (sync_time&&!manualtime) {
 #if DOSBOX_CLOCKSYNC
-    static bool check = false;
-    if((value %50)==0) {
-        if(((value %100)==0) && check) {
-            check = false;
-            time_t curtime;struct tm *loctime;
-            curtime = time (NULL);loctime = localtime (&curtime);
-            uint32_t ticksnu = (uint32_t)((loctime->tm_hour*3600+loctime->tm_min*60+loctime->tm_sec)*(float)PIT_TICK_RATE/65536.0);
-            int32_t bios = value;int32_t tn = ticksnu;
-            int32_t diff = tn - bios;
-            if(diff>0) {
-                if(diff < 18) { diff  = 0; } else diff = 9;
-            } else {
-                if(diff > -18) { diff = 0; } else diff = -9;
-            }
-         
-            value += diff;
-        } else if((value%100)==50) check = true;
-    }
+        static bool check = false;
+        if((value %50)==0) {
+            if(((value %100)==0) && check) {
+                check = false;
+                time_t curtime;struct tm *loctime;
+                curtime = time (NULL);loctime = localtime (&curtime);
+                uint32_t ticksnu = (uint32_t)((loctime->tm_hour*3600+loctime->tm_min*60+loctime->tm_sec)*(float)PIT_TICK_RATE/65536.0);
+                int32_t bios = value;int32_t tn = ticksnu;
+                int32_t diff = tn - bios;
+                if(diff>0) {
+                    if(diff < 18) { diff  = 0; } else diff = 9;
+                } else {
+                    if(diff > -18) { diff = 0; } else diff = -9;
+                }
+
+                value += diff;
+            } else if((value%100)==50) check = true;
+        }
 #endif
+
+        /* synchronize time=true is based around the assumption
+         * that the timer is left ticking at the standard 18.2Hz
+         * rate. If that is not true, and this IRQ0 handler is
+         * being called faster, then synchronization will not
+         * work properly.
+         *
+         * Two 1996 demoscene entries sl_fokus.zip and sl_haloo.zip
+         * are known to program the timer to run faster (58Hz and
+         * 150Hz) yet use BIOS_TIMER from the BIOS data area to
+         * track the passage of time. Synchronizing time that way
+         * will only lead to BIOS_TIMER values that repeat or go
+         * backwards and will break the demo. */
+        if (PIT0_GetAssignedCounter() >= 0xFFFF/*Should be 0x10000 but we'll accept some programs might write 0xFFFF*/) {
+            uint32_t BIOS_HostTimeSync(uint32_t ticks);
+            value = BIOS_HostTimeSync(value);
+
+            if (sync_time_timerrate_warning) {
+                sync_time_timerrate_warning = false;
+                LOG(LOG_MISC,LOG_WARN)("IRQ0 timer rate restored to 18.2Hz and synchronize time=true, resuming synchronization. BIOS_TIMER may jump backwards suddenly.");
+            }
+        }
+        else {
+            if (!sync_time_timerrate_warning) {
+                /* Okay, you changed the tick rate. That affects BIOS_TIMER
+                 * and therefore counts as manual time. Sorry. */
+                sync_time_timerrate_warning = true;
+                LOG(LOG_MISC,LOG_WARN)("IRQ0 timer rate is not 18.2Hz and synchronize time=true, disabling synchronization until normal rate restored.");
+            }
+        }
+    }
     mem_writed(BIOS_TIMER,value);
 
     /* decrease floppy motor timer */
@@ -7829,7 +7872,13 @@ private:
             size_extended=IO_Read(0x71);
             IO_Write(0x70,0x31);
             size_extended|=(IO_Read(0x71) << 8);
-            BIOS_HostTimeSync();
+
+            uint32_t value = 0;
+
+            if (sync_time&&!manualtime);
+                value = BIOS_HostTimeSync(value);
+
+            mem_writed(BIOS_TIMER,value);
         }
         else {
             /* Provide a valid memory size anyway */
@@ -8229,7 +8278,20 @@ private:
     }
     CALLBACK_HandlerObject cb_bios_startup_screen;
     static Bitu cb_bios_startup_screen__func(void) {
-        if (control->opt_fastlaunch && machine != MCH_PC98) return CBRET_NONE;
+        if (control->opt_fastlaunch && machine != MCH_PC98) {
+#if defined(USE_TTF)
+            if (TTF_using()) {
+                uint32_t lasttick=GetTicks();
+                while ((GetTicks()-lasttick)<500) {
+                    reg_eax = 0x0100;
+                    CALLBACK_RunRealInt(0x16);
+                }
+                reg_eax = 3;
+                CALLBACK_RunRealInt(0x10);
+            }
+#endif
+            return CBRET_NONE;
+        }
         const char *msg = "DOSBox-X (C) 2011-" COPYRIGHT_END_YEAR " The DOSBox-X Team\nDOSBox-X project maintainer: joncampbell123\nDOSBox-X project homepage: https://dosbox-x.com\n\n";
         int logo_x,logo_y,x,y,rowheight=8;
 
@@ -8543,6 +8605,14 @@ private:
                 if (reg_al == 27/*ESC*/ || reg_al == 13/*ENTER*/)
                     break;
             }
+#if defined(USE_TTF)
+        } else if (TTF_using() && machine != MCH_PC98) {
+            uint32_t lasttick=GetTicks();
+            while ((GetTicks()-lasttick)<500) {
+                reg_eax = 0x0100;
+                CALLBACK_RunRealInt(0x16);
+            }
+#endif
         }
 #endif
 
