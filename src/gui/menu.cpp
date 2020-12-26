@@ -190,9 +190,10 @@ static const char *def_menu_main_wheelarrow[] =
 static const char *def_menu_main_clipboard[] =
 {
 #if defined(WIN32) || defined(C_SDL2)
-    "clipboard_quick",
+    "mapper_fastedit",
     "clipboard_right",
     "clipboard_middle",
+    "clipboard_arrows",
 #endif
 #if defined(WIN32)
     "--",
@@ -483,21 +484,21 @@ static const char *def_menu_video[] =
 /* DOS menu ("DOSMenu") */
 static const char *def_menu_dos[] =
 {
-    "DOSMouseMenu",
-    "--",
-    "DOSVerMenu",
-    "DOSLFNMenu",
-    "DOSEMSMenu",
-    "--",
-#if defined(WIN32) && !defined(HX_DOS)
-    "DOSWinMenu",
-#endif
-    "shell_config_commands",
 #if !defined(HX_DOS)
     "mapper_quickrun",
 #endif
+    "DOSVerMenu",
+    "DOSLFNMenu",
+    "--",
+    "DOSMouseMenu",
+    "DOSEMSMenu",
+#if defined(WIN32) && !defined(HX_DOS)
+    "DOSWinMenu",
+#endif
     "--",
     "quick_reboot",
+    "sync_host_datetime",
+    "shell_config_commands",
     "--",
     "mapper_swapimg",
     "mapper_swapcd",
