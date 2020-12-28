@@ -107,6 +107,7 @@ void GFX_OpenGLRedrawScreen(void);
 #include "shell.h"
 #include "glidedef.h"
 #include "inout.h"
+#include "../dos/cdrom.h"
 #include "../ints/int10.h"
 #if !defined(HX_DOS)
 #if !defined(__MINGW32__) || defined(__MINGW64_VERSION_MAJOR)
@@ -5943,6 +5944,19 @@ bool isModifierApplied() {
 }
 
 void ClipKeySelect(int sym) {
+    if (sym==SDLK_ESCAPE) {
+        if (mbutton==4 && selsrow>-1 && selscol>-1) {
+            Mouse_Select(selscol, selsrow, selmark?selecol:selscol, selmark?selerow:selsrow, -1, -1, false);
+            selmark = false;
+            selsrow = selscol = selerow = selecol = -1;
+        } else if (mouse_start_x >= 0 && mouse_start_y >= 0 && fx >= 0 && fy >= 0) {
+            Mouse_Select(mouse_start_x-sdl.clip.x,mouse_start_y-sdl.clip.y,fx-sdl.clip.x,fy-sdl.clip.y,(int)(currentWindowWidth-sdl.clip.x),(int)(currentWindowHeight-sdl.clip.y), false);
+            mouse_start_x = mouse_start_y = -1;
+            mouse_end_x = mouse_end_y = -1;
+            fx = fy = -1;
+        }
+        return;
+    }
     if (mbutton!=4 || (CurMode->type!=M_TEXT && !IS_PC98_ARCH)) return;
     if (sym==SDLK_HOME) {
         if (selsrow==-1 || selscol==-1) {
@@ -5969,10 +5983,6 @@ void ClipKeySelect(int sym) {
             selmark = false;
             selsrow = selscol = selerow = selecol = -1;
         }
-    } else if (sym==SDLK_ESCAPE) {
-        if (selsrow>-1 && selscol>-1) Mouse_Select(selscol, selsrow, selmark?selecol:selscol, selmark?selerow:selsrow, -1, -1, false);
-        selmark = false;
-        selsrow = selscol = selerow = selecol = -1;
     } else if (sym==SDLK_LEFT || sym==SDLK_RIGHT || sym==SDLK_UP || sym==SDLK_DOWN) {
         if (selsrow==-1 || selscol==-1) {
             int p=real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
@@ -5982,10 +5992,10 @@ void ClipKeySelect(int sym) {
             selmark = false;
         } else
             Mouse_Select(selscol, selsrow, selmark?selecol:selscol, selmark?selerow:selsrow, -1, -1, false);
-        if (sym==SDLK_LEFT && selscol>0) (selmark?selecol:selscol)--;
-        else if (sym==SDLK_RIGHT && selscol<(IS_PC98_ARCH?80:real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS))-1) (selmark?selecol:selscol)++;
-        else if (sym==SDLK_UP && selsrow>0) (selmark?selerow:selsrow)--;
-        else if (sym==SDLK_DOWN && selsrow<real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS)) (selmark?selerow:selsrow)++;
+        if (sym==SDLK_LEFT && (selmark?selecol:selscol)>0) (selmark?selecol:selscol)--;
+        else if (sym==SDLK_RIGHT && (selmark?selecol:selscol)<(IS_PC98_ARCH?80:real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS))-1) (selmark?selecol:selscol)++;
+        else if (sym==SDLK_UP && (selmark?selerow:selsrow)>0) (selmark?selerow:selsrow)--;
+        else if (sym==SDLK_DOWN && (selmark?selerow:selsrow)<(IS_PC98_ARCH?(real_readb(0x60,0x113)&0x01?25:20)-1:real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS))) (selmark?selerow:selsrow)++;
         Mouse_Select(selscol, selsrow, selmark?selecol:selscol, selmark?selerow:selsrow, -1, -1, true);
     }
 }
@@ -6498,14 +6508,17 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEven
     case SDL_PRESSED:
         if (inMenu || !inputToScreen) return;
 #if defined(WIN32) || defined(C_SDL2)
-		if (!sdl.mouse.locked && button->button == SDL_BUTTON_LEFT && isModifierApplied() && mouse_start_x >= 0 && mouse_start_y >= 0 && fx >= 0 && fy >= 0) {
-			Mouse_Select(mouse_start_x-sdl.clip.x,mouse_start_y-sdl.clip.y,fx-sdl.clip.x,fy-sdl.clip.y,(int)(currentWindowWidth-sdl.clip.x),(int)(currentWindowHeight-sdl.clip.y), false);
-			mouse_start_x = -1;
-			mouse_start_y = -1;
-			mouse_end_x = -1;
-			mouse_end_y = -1;
-			fx = -1;
-			fy = -1;
+		if (!sdl.mouse.locked && button->button == SDL_BUTTON_LEFT && isModifierApplied()) {
+            if (mbutton==4 && selsrow>-1 && selscol>-1) {
+                Mouse_Select(selscol, selsrow, selmark?selecol:selscol, selmark?selerow:selsrow, -1, -1, false);
+                selmark = false;
+                selsrow = selscol = selerow = selecol = -1;
+            } else if (mouse_start_x >= 0 && mouse_start_y >= 0 && fx >= 0 && fy >= 0) {
+                Mouse_Select(mouse_start_x-sdl.clip.x,mouse_start_y-sdl.clip.y,fx-sdl.clip.x,fy-sdl.clip.y,(int)(currentWindowWidth-sdl.clip.x),(int)(currentWindowHeight-sdl.clip.y), false);
+                mouse_start_x = mouse_start_y = -1;
+                mouse_end_x = mouse_end_y = -1;
+                fx = fy = -1;
+            }
 		}
 		if (!sdl.mouse.locked && ((mbutton==2 && button->button == SDL_BUTTON_MIDDLE) || (mbutton==3 && button->button == SDL_BUTTON_RIGHT)) && isModifierApplied()) {
 			mouse_start_x=motion->x;
@@ -10600,14 +10613,6 @@ bool use_save_file_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * con
     return true;
 }
 
-bool show_save_state_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    (void)menuitem;//UNUSED
-    std::string message = "Save to: "+(use_save_file&&savefilename.size()?"File "+savefilename:"Slot "+std::to_string(GetGameState_Run()+1))+"\n"+SaveState::instance().getName(GetGameState_Run(), true);
-    systemmessagebox("Saved state information", message.c_str(), "ok","info", 1);
-    return true;
-}
-
 void refresh_slots() {
     mainMenu.get_item("current_page").set_text("Current page: "+to_string(page+1)+"/10").refresh_item(mainMenu);
 	for (unsigned int i=0; i<SaveState::SLOT_COUNT; i++) {
@@ -11737,11 +11742,13 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             sdl.num_joysticks = 0;
         }
 
-#if !defined(C_SDL2)
+#if defined(C_SDL2)
+        if (Compat_SDL_CDROMInit() < 0) {
+#else
         if (SDL_InitSubSystem(SDL_INIT_CDROM) < 0) {
+#endif
             LOG(LOG_GUI,LOG_WARN)("Failed to init CD-ROM support");
         }
-#endif
 
         /* must redraw after modeset */
         sdl.must_redraw_all = true;
@@ -12192,7 +12199,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             mainMenu.alloc_item(DOSBoxMenu::item_type_id,"refreshslot").set_text("Refresh display status").set_callback_function(refresh_slots_menu_callback);
             mainMenu.alloc_item(DOSBoxMenu::item_type_id, "usesavefile").set_text("Use save file instead of save slot").set_callback_function(use_save_file_menu_callback).check(use_save_file);
             mainMenu.alloc_item(DOSBoxMenu::item_type_id, "browsesavefile").set_text("Browse save file...").set_callback_function(browse_save_file_menu_callback).enable(use_save_file);
-            mainMenu.alloc_item(DOSBoxMenu::item_type_id, "showstate").set_text("Display state information").set_callback_function(show_save_state_menu_callback);
             {
 				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"current_page").set_text("Current page: 1/10").enable(false).set_callback_function(refresh_slots_menu_callback);
 				mainMenu.alloc_item(DOSBoxMenu::item_type_id,"prev_page").set_text("Previous page").set_callback_function(prev_page_menu_callback);
@@ -13066,6 +13072,9 @@ fresh_boot:
     sdl_hax_macosx_setmenu(NULL);
 #endif
 
+#if defined(C_SDL2)
+	Compat_SDL_CDROMQuit();
+#endif
     SDL_Quit();//Let's hope sdl will quit as well when it catches an exception
 
 #if defined(WIN32) && !defined(HX_DOS)
