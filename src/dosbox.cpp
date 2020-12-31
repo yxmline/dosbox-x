@@ -1101,12 +1101,12 @@ void DOSBOX_RealInit() {
 	}
 
 	//add support for loading/saving game states
-    MAPPER_AddHandler(ShowStateInfo, MK_nothing, 0,"showstate","Display state info", &item);
-        item->set_text("Display state information");
 	MAPPER_AddHandler(SaveGameState, MK_s, MMODHOST,"savestate","Save state", &item);
         item->set_text("Save state");
 	MAPPER_AddHandler(LoadGameState, MK_l, MMODHOST,"loadstate","Load state", &item);
         item->set_text("Load state");
+    MAPPER_AddHandler(ShowStateInfo, MK_nothing, 0,"showstate","Display state info", &item);
+        item->set_text("Display state information");
 	MAPPER_AddHandler(PreviousSaveSlot, MK_comma, MMODHOST,"prevslot","Previous save slot", &item);
         item->set_text("Select previous slot");
 	MAPPER_AddHandler(NextSaveSlot, MK_period, MMODHOST,"nextslot","Next save slot", &item);
@@ -3719,7 +3719,7 @@ void DOSBOX_SetupConfigSections(void) {
             "   direct    Non-standard behavior, encode the CALL FAR directly to the entry point rather than indirectly");
 
     Pbool = secprop->Add_bool("share",Property::Changeable::WhenIdle,true);
-    Pbool->Set_help("Report SHARE.EXE as resident. Does not actually emulate SHARE functions.");
+    Pbool->Set_help("Report SHARE.EXE as resident. This will allow file locking to be performed, although not all SHARE functions are emulated.");
     Pbool->SetBasic(true);
 
     Phex = secprop->Add_hex("minimum dos initial private segment", Property::Changeable::WhenIdle,0);
