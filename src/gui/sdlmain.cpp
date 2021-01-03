@@ -296,6 +296,7 @@ static bool blinkCursor = false, blinkstate = false;
 bool colorChanged = false, justChanged = false;
 #endif
 #if defined(WIN32)
+#if !defined(HX_DOS)
 int curscr;
 RECT monrect;
 typedef struct {
@@ -307,6 +308,7 @@ BOOL CALLBACK EnumDispProc(HMONITOR hMon, HDC dcMon, RECT* pRcMon, LPARAM lParam
 	if (sdl.displayNumber==curscr) monrect=*pRcMon;
 	return TRUE;
 }
+#endif
 extern int dos_clipboard_device_access;
 #endif
 extern bool dos_kernel_disabled;
@@ -2594,7 +2596,7 @@ static Bitu OUTPUT_TTF_SetSize() {
         SDL_FULLSCREEN
 #endif
         );
-#if defined(WIN32) && !defined(C_SDL2)
+#if defined(WIN32) && !defined(C_SDL2) && !defined(HX_DOS)
         if (sdl.displayNumber>0) {
             xyp xy={0};
             xy.x=-1;
@@ -5237,7 +5239,7 @@ static void GUI_StartUp() {
     // SDL_VIDEO_WINDOW_POS environment variable then "windowposition" setting should have no effect.
     // SDL2 position is set later, using SDL_SetWindowPosition()
 #if !defined(C_SDL2)
-#if defined(WIN32)
+#if defined(WIN32) && !defined(HX_DOS)
     MONITORINFO info;
     if (sdl.displayNumber>0) {
         xyp xy={0};
@@ -5259,7 +5261,7 @@ static void GUI_StartUp() {
         safe_strncpy(pos, "SDL_VIDEO_WINDOW_POS=", sizeof(pos));
         safe_strcat(pos, (std::to_string(posx)+","+std::to_string(posy)).c_str());
         SDL_putenv(pos);
-#if defined(WIN32)
+#if defined(WIN32) && !defined(HX_DOS)
     } else if (sdl.displayNumber>0) {
         safe_strncpy(pos, "SDL_VIDEO_WINDOW_POS=", sizeof(pos));
         safe_strcat(pos, (std::to_string(info.rcMonitor.left+200)+","+std::to_string(info.rcMonitor.top+200)).c_str());
@@ -10159,7 +10161,7 @@ int GetNumScreen() {
     int numscreen = 1;
 #if defined(C_SDL2)
     numscreen = SDL_GetNumVideoDisplays();
-#elif defined(WIN32)
+#elif defined(WIN32) && !defined(HX_DOS)
     xyp xy={0};
     xy.x=-1;
     xy.y=-1;
