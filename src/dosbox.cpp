@@ -1320,6 +1320,7 @@ void DOSBOX_SetupConfigSections(void) {
     const char* lfn_settings[] = { "true", "false", "1", "0", "auto", "autostart", 0};
     const char* quit_settings[] = { "true", "false", "1", "0", "auto", "autofile", 0};
     const char* autofix_settings[] = { "true", "false", "1", "0", "both", "a20fix", "loadfix", "none", 0};
+    const char* color_themes[] = { "default", "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", 0};
     const char* irqsgus[] = { "5", "3", "7", "9", "10", "11", "12", 0 };
     const char* irqssb[] = { "7", "5", "3", "9", "10", "11", "12", 0 };
     const char* dmasgus[] = { "3", "0", "1", "5", "6", "7", 0 };
@@ -1422,6 +1423,11 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool->Set_help("If set (default), DOSBox-X will display the welcome banner when it starts.");
     Pbool->SetBasic(true);
 
+    Pstring = secprop->Add_string("bannercolortheme",Property::Changeable::OnlyAtStart,"default");
+    Pstring->Set_values(color_themes);
+    Pstring->Set_help("You can specify a different background color theme for the welcome banner from the default one.");
+    Pstring->SetBasic(true);
+
     Pstring = secprop->Add_string("dpi aware",Property::Changeable::OnlyAtStart,"auto");
     Pstring->Set_values(truefalseautoopt);
     Pstring->Set_help("Set this option (auto by default) to indicate to your OS that DOSBox-X is DPI aware.\n"
@@ -1453,6 +1459,7 @@ void DOSBOX_SetupConfigSections(void) {
 
     Pbool = secprop->Add_bool("synchronize time", Property::Changeable::Always, false);
     Pbool->Set_help("If set, DOSBox-X will try to automatically synchronize time with the host, unless you decide to change the date/time manually.");
+    Pbool->SetBasic(true);
 
     Pbool = secprop->Add_bool("keyboard hook", Property::Changeable::Always, false);
     Pbool->Set_help("Use keyboard hook (currently only on Windows) to catch special keys and synchronize the keyboard LEDs with the host.");
@@ -2371,6 +2378,8 @@ void DOSBOX_SetupConfigSections(void) {
 
 	Pstring = secprop->Add_string("ttf.font", Property::Changeable::Always, "");
     Pstring->Set_help("Specifies a TrueType font to use for the TTF output. If not specified, the built-in TrueType font will be used.\n"
+                    "Either a font name or full font path can be specified. If file ends with the .TTF extension then the extension can be omitted.\n"
+                    "For a font name or relative path, directories such as the working directory and default system font directory will be searched.\n"
                     "For example, setting it to \"consola\" or \"consola.ttf\" will use the Consola font; similar for other TTF fonts.");
     Pstring->SetBasic(true);
 
@@ -4052,6 +4061,9 @@ void DOSBOX_SetupConfigSections(void) {
         "name, e.g. VIA here.");
     Pstring->SetBasic(true);
 
+    Pstring = secprop->Add_string("pcaptimeout", Property::Changeable::WhenIdle,"default");
+    Pstring->Set_help("Specifies the read timeout for the device in milliseconds for the pcap backend, or the default value will be used.");
+
     /* IDE emulation options and setup */
     for (size_t i=0;i < MAX_IDE_CONTROLLERS;i++) {
         secprop=control->AddSection_prop(ide_names[i],&Null_Init,false);//done
@@ -4260,6 +4272,7 @@ void DOSBOX_SetupConfigSections(void) {
             "# They are used to (briefly) document the effect of each option.\n"
         "# To write out ALL options, use command 'config -all' with -wc or -writeconf options.\n");
     MSG_Add("CONFIG_SUGGESTED_VALUES", "Possible values");
+    MSG_Add("EMPTY_SLOT","Empty slot");
 }
 
 int utf8_encode(char **ptr, const char *fence, uint32_t code) {
@@ -5828,7 +5841,7 @@ void SaveState::removeState(size_t slot) const {
 }
 
 std::string SaveState::getName(size_t slot, bool nl) const {
-	if (slot >= SLOT_COUNT*MAX_PAGE) return "[Empty slot]";
+	if (slot >= SLOT_COUNT*MAX_PAGE) return "["+std::string(MSG_Get("EMPTY_SLOT"))+"]";
 	std::string path;
 	bool Get_Custom_SaveDir(std::string& savedir);
 	if(Get_Custom_SaveDir(path)) {
@@ -5852,7 +5865,7 @@ std::string SaveState::getName(size_t slot, bool nl) const {
 	std::string save=nl&&use_save_file&&savefilename.size()?savefilename:temp+slotname.str()+".sav";
 	std::ifstream check_slot;
 	check_slot.open(save.c_str(), std::ifstream::in);
-	if (check_slot.fail()) return nl?"(Empty state)":"[Empty slot]";
+	if (check_slot.fail()) return nl?"(Empty state)":"["+std::string(MSG_Get("EMPTY_SLOT"))+"]";
 	my_miniunz((char **)save.c_str(),"Program_Name",temp.c_str());
 	std::ifstream check_title;
 	int length = 8;
