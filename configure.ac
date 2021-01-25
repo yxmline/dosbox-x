@@ -441,7 +441,7 @@ case "$host" in
        CXXFLAGS="$CXXFLAGS -mno-ms-bitfields"
        if test x$have_sdl_net_h = xyes ; then
          dnl HACK: We have to put SDL_net THEN winsock libraries or else the linker can't resolve things properly
-         LIBS="$LIBS -lSDL_net -lwsock32 -lws2_32 -liphlpapi"
+         LIBS="$LIBS -lSDL_net -lwsock32 -lws2_32 -lwinspool -liphlpapi"
        fi
        dnl FEATURE: Whether to support direct parallel port passthrough
        AC_DEFINE(C_DIRECTLPT, 1, [ Define to 1 if you want parallel passthrough support (Win32, Linux).])
@@ -851,8 +851,8 @@ dnl FEATURE: Whether to enable dynamic core
 AC_ARG_ENABLE(dynamic-core,AC_HELP_STRING([--disable-dynamic-core],[Disable all dynamic cores]),,enable_dynamic_core=yes)
 
 dnl FEATURE: Whether to enable x86 dynamic core
-AH_TEMPLATE(C_DYNAMIC_X86,[Define to 1 to use x86 dynamic cpu core])
-AC_ARG_ENABLE(dynamic-x86,AC_HELP_STRING([--disable-dynamic-x86],[Disable x86 dynamic cpu core]),,enable_dynamic_x86=yes)
+AH_TEMPLATE(C_DYNAMIC_X86,[Define to 1 to use x86/x64 dynamic cpu core])
+AC_ARG_ENABLE(dynamic-x86,AC_HELP_STRING([--disable-dynamic-x86],[Disable x86/x64 dynamic cpu core]),,enable_dynamic_x86=yes)
 AC_MSG_CHECKING(whether x86 dynamic cpu core will be enabled)
 if test x$enable_dynamic_x86 = xno -o x$enable_dynamic_core = xno -o x$c_targetcpu = xarm; then
    AC_MSG_RESULT(no)
