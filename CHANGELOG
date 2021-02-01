@@ -1,4 +1,8 @@
 0.83.10
+  - The Windows key(s) in Windows and the Command key(s)
+    in macOS will now be displayed as the "Windows" and
+    "Command" keys instead of the "super" and "meta"
+    keys in SDL1 builds just like SDL2 builds. (Wengier)
   - Cursor blinking rate for TrueType font (TTF) output
     can now be customized with the ttf.blinkc option.
     Set an integer between 1 (fastest) and 7 (slowest)
@@ -26,10 +30,10 @@
     dynamic core with paging on" in [cpu] section to
     "false"; the default value of this option has been
     changed to "auto" which will enable/disable itself
-    based on whether the 386 paging has been enabled.
-    Also fixed incorrect behavior for handling trap
-    flags in the dynamic core and updated the MMX code
-    for improved performance. (koolkdev)
+    based on whether the 386 paging and a guest system
+    has been enabled. Also fixed incorrect behavior for
+    handling trap flags in the dynamic core and updated
+    the MMX code for improved performance. (koolkdev)
   - Added support for Direct3D output on Windows SDL2
     builds just like Windows SDL1 builds to become the
     default output in all Windows builds. (Wengier)
@@ -62,7 +66,7 @@
     will specify path C:\DIR(\C_DRIVE) as the write
     location after mounting C: drive as a PhysFS drive
     with a command like "MOUNT FILES.ZIP". (Wengier)
-  - Added abliity to resolve file paths that include
+  - Added ability to resolve file paths that include
     environment variables on Windows or tildes (~) on
     other platforms for various options in the config
     file, such as language and mapper file paths, MT32
@@ -113,7 +117,7 @@
     option in [printer] section too. (Wengier)
   - Added special properties to CONFIG command such as
     "screenwidth", "screenheight", "windowwidth", and
-    "windowheight" so that commmands like "CONFIG -GET
+    "windowheight" so that commands like "CONFIG -GET
     screenwidth" and "CONFIG -GET screenheight" will
     get the current screen width and height. (Wengier)
   - BOOT command without a parameter will now try to
@@ -129,7 +133,8 @@
     the word processor for TTF dynamically using CONFIG
     command, e.g. "config -set ttf.font=test", "config
     -set ttf.lins=30", "config -set ttf.cols=100" and
-    "config -set ttf.wp=wp". (Wengier)
+    "config -set ttf.wp=wp". The limits for the options
+    ttf.cols and ttf.lins are increased too. (Wengier)
   - Implemented the DOS network redirector functions so
     that the host name can be reported to DOS programs,
     unless the secure mode is enabled. You may need to
@@ -147,23 +152,29 @@
   - Fixed large ISO images (>2GB) unable to be mounted
     using IMGMOUNT command. (Wengier)
   - Fixed build failure on Gentoo Linux. (fonic)
-  - Improved the speed of the internal Voodoo hardware
-    emulation for running games like Tomb Raider 3dfx
-    when using the Direct3D output. (Wengier)
+  - 3dfx games can now work with the Glide passthrough
+    feature when a guest system (guest DOS or Windows
+    9x) is currently running. The default setting for
+    config option "keep private area on boot" in [dos]
+    section is changed from "false" to "auto". (Wengier)
+  - Improved the speed of the Voodoo hardware emulation
+    for running games like Tomb Raider 3dfx. (Wengier)
   - Improved OPL3Duo support, such as adding a buffer
     thread to get rid of slowdowns & breakups in audio
     playback when using the board. (DhrBaksteen)
   - Updated the Tiny File Dialog library to the latest
     version v3.8.5, which fixes issues such as the
     compatibility problem with Windows XP. (Wengier)
-  - Updated FLAC and WAV CD-DA decoder libraries to the
-    latest versions (0.12.26 and 0.12.18 respectively;
-    per David Reid). (Wengier)
+  - Updated FLAC, MP3, and WAV CD-DA decoder libraries
+    to the latest versions (0.12.28, 0.6.26 and 0.12.18
+    respectively; per David Reid). (Wengier)
   - Integrated SVN commits (Allofich & Wengier)
     - r4426: Emulate debug register 6 during trap flag
     emulation (and normal int 1). Fixes 544 (jmarsh)
-    - r4392: Improve capturing of Zeliard and fix a
-    few percussion-related capturing problems as well.
+    - r4401: Improve xchg to handle unwritable memory
+    better for core_dyn_x86.
+    - r4399: Finish up and add LOOP_NE and LOOP_E for
+    core_dyn_x86.
     - r4393: Remove video page check when drawing
     internal mouse pointer, as the BIOS current page
     is not updated in some cases. Fixes QQP games: Lost
@@ -171,10 +182,15 @@
     Journey. Also be a bit smarter about enabling
     autolock, supporting more cases where the mouse
     is used for input without resetting it.
-    - r4399: Finish up and add LOOP_NE and LOOP_E for
-    core_dyn_x86.
-    - r4401: Improve xchg to handle unwritable memory
-    better for core_dyn_x86.
+    - r4392: Improve capturing of Zeliard and fix a
+    few percussion-related capturing problems as well.
+    - r4310: Improve PMAKE on big endian machines and
+    fix some bugs. Fixes bug in 16 -> 15 bit color
+    conversion.
+    - r4309: Copy working directory when mounting an
+    overlay.
+    - r4307: Refinement of SoundBlaster checks, so no
+    IRQ is raised when not in autodma mode.
 
 0.83.9
   - Physical CD drives are now mountable in SDL2 builds
