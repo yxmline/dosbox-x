@@ -1,4 +1,4 @@
-/*
+ï»¿/*
  *  Copyright (C) 2002-2020  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -839,10 +839,10 @@ static bool doTree(DOS_Shell * shell, char * args, DOS_DTA dta, bool optA, bool 
     if (level&&strlen(sfull)>4&&!strcasecmp(sfull+strlen(sfull)-4, "\\*.*")) {
         *(sfull+strlen(sfull)-4)=0;
         p=strrchr(sfull, '\\');
-        char c=optA?(last?'\\':'+'):(last?'À':'Ã');
+        char c=optA?(last?'\\':'+'):(last?'Ã€':'Ãƒ');
         cont[level]=!last;
-        for (int i=1; i<level; i++) shell->WriteOut("%c   ", cont[i]?(optA?'|':'³'):' ');
-        shell->WriteOut(optA?"%c---%s\n":"%cÄÄÄ%s\n", c, p?p+1:sfull);
+        for (int i=1; i<level; i++) shell->WriteOut("%c   ", cont[i]?(optA?'|':'Â³'):' ');
+        shell->WriteOut(optA?"%c---%s\n":"%cÃ„Ã„Ã„%s\n", c, p?p+1:sfull);
         *(sfull+strlen(sfull))='\\';
     }
     sprintf(sargs,"\"%s\"",spath);
@@ -877,7 +877,7 @@ static bool doTree(DOS_Shell * shell, char * args, DOS_DTA dta, bool optA, bool 
                         found=true;
                     }
                 } else if (optF) {
-                    for (int i=1; i<=level; i++) shell->WriteOut("%c   ", (i==1&&level>1?!plast:cont[i])?(optA?'|':'³'):' ');
+                    for (int i=1; i<=level; i++) shell->WriteOut("%c   ", (i==1&&level>1?!plast:cont[i])?(optA?'|':'Â³'):' ');
                     shell->WriteOut("    %s\n", uselfn?lname:name);
                 }
             }
