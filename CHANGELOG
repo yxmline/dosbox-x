@@ -1,15 +1,21 @@
 0.83.11
-  - Improved handling for file- and record-locking
-    for non-Windows platforms. Portions of the code
-    are adopted from DOSEmu. (Wengier)
   - With the config option "startcmd=true" or command-
     line option -winrun, Windows applications can now
     be launched from within a DOS program or from the
     4DOS shell in addition to built-in shell. (Wengier)
+  - Added support for the clipboard device (CLIP$) and
+    DOS clipboard API on non-Windows systems (they were
+    previously only supported on the Windows platform).
+    In Linux/macOS SDL1 builds only the read access is
+    supported whereas Linux/macOS SDL2 builds support
+    both read and write accesses. (Wengier)
   - Added a simple BIOS Setup Utlity, which will show
     a summary of the current system configuration and
     allow users to change the date and time. Press Del
     key at the BIOS boot screen to enter. (Wengier)
+  - Added config option "showbasic" in [sdl] section
+    which when set to false will hide DOSBox-X version
+    number and running speed in the titlebar. (Wengier)
   - Added experimental option to load a VGA BIOS ROM
     image and execute it, instead of our own INT 10h
     emulation. If enabled, it will load the specific
@@ -19,8 +25,13 @@
     can be dumped from real hardware or downloaded from
     the PCem ROMs collection. It can be set with config
     option "vga bios rom image" in [video] section.
-  - Fixed PC-98 keyboard handling of CTRL+A through
-    CTRL+Z. CTRL+C now works correctly in PC-98 mode.
+  - Improved handling for file- and record-locking
+    for non-Windows platforms. Portions of the code
+    are adopted from DOSEmu. (Wengier)
+  - Improved handling for the setting "ansi.sys=false",
+    such as fixing the welcome screen messup in this
+    case and allowing the use of a custom ANSI TSR
+    (such as NNANSI.COM) instead. (Wengier & stu)
   - You can now press Ctrl+C or Ctrl+Break to break
     from long outputs from commands like COPY, TYPE,
     DIR /S, and ATTRIB /S. (Wengier)
@@ -86,11 +97,20 @@
   - The command "KEYB US" will return the DOS codepage
     to 437 if current codepage is different. (Wengier)
   - The setting "output=default" will enable the OpenGL
-    output for the Linux platform if possible. (Wengier)
+    output for Linux systems if possible. (Wengier)
+  - Fixed the CGA/MCGA/MDA/Hercules-specfic shortcut
+    function buttons in Mapper Editor, and the screen
+    colors after exiting from Mapper Editor when using
+    these machine types in Direct3D output (SDL1 build).
+    Also fixed the messages in the welcome banner for
+    these machine types to inform users the new default
+    shortcuts (Ctrl(+Shift)+[F7/F8]). (Wengier)
   - Fixed DOS Int21/AH=0x5a "Create temporary file"
     function not generating unique files. (Wengier)
   - Fixed that the current drive goes back to Z drive
     when combined unmounts & mounts are used. (Wengier)
+  - Fixed PC-98 keyboard handling of CTRL+A through
+    CTRL+Z. CTRL+C now works correctly in PC-98 mode.
   - Fixed crash of Free Pascal compiler with dynamic
     core and setting "use dynamic core with paging on =
     auto" introduced in the previous version. (Wengier)
@@ -106,6 +126,13 @@
   - Fixed that the "Save" button in Configuration Tool
     did not save config file in last version. (Wengier)
   - Integrated SVN commits (Allofich)
+    - r4346: Fix a long-standing crash that occurred
+    when disconnecting a second joystick after
+    partially mapping it.
+    - r4344: Add F8 to toggle printable characters on
+    and off in the debugger.
+    - r4340: Fix behavior when main memory allocation
+    fails.
     - r4336: Correct an oversight of r4186 when floppy
     disks are mounted.
     - r4330: some big endian improvements and drive_fat
