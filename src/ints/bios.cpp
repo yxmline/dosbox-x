@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Copyright (C) 2002-2020  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -3184,7 +3184,7 @@ static Bitu INT18_PC98_Handler(void) {
      *      I've run through GNU iconv to convert from SHIFT-JIS to UTF-8 here in case Google Translate
      *      got anything wrong. */
     switch (reg_ah) {
-        case 0x00: /* Reading of key data (キー・データの読みだし) */
+        case 0x00: /* Reading of key data (ã‚­ãƒ¼ãƒ»ãƒ‡ãƒ¼ã‚¿ã®èª­ã¿ã ã—) */
             /* FIXME: We use the IBM PC/AT keyboard buffer to fake this call.
              *        This will be replaced with PROPER emulation once the PC-98 keyboard handler has been
              *        updated to write the buffer the way PC-98 BIOSes do it.
@@ -3210,7 +3210,7 @@ static Bitu INT18_PC98_Handler(void) {
                 reg_ip += 1; /* step over IRET, to NOPs which then JMP back to callback */
             }
             break;
-        case 0x01: /* Sense of key buffer state (キー・バッファ状態のセンス) */
+        case 0x01: /* Sense of key buffer state (ã‚­ãƒ¼ãƒ»ãƒãƒƒãƒ•ã‚¡çŠ¶æ…‹ã®ã‚»ãƒ³ã‚¹) */
             /* This call returns whether or not there is input waiting.
              * The waiting data is read, but NOT discarded from the buffer. */
             if (INT16_peek_key(temp16)) {
@@ -3231,13 +3231,13 @@ static Bitu INT18_PC98_Handler(void) {
                 reg_bh = 0;
             }
             break;
-        case 0x02: /* Sense of shift key state (シフト・キー状態のセンス) */
+        case 0x02: /* Sense of shift key state (ã‚·ãƒ•ãƒˆãƒ»ã‚­ãƒ¼çŠ¶æ…‹ã®ã‚»ãƒ³ã‚¹) */
             reg_al = mem_readb(0x53A);
             break;
-        case 0x03: /* Initialization of keyboard interface (キーボード・インタフェイスの初期化) */
+        case 0x03: /* Initialization of keyboard interface (ã‚­ãƒ¼ãƒœãƒ¼ãƒ‰ãƒ»ã‚¤ãƒ³ã‚¿ãƒ•ã‚§ã‚¤ã‚¹ã®åˆæœŸåŒ–) */
             /* TODO */
             break;
-        case 0x04: /* Sense of key input state (キー入力状態のセンス) */
+        case 0x04: /* Sense of key input state (ã‚­ãƒ¼å…¥åŠ›çŠ¶æ…‹ã®ã‚»ãƒ³ã‚¹) */
             reg_ah = mem_readb(0x52A + (unsigned int)(reg_al & 0x0Fu));
             /* Hack for "Shangrlia" by Elf: The game's regulation of animation speed seems to depend on
              * INT 18h AH=0x04 taking some amount of time. If we do not do this, animation will run way
@@ -3260,7 +3260,7 @@ static Bitu INT18_PC98_Handler(void) {
              * of cycle count in DOSBox-X. */
             CPU_Cycles -= (cpu_cycles_count_t)(CPU_CycleMax * 0.006);
             break;
-        case 0x05: /* Key input sense (キー入力センス) */
+        case 0x05: /* Key input sense (ã‚­ãƒ¼å…¥åŠ›ã‚»ãƒ³ã‚¹) */
             /* This appears to return a key from the buffer (and remove from
              * buffer) or return BH == 0 to signal no key was pending. */
             if (INT16_get_key(temp16)) {
@@ -3664,7 +3664,7 @@ static Bitu INT18_PC98_Handler(void) {
             }
             break;
         /* From this point on the INT 18h call list appears to wander off from the keyboard into CRT/GDC/display management. */
-        case 0x40: /* Start displaying the graphics screen (グラフィック画面の表示開始) */
+        case 0x40: /* Start displaying the graphics screen (ã‚°ãƒ©ãƒ•ã‚£ãƒƒã‚¯ç”»é¢ã®è¡¨ç¤ºé–‹å§‹) */
             pc98_gdc[GDC_SLAVE].force_fifo_complete();
             pc98_gdc[GDC_SLAVE].display_enable = true;
  
@@ -3673,7 +3673,7 @@ static Bitu INT18_PC98_Handler(void) {
                 mem_writeb(0x54C/*MEMB_PRXCRT*/,b | 0x80);
             }
             break;
-        case 0x41: /* Stop displaying the graphics screen (グラフィック画面の表示終了) */
+        case 0x41: /* Stop displaying the graphics screen (ã‚°ãƒ©ãƒ•ã‚£ãƒƒã‚¯ç”»é¢ã®è¡¨ç¤ºçµ‚äº†) */
             pc98_gdc[GDC_SLAVE].force_fifo_complete();
             pc98_gdc[GDC_SLAVE].display_enable = false;
 
@@ -3682,7 +3682,7 @@ static Bitu INT18_PC98_Handler(void) {
                 mem_writeb(0x54C/*MEMB_PRXCRT*/,b & (~0x80));
             }
             break;
-        case 0x42: /* Display area setup (表示領域の設定) */
+        case 0x42: /* Display area setup (è¡¨ç¤ºé ˜åŸŸã®è¨­å®š) */
             // HACK for Quarth: If the game has triggered vsync interrupt, wait for it.
             // Quarth's vsync interrupt will reprogram the display partitions back to what
             // it would have set for gameplay after this modeset and cause display problems
@@ -6937,12 +6937,12 @@ static void BIOS_Int10RightJustifiedPrint(const int x,int &y,const char *msg, bo
                 bo = (((unsigned int)y * 80u) + (unsigned int)(bios_pc98_posx++)) * 2u; /* NTS: note the post increment */
                 if (boxdraw) {
                     unsigned int ch = (unsigned char)*s;
-                    if (*s=='�') ch = 0x250B;
-                    else if (*s=='�') ch = 0x270B;
-                    else if (*s=='�') ch = 0x330B;
-                    else if (*s=='�') ch = 0x370B;
-                    else if (*s=='�') ch = 0x3B0B;
-                    else if (*s=='�') ch = 0x3F0B;
+                    if (*s=='Í') ch = 0x250B;
+                    else if (*s=='º') ch = 0x270B;
+                    else if (*s=='É') ch = 0x330B;
+                    else if (*s=='»') ch = 0x370B;
+                    else if (*s=='È') ch = 0x3B0B;
+                    else if (*s=='¼') ch = 0x3F0B;
                     mem_writew(0xA0000+bo,ch);
                 } else
                     mem_writew(0xA0000+bo,(unsigned char)*s);
@@ -6962,7 +6962,7 @@ static void BIOS_Int10RightJustifiedPrint(const int x,int &y,const char *msg, bo
 char *getSetupLine(const char *capt, const char *cont) {
     unsigned int pad1=25-strlen(capt), pad2=41-strlen(cont);
     static char line[90];
-    sprintf(line, "�%*c%s%*c%s%*c�", 12, ' ', capt, pad1, ' ', cont, pad2, ' ');
+    sprintf(line, "º%*c%s%*c%s%*cº", 12, ' ', capt, pad1, ' ', cont, pad2, ' ');
     return line;
 }
 
@@ -7114,7 +7114,7 @@ void showBIOSSetup(const char* card, int x, int y) {
     char title[]="                               BIOS Setup Utility                               ";
     char *p=machine == MCH_PC98?title+2:title;
     BIOS_Int10RightJustifiedPrint(x,y,p);
-    BIOS_Int10RightJustifiedPrint(x,y,"������������������������������������������������������������������������������ͻ", true);
+    BIOS_Int10RightJustifiedPrint(x,y,"ÉÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ»", true);
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("", ""), true);
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("System date:", "0000-00-00"), true);
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("System time:", "00:00:00"), true);
@@ -7158,7 +7158,7 @@ void showBIOSSetup(const char* card, int x, int y) {
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("Video memory:", (std::to_string(vga.mem.memsize/1024)+"K").c_str()), true);
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("Total memory:", (std::to_string(MEM_TotalPages()*4096/1024)+"K").c_str()), true);
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("", ""), true);
-    BIOS_Int10RightJustifiedPrint(x,y,"������������������������������������������������������������������������������ͼ", true);
+    BIOS_Int10RightJustifiedPrint(x,y,"ÈÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼", true);
     if (machine == MCH_PC98)
         BIOS_Int10RightJustifiedPrint(x,y,"                                  ESC = Exit                                  ");
     else
