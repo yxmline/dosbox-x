@@ -1230,6 +1230,10 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool->Set_help("If set, DOSBox-X will skip the BIOS screen by activating fast BIOS logo mode (without 1-second pause).");
     Pbool->SetBasic(true);
 
+    Pbool = secprop->Add_bool("disable graphical splash",Property::Changeable::OnlyAtStart,false);
+    Pbool->Set_help("If set, DOSBox-X will always display text-mode BIOS splash screen instead of the graphical one.\n"
+                    "The text-mode BIOS screen will automatically be used if the TrueType font (TTF) output is enabled.");
+
     Pbool = secprop->Add_bool("startbanner",Property::Changeable::OnlyAtStart,true);
     Pbool->Set_help("If set (default), DOSBox-X will display the welcome banner when it starts.");
     Pbool->SetBasic(true);
@@ -4132,7 +4136,7 @@ void DOSBOX_SetupConfigSections(void) {
     Pint->Set_help("Number of file handles available to DOS programs (8-255).");
     Pint->SetBasic(true);
     Pstring = secprop->Add_string("country",Property::Changeable::OnlyAtStart,"");
-    Pstring->Set_help("Sets the country code for country-specific date & time formats.");
+    Pstring->Set_help("The country code for date/time formats and optionally the code page for TTF output.");
     Pstring->SetBasic(true);
     Pstring = secprop->Add_string("lastdrive",Property::Changeable::OnlyAtStart,"a");
 	Pstring->Set_help("The maximum drive letter that can be accessed by programs.");

@@ -4,7 +4,7 @@
  *
  * \section f Features
  *
- * \li Accurate x86 emulation
+ * \li Complete and accurate x86/DOS emulation
  *
 */
 
@@ -3898,15 +3898,16 @@ void modeSwitched(bool full) {
     if ((full && !locked) || (!full && locked)) GFX_CaptureMouse();
 }
 
-bool toaddmenu = false;
 void GFX_SwitchFullScreen(void)
 {
-    if (sdl.desktop.fullscreen && toaddmenu && static_cast<Section_prop *>(control->GetSection("sdl"))->Get_bool("showmenu")) {
-        DOSBox_SetMenu();
-        toaddmenu = false;
-    }
-
 #if defined(USE_TTF)
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
+    if (ttf.fullScrn && ttf.inUse && !control->opt_nomenu && static_cast<Section_prop *>(control->GetSection("sdl"))->Get_bool("showmenu")) {
+        DOSBox_SetMenu();
+        lastmenu = true;
+    }
+#endif
+
     if (ttf.inUse) {
         if (ttf.fullScrn) {
             sdl.desktop.fullscreen = false;
@@ -4992,12 +4993,13 @@ bool has_GUI_StartUp = false;
 std::string GetDefaultOutput() {
     static std::string output = "surface";
 #if defined(USE_TTF)
-# if 0 /* TODO: If someone wants to compile DOSBox-X to default to TTF, change this to #if defined(...) here */
+# if 0 /* TODO: If someone wants to compile DOSBox-X to default to TTF, change this to "# if 1" or "# if defined(...)" here */
     std::string mtype(static_cast<Section_prop *>(control->GetSection("dosbox"))->Get_string("machine"));
     if (mtype.substr(0, 3) == "vga" || mtype.substr(0, 4) == "svga" || mtype.substr(0, 4) == "vesa" || mtype.substr(0, 4) == "pc98")
         return "ttf";
 # endif
-#elif defined(WIN32)
+#endif
+#if defined(WIN32)
 # if defined(HX_DOS)
     output = "surface"; /* HX-DOS should stick to surface */
 # elif defined(__MINGW32__) && !(C_DIRECT3D) && !defined(C_SDL2)
@@ -5262,10 +5264,7 @@ static void GUI_StartUp() {
         sdl.displayNumber = 0;
     }
     std::string output=section->Get_string("output");
-    std::string mtype(static_cast<Section_prop *>(control->GetSection("dosbox"))->Get_string("machine"));
 
-    //if (output == "ttf" && (mtype == "tandy" || mtype == "pcjr"))
-        //output = "default";
 	if (output == "default") {
 		output=GetDefaultOutput();
 		LOG_MSG("The default output for the video system: %s", output.c_str());
@@ -5958,7 +5957,9 @@ static void HandleMouseMotion(SDL_MouseMotionEvent * motion) {
         return;
     }
     else {
+        skipdraw=true;
         GFX_SDLMenuTrackHover(mainMenu,DOSBoxMenu::unassigned_item_handle);
+        skipdraw=false;
 
         if (OpenGL_using() && mainMenu.needsRedraw()) {
 #if C_OPENGL
@@ -7165,7 +7166,9 @@ void GFX_Events() {
                 void GFX_SDLMenuTrackHover(DOSBoxMenu &menu,DOSBoxMenu::item_handle_t item_id);
                 void GFX_SDLMenuTrackHilight(DOSBoxMenu &menu,DOSBoxMenu::item_handle_t item_id);
 
+                skipdraw=true;
                 GFX_SDLMenuTrackHover(mainMenu,DOSBoxMenu::unassigned_item_handle);
+                skipdraw=false;
                 GFX_SDLMenuTrackHilight(mainMenu,DOSBoxMenu::unassigned_item_handle);
 
                 GFX_DrawSDLMenu(mainMenu,mainMenu.display_list);
@@ -7728,15 +7731,15 @@ void SDL_SetupConfigSection() {
 		"The default modifier is \"shift\" (both left and right shift keys). Set to \"none\" if no modifier is desired.");
     Pstring->SetBasic(true);
 
-	const char* truefalseautoopt[] = { "true", "false", "1", "0", "auto", 0};
-	Pstring = sdl_sec->Add_string("clip_paste_bios",Property::Changeable::WhenIdle, "auto");
-	Pstring->Set_values(truefalseautoopt);
-	Pstring->Set_help("Specify whether to use BIOS keyboard functions for clipboard pasting instead of the keystroke method.\n"
-		"For pasting clipboard text into Windows 3.x/9x applications, make sure to use the keystroke method.");
+	const char* truefalsedefaultopt[] = { "true", "false", "1", "0", "default", 0};
+	Pstring = sdl_sec->Add_string("clip_paste_bios",Property::Changeable::WhenIdle, "default");
+	Pstring->Set_values(truefalsedefaultopt);
+	Pstring->Set_help("Specify whether to use BIOS keyboard functions for the clipboard pasting instead of the keystroke method.\n"
+		"For pasting clipboard text into Windows 3.x/9x applications (e.g. Notepad), make sure to use the keystroke method.");
     Pstring->SetBasic(true);
 
     Pint = sdl_sec->Add_int("clip_paste_speed", Property::Changeable::WhenIdle, 30);
-    Pint->Set_help("Set keyboard speed for pasting from the shared clipboard.\n"
+    Pint->Set_help("Set keyboard speed for pasting text from the shared clipboard.\n"
         "If the default setting of 30 causes lost keystrokes, increase the number.\n"
         "Or experiment with decreasing the number for applications that accept keystrokes quickly.");
     Pint->SetBasic(true);
@@ -7805,6 +7808,7 @@ void SDL_SetupConfigSection() {
     Pstring = sdl_sec->Add_path("mapperfile_sdl2",Property::Changeable::Always,"");
     Pstring->Set_help("File used to load/save the key/event mappings from DOSBox-X SDL2 builds. If set it will override \"mapperfile\" for SDL2 builds.");
 
+	const char* truefalseautoopt[] = { "true", "false", "1", "0", "auto", 0};
     Pstring = sdl_sec->Add_string("usescancodes",Property::Changeable::OnlyAtStart,"auto");
     Pstring->Set_values(truefalseautoopt);
     Pstring->Set_help("Avoid usage of symkeys, might not work on all operating systems.\n"
@@ -9185,7 +9189,7 @@ void AUTOEXEC_Init();
 
 #if defined(WIN32)
 // NTS: I intend to add code that not only indicates High DPI awareness but also queries the monitor DPI
-//      and then factor the DPI into DOSBox's scaler and UI decisions.
+//      and then factor the DPI into DOSBox-X's scaler and UI decisions.
 void Windows_DPI_Awareness_Init() {
     // if the user says not to from the command line, or disables it from dosbox-x.conf, then don't enable DPI awareness.
     if (!dpi_aware_enable || control->opt_disable_dpi_awareness)
@@ -10355,7 +10359,11 @@ bool toOutput(const char *what) {
             sdl.desktop.type = SCREEN_OPENGL;
         }
 #endif
-        if (window_was_maximized&&!GFX_IsFullscreen()) {
+        bool switchfull = false;
+        if (GFX_IsFullscreen()) {
+            switchfull = true;
+            GFX_SwitchFullScreen();
+        } else if (window_was_maximized) {
 #if defined(WIN32)
             ShowWindow(GetHWND(), SW_RESTORE);
 #else
@@ -10367,6 +10375,17 @@ bool toOutput(const char *what) {
 #endif
         firstset=false;
         change_output(10);
+        if (!GFX_IsFullscreen() && switchfull) {
+            switchfull = false;
+            ttf.fullScrn = false;
+            GFX_SwitchFullScreen();
+        } else if (!GFX_IsFullscreen() && ttf.fullScrn) {
+            ttf.fullScrn = false;
+            reset = true;
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
+            if (!control->opt_nomenu && static_cast<Section_prop *>(control->GetSection("sdl"))->Get_bool("showmenu")) DOSBox_SetMenu();
+#endif
+        }
 #endif
     }
     if (reset) RENDER_Reset();
@@ -12758,7 +12777,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 
             menu.showrt = control->opt_showrt||sdl_sec->Get_bool("showdetails");
             menu.hidecycles = (control->opt_showcycles||sdl_sec->Get_bool("showdetails") ? false : true);
-            toaddmenu = false;
         }
 
         /* Start up main machine */
@@ -12877,7 +12895,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         MSCDEX_Init();
         CDROM_Image_Init();
 
-        /* Init memhandle system. This part is used by DOSBox's XMS/EMS emulation to associate handles
+        /* Init memhandle system. This part is used by DOSBox-X's XMS/EMS emulation to associate handles
          * per page. FIXME: I would like to push this down to the point that it's never called until
          * XMS/EMS emulation needs it. I would also like the code to free the mhandle array immediately
          * upon booting into a guest OS, since memory handles no longer have meaning in the guest OS
@@ -13148,10 +13166,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             /* -- -- decide whether to set menu */
             if (menu_gui && !control->opt_nomenu && cfg_want_menu) {
 #if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
-                if (TTF_using() && sdl.desktop.fullscreen) {
-                    DOSBox_NoMenu();
-                    toaddmenu=true;
-                } else
+                if (!TTF_using() || !sdl.desktop.fullscreen)
 #endif
                     DOSBox_SetMenu();
             }

@@ -1,22 +1,4 @@
 0.83.11
-  - With setting "output=default", the TrueType font
-    (TTF) output will be used by default for PC-98 and
-    VGA+ machine types. A text-mode BIOS screen will be
-    enabled for the TTF output. (Wengier)
-  - With the config option "startcmd=true" or command-
-    line option -winrun, Windows applications can now
-    be launched from within a DOS program or from the
-    4DOS shell in addition to built-in shell. (Wengier)
-  - Windows SDL2 builds now use same clipboard pasting
-    method as Windows SDL1 builds by default instead of
-    the BIOS function. The method is now also available
-    for Linux and macOS builds. A menu option "Use BIOS
-    function for keyboard pasting" is added to "Shared
-    clipboard functions" menu group (under "Main") to
-    use BIOS function for the clipboard pasting instead
-    of the keystroke method. This setting can also be
-    changed with the "clip_paste_bios" config option in
-    [sdl] section of the configuration. (Wengier)
   - Added support for the clipboard device (CLIP$) and
     DOS clipboard API on non-Windows systems (they were
     previously only supported on the Windows platform).
@@ -28,6 +10,30 @@
   - Added "Paste Clipboard" button to the AUTOEXEC.BAT,
     CONFIG.SYS and 4DOS.INI sections in Configuration
     Tool for pasting clipboard contents. (Wengier)
+  - Windows SDL2 builds now use same clipboard pasting
+    method as Windows SDL1 builds by default instead of
+    the BIOS keyboard function. The method is now also
+    available for Linux and macOS (both SDL1 and SDL2)
+    builds (although it is disabled by default on these
+    platforms). A menu option "Use BIOS function for
+    keyboard pasting" is added to the "Shared clipboard
+    functions" menu group (under "Main") to use BIOS
+    function for the clipboard pasting instead of the
+    keystroke method. Make sure this option is disabled
+    if pasting clipboad text into Windows 3.x/9x apps
+    (e.g. Notepad & Write) is desired. This setting can
+    be changed with "clip_paste_bios" config option in
+    in [sdl] section of the config file too. (Wengier)
+  - With the config option "startcmd=true" or command-
+    line option -winrun, Windows applications can now
+    be launched from within a DOS program or from the
+    4DOS shell in addition to built-in shell. (Wengier)
+  - Added the "disable graphical splash" config option
+    in [dosbox] section which when set will cause a
+    text-mode BIOS splash screen to be always displayed
+    at startup instead of the graphical one. If the
+    TrueType font (TTF) output is enabled the text-
+    mode BIOS screen is used automatically. (Wengier)
   - Added a simple BIOS Setup Utlity, which will show
     a summary of the current system configuration and
     allow users to change the date and time. Press Del
@@ -75,11 +81,14 @@
     For example, command "COLOR fc" produces light red
     on bright white; COLOR without an argument restores
     the original color. (Wengier)
-  - Added CHCP command to view current code page, or
-    change the current code page in the TrueType font
-    output. Supported code pages include 437, 808, 850,
-    852, 853, 855, 857, 858, 860, 861, 862, 863, 864,
-    865, 866, 869, 872, and 874. (Wengier)
+  - Added CHCP command to view the current code page,
+    or change the current code page for the TrueType
+    font (TTF) output. Supported code pages include:
+    437, 808, 850, 852, 853, 855, 857, 858, 860, 861,
+    862, 863, 864, 865, 866, 869, 872, and 874. You can
+    now also set the code page for TTF output via the
+    optional second parameter of the "country" option
+    in [config] section of the configuration. (Wengier)
   - Added function to automatically save states in the
     specified time interval (in seconds). You can also
     specify a save slot or start and end save slots to
@@ -135,6 +144,8 @@
     auto" introduced in the previous version. (Wengier)
   - Fixed launching Windows programs when the working
     directory has no 8.3 filename entry. (Wengier)
+  - Fixed issues with full-screen switch in some cases
+    when the TrueType font output is enabled. (Wengier)
   - Fixed an issue in MinGW builds that no data will be
     sent to the OPL3Duo board. (DhrBaksteen)
   - Fixed screen flickering when hovering over the menu
