@@ -1,5 +1,5 @@
 ﻿/*
- *  Copyright (C) 2002-2020  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -3184,7 +3184,7 @@ static Bitu INT18_PC98_Handler(void) {
      *      I've run through GNU iconv to convert from SHIFT-JIS to UTF-8 here in case Google Translate
      *      got anything wrong. */
     switch (reg_ah) {
-        case 0x00: /* Reading of key data (ã‚­ãƒ¼ãƒ»ãƒ‡ãƒ¼ã‚¿ã®èª­ã¿ã ã—) */
+        case 0x00: /* Reading of key data (キー・データの読みだし) */
             /* FIXME: We use the IBM PC/AT keyboard buffer to fake this call.
              *        This will be replaced with PROPER emulation once the PC-98 keyboard handler has been
              *        updated to write the buffer the way PC-98 BIOSes do it.
@@ -3210,7 +3210,7 @@ static Bitu INT18_PC98_Handler(void) {
                 reg_ip += 1; /* step over IRET, to NOPs which then JMP back to callback */
             }
             break;
-        case 0x01: /* Sense of key buffer state (ã‚­ãƒ¼ãƒ»ãƒãƒƒãƒ•ã‚¡çŠ¶æ…‹ã®ã‚»ãƒ³ã‚¹) */
+        case 0x01: /* Sense of key buffer state (キー・バッファ状態のセンス) */
             /* This call returns whether or not there is input waiting.
              * The waiting data is read, but NOT discarded from the buffer. */
             if (INT16_peek_key(temp16)) {
@@ -3231,13 +3231,13 @@ static Bitu INT18_PC98_Handler(void) {
                 reg_bh = 0;
             }
             break;
-        case 0x02: /* Sense of shift key state (ã‚·ãƒ•ãƒˆãƒ»ã‚­ãƒ¼çŠ¶æ…‹ã®ã‚»ãƒ³ã‚¹) */
+        case 0x02: /* Sense of shift key state (シフト・キー状態のセンス) */
             reg_al = mem_readb(0x53A);
             break;
-        case 0x03: /* Initialization of keyboard interface (ã‚­ãƒ¼ãƒœãƒ¼ãƒ‰ãƒ»ã‚¤ãƒ³ã‚¿ãƒ•ã‚§ã‚¤ã‚¹ã®åˆæœŸåŒ–) */
+        case 0x03: /* Initialization of keyboard interface (キーボード・インタフェイスの初期化) */
             /* TODO */
             break;
-        case 0x04: /* Sense of key input state (ã‚­ãƒ¼å…¥åŠ›çŠ¶æ…‹ã®ã‚»ãƒ³ã‚¹) */
+        case 0x04: /* Sense of key input state (キー入力状態のセンス) */
             reg_ah = mem_readb(0x52A + (unsigned int)(reg_al & 0x0Fu));
             /* Hack for "Shangrlia" by Elf: The game's regulation of animation speed seems to depend on
              * INT 18h AH=0x04 taking some amount of time. If we do not do this, animation will run way
@@ -3260,7 +3260,7 @@ static Bitu INT18_PC98_Handler(void) {
              * of cycle count in DOSBox-X. */
             CPU_Cycles -= (cpu_cycles_count_t)(CPU_CycleMax * 0.006);
             break;
-        case 0x05: /* Key input sense (ã‚­ãƒ¼å…¥åŠ›ã‚»ãƒ³ã‚¹) */
+        case 0x05: /* Key input sense (キー入力センス) */
             /* This appears to return a key from the buffer (and remove from
              * buffer) or return BH == 0 to signal no key was pending. */
             if (INT16_get_key(temp16)) {

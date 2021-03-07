@@ -9,7 +9,7 @@
 */
 
 /*
- *  Copyright (C) 2002-2020  The DOSBox Team
+ *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -10762,6 +10762,27 @@ bool show_console_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const
     return true;
 }
 
+bool save_logas_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+#if !defined(HX_DOS)
+    char CurrentDir[512];
+    char * Temp_CurrentDir = CurrentDir;
+    getcwd(Temp_CurrentDir, 512);
+    std::string cwd = std::string(Temp_CurrentDir)+CROSS_FILESPLIT;
+    const char *lFilterPatterns[] = {"*.log","*.LOG"};
+    const char *lFilterDescription = "Log files (*.log)";
+    char const * lTheSaveFileName = tinyfd_saveFileDialog("Save log file...","",2,lFilterPatterns,lFilterDescription);
+    if (lTheSaveFileName==NULL) return false;
+#if C_DEBUG
+    void savetologfile(const char *name);
+    savetologfile(lTheSaveFileName);
+#endif
+    chdir( Temp_CurrentDir );
+#endif
+    return true;
+}
+
 bool wait_on_error_menu_callback(DOSBoxMenu * const menu, DOSBoxMenu::item * const menuitem) {
 #if !defined(C_EMSCRIPTEN)
     (void)menu;//UNUSED
@@ -11854,6 +11875,36 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 				}
 			}
 		}
+
+		// Redirect NE2000 realnic settings to pcap section
+		Section_prop * ne2000_section = static_cast<Section_prop *>(control->GetSection("ne2000"));
+		Section_prop * pcap_section = static_cast<Section_prop *>(control->GetSection("ethernet, pcap"));
+		assert(ne2000_section != NULL);
+		assert(pcap_section != NULL);
+		std::istringstream in(ne2000_section->data.c_str());
+		if (in)	for (std::string line; std::getline(in, line); ) {
+			size_t pcaptimeout_pos = line.find("pcaptimeout");
+			size_t realnic_pos = line.find("realnic");
+			size_t eq_pos = line.find("=");
+			if (pcaptimeout_pos != std::string::npos &&
+			    eq_pos != std::string::npos &&
+			    pcaptimeout_pos < eq_pos) {
+				pcap_section->HandleInputline("timeout=" + line.substr(eq_pos + 1, std::string::npos));
+				LOG_MSG("Migrated pcaptimeout from [ne2000] to [ethernet, pcap] section");
+			}
+			if (realnic_pos != std::string::npos &&
+			    eq_pos != std::string::npos &&
+			    realnic_pos < eq_pos) {
+				pcap_section->HandleInputline(line);
+				LOG_MSG("Migrated realnic from [ne2000] to [ethernet, pcap] section");
+				if (ne2000_section->Get_bool("ne2000")) {
+					LOG_MSG("Set ne2000 backend to pcap during migration");
+					Prop_string* backend_prop = static_cast<Prop_string*>(ne2000_section->Get_prop("backend"));
+					assert(backend_prop != NULL);
+					backend_prop->SetValue("pcap");
+				}
+			}
+		}
     }
 
 		MSG_Add("PROGRAM_CONFIG_PROPERTY_ERROR","No such section or property.\n");
@@ -12709,7 +12760,10 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 #if !defined(C_EMSCRIPTEN)
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"show_console").set_text("Show logging console").set_callback_function(show_console_menu_callback);
 #endif
+#if C_DEBUG
+                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"save_logas").set_text("Save logging as...").set_callback_function(save_logas_menu_callback);
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"wait_on_error").set_text("Console wait on error").set_callback_function(wait_on_error_menu_callback).check(sdl.wait_on_error);
+#endif
             }
 
             {
@@ -12866,9 +12920,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         PRINTER_Init();
 #endif
         PARALLEL_Init();
-#if C_NE2000
         NE2K_Init();
-#endif
 
 #if defined(WIN32) && !defined(C_SDL2)
         Reflect_Menu();
