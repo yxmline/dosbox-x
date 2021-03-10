@@ -997,9 +997,9 @@ AH_TEMPLATE(C_SLIRP, [Define to 1 to enable userspace TCP/IP emulation, requires
 if test x$have_slirp_lib = xyes -a x$have_slirp_h = xyes ; then
     have_slirp=yes
     AC_DEFINE(C_SLIRP,1)
-    LIBS="$LIBS ${libslirp_LIBS}"
-    CFLAGS="$CFLAGS ${libslirp_CFLAGS}"
-    CPPFLAGS="$CPPFLAGS ${libslirp_CFLAGS}"
+    LIBS="$LIBS "`pkg-config slirp --libs`
+    CFLAGS="$CFLAGS "`pkg-config slirp --cflags`
+    CPPFLAGS="$CPPFLAGS "`pkg-config slirp --cflags`
 else
     have_slirp=no
     AC_MSG_WARN([Can't find libslirp, userspace TCP/IP emulation disabled])
@@ -1162,8 +1162,12 @@ dnl so SDL_net, fluidsynth and libslirp successfully link to them
 if test x$enable_emscripten != xyes; then
 case "$host" in
     *-*-cygwin* | *-*-mingw32*)
-       if test x$have_sdl_net = xyes -o x$enable_libfluidsynth = xyes -o x$have_slirp = xyes; then
-         LIBS="$LIBS -lwsock32 -lws2_32 -lwinspool -lshlwapi -liphlpapi"
+       if test x$have_slirp = xyes; then
+         LIBS="$LIBS -lole32"
+       fi
+       LIBS="$LIBS -lwsock32 -lws2_32 -liphlpapi -lshlwapi"
+       if test x$enable_freetype = xyes; then
+         LIBS="$LIBS -lfreetype -lwinspool"
        fi
     ;;
 esac
