@@ -2101,6 +2101,73 @@ bool ScreenSDL::event(SDL_Event &event) {
 	return false;
 }
 
+void WindowInWindow::paintScrollBarThumb(Drawable &dscroll, vscrollbarlayout &vsl) const {
+    // black border
+    dscroll.setColor(vsl.disabled ? Color::Shadow3D : Color::Black);
+    dscroll.drawRect(vsl.xleft,vsl.ytop,vsl.thumbwidth-1,vsl.thumbheight-1);
+
+    dscroll.setColor(Color::Light3D);
+    dscroll.drawLine(vsl.xleft+1,vsl.ytop+1,vsl.xleft+1+vsl.thumbwidth-2-2,vsl.ytop+1);
+    dscroll.drawLine(vsl.xleft+1,vsl.ytop+1,vsl.xleft+1,                   vsl.ytop+1+vsl.thumbheight-2-2);
+
+    // Windows 3.1 renders the shadow two pixels wide
+    dscroll.setColor(Color::Shadow3D);
+    dscroll.drawLine(vsl.xleft+1,                   vsl.ytop+1+vsl.thumbheight-2-1,vsl.xleft+1+vsl.thumbwidth-2-1,vsl.ytop+1+vsl.thumbheight-2-1);
+    dscroll.drawLine(vsl.xleft+1+vsl.thumbwidth-2-1,vsl.ytop+1,                    vsl.xleft+1+vsl.thumbwidth-2-1,vsl.ytop+1+vsl.thumbheight-2-1);
+
+    dscroll.drawLine(vsl.xleft+2,                   vsl.ytop+1+vsl.thumbheight-2-2,vsl.xleft+1+vsl.thumbwidth-2-2,vsl.ytop+1+vsl.thumbheight-2-2);
+    dscroll.drawLine(vsl.xleft+1+vsl.thumbwidth-2-2,vsl.ytop+2,                    vsl.xleft+1+vsl.thumbwidth-2-2,vsl.ytop+1+vsl.thumbheight-2-2);
+}
+
+void WindowInWindow::paintScrollBarBackground(Drawable &dscroll,const vscrollbarlayout &vsl) const {
+    /* scroll bar border, background */
+    dscroll.setColor(vsl.disabled ? Color::Shadow3D : Color::Black);
+    dscroll.drawRect(0,0,vsl.scrollbarRegion.w-1,vsl.scrollbarRegion.h-1);
+
+    dscroll.setColor(Color::Background3D);
+    dscroll.fillRect(1,1,vsl.scrollbarRegion.w-2,vsl.scrollbarRegion.h-2);
+}
+
+void WindowInWindow::paintScrollBarThumbDragOutline(Drawable &dscroll,const vscrollbarlayout &vsl) const {
+    // Windows 3.1 also draws an inverted dotted rectangle around the thumb where it WOULD be
+    // before quantization to scroll position.
+    int x = 0;
+    int y = drag_y - ((vsl.thumbheight + 2) / 2);
+    if (y < 0) y = 0;
+    if (y > vsl.thumbtravel) y = vsl.thumbtravel;
+    dscroll.setColor(Color::Light3D);
+    dscroll.drawDotRect(x,y,vsl.thumbwidth-1,vsl.thumbheight-1);
+}
+
+void WindowInWindow::getVScrollInfo(vscrollbarlayout &vsl) const {
+    vsl.draw = vsl.drawthumb = vsl.disabled = false;
+    if (vscroll_display_width >= 4 && height >= 4) {
+        vsl.disabled = (scroll_pos_h == 0);
+
+        vsl.draw = true;
+        vsl.scrollbarRegion.x = width - vscroll_display_width;
+        vsl.scrollbarRegion.y = 0;
+        vsl.scrollbarRegion.w = vscroll_display_width;
+        vsl.scrollbarRegion.h = height;
+
+        /* the "thumb". make it fixed size, Windows 3.1 style.
+         * this code could adapt to the more range-aware visual style of Windows 95 later. */
+        vsl.thumbwidth = vsl.scrollbarRegion.w;
+        vsl.thumbheight = vsl.scrollbarRegion.w;
+        vsl.thumbtravel = vsl.scrollbarRegion.h - vsl.thumbheight;
+        if (vsl.thumbtravel < 0) vsl.thumbtravel = 0;
+        vsl.drawthumb = (vsl.thumbheight <= vsl.scrollbarRegion.h) && (!vsl.disabled) && (scroll_pos_h > 0);
+
+        if (vsl.drawthumb) {
+            vsl.ytop = (vsl.thumbtravel * scroll_pos_y) / scroll_pos_h;
+            vsl.xleft = 0;
+        }
+        else {
+            vsl.thumbwidth = vsl.thumbheight = vsl.thumbtravel = 0;
+        }
+    }
+}
+
 void WindowInWindow::paintAll(Drawable &d) const {
     int xadj = -scroll_pos_x;
     int yadj = -scroll_pos_y;
@@ -2135,58 +2202,17 @@ void WindowInWindow::paintAll(Drawable &d) const {
         dchild.drawLine(w,0,w,h);
     }
 
-    if (vscroll && vscroll_display_width >= 4) {
-        // TODO: Need a vertical scrollbar window object
+    if (vscroll) {
+        vscrollbarlayout vsl;
 
-        Drawable dscroll(d,width - vscroll_display_width,0,vscroll_display_width,height);
+        getVScrollInfo(vsl);
+        if (vsl.draw) {
+            Drawable dscroll(d,vsl.scrollbarRegion.x,vsl.scrollbarRegion.y,vsl.scrollbarRegion.w,vsl.scrollbarRegion.h);
 
-        bool disabled = (scroll_pos_h == 0);
-
-        /* scroll bar border, gray background */
-        dscroll.setColor(disabled ? Color::Shadow3D : Color::Black);
-        dscroll.drawRect(0,0,vscroll_display_width-1,height-1);
-
-        dscroll.setColor(Color::Background3D);
-        dscroll.fillRect(1,1,vscroll_display_width-2,height-2);
-
-        /* the "thumb". make it fixed size, Windows 3.1 style.
-         * this code could adapt to the more range-aware visual style of Windows 95 later. */
-        int thumbwidth = vscroll_display_width - 2;
-        int thumbheight = vscroll_display_width - 2;
-        int thumbtravel = height - 2 - thumbheight;
-        if (thumbtravel < 0) thumbtravel = 0;
-        int ytop = 1 + ((scroll_pos_h > 0) ?
-            ((thumbtravel * scroll_pos_y) / scroll_pos_h) :
-            0);
-
-        if (thumbheight <= (height + 2) && !disabled) {
-            int xleft = 1;
-            dscroll.setColor(Color::Light3D);
-            dscroll.drawLine(xleft,ytop,xleft+thumbwidth-1,ytop);
-            dscroll.drawLine(xleft,ytop,xleft,ytop+thumbheight-1);
-
-            // Windows 3.1 renders the shadow two pixels wide
-            dscroll.setColor(Color::Shadow3D);
-            dscroll.drawLine(xleft,ytop+thumbheight-1,xleft+thumbwidth-1,ytop+thumbheight-1);
-            dscroll.drawLine(xleft+thumbwidth-1,ytop,xleft+thumbwidth-1,ytop+thumbheight-1);
-
-            dscroll.drawLine(xleft+1,ytop+thumbheight-2,xleft+thumbwidth-2,ytop+thumbheight-2);
-            dscroll.drawLine(xleft+thumbwidth-2,ytop+1,xleft+thumbwidth-2,ytop+thumbheight-2);
-
-            // Windows 3.1 also draws a hard black line around the thumb that can coincide with the border
-            dscroll.setColor(Color::Black);
-            dscroll.drawLine(xleft,ytop-1,xleft+thumbwidth-1,ytop-1);
-            dscroll.drawLine(xleft,ytop+thumbheight,xleft+thumbwidth-1,ytop+thumbheight);
-
-            // Windows 3.1 also draws an inverted dotted rectangle around the thumb where it WOULD be
-            // before quantization to scroll position.
-            if (vscroll_dragging) {
-                xleft = 0;
-                ytop = drag_y - ((thumbheight + 2) / 2);
-                if (ytop < 0) ytop = 0;
-                if (ytop > thumbtravel) ytop = thumbtravel;
-                dscroll.setColor(Color::Light3D);
-                dscroll.drawDotRect(xleft,ytop,thumbwidth+1,thumbheight+1);
+            paintScrollBarBackground(dscroll,vsl);
+            if (vsl.drawthumb) {
+                paintScrollBarThumb(dscroll,vsl);
+                if (vscroll_dragging) paintScrollBarThumbDragOutline(dscroll,vsl);
             }
         }
     }

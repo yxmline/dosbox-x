@@ -778,6 +778,18 @@ public:
 
 };
 
+struct vscrollbarlayout {
+    SDL_Rect scrollbarRegion = {0,0,0,0};
+    int thumbwidth = 0;
+    int thumbheight = 0;
+    int thumbtravel = 0;
+    bool drawthumb = false;
+    bool disabled = true;
+    bool draw = false;
+    int xleft = -1;
+    int ytop = -1;
+};
+
 /* Window wrapper to make scrollable regions */
 class WindowInWindow : public Window {
 protected:
@@ -804,6 +816,10 @@ public:
 	/// Key was pressed. Returns true if event was handled.
 	virtual bool keyDown(const Key &key);
 
+	virtual void getVScrollInfo(vscrollbarlayout &vsl) const;
+	virtual void paintScrollBarThumbDragOutline(Drawable &dscroll,const vscrollbarlayout &vsl) const;
+	virtual void paintScrollBarBackground(Drawable &dscroll,const vscrollbarlayout &vsl) const;
+	virtual void paintScrollBarThumb(Drawable &dscroll, vscrollbarlayout &vsl) const;
 	virtual void paintAll(Drawable &d) const;
 
 	virtual void resize(int w, int h);
