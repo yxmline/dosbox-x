@@ -819,6 +819,8 @@ static void INT10_Seg40Init(void) {
 		real_writeb(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,0x60);
 		real_writeb(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT,16);
 		real_writeb(BIOSMEM_SEG,BIOSMEM_SWITCHES,0xF9);
+		// Set the pointer to video save pointer table
+		real_writed(BIOSMEM_SEG, BIOSMEM_VS_POINTER, int10.rom.video_save_pointers);
 	}
 	else {
 		real_writeb(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,0x00);
@@ -833,11 +835,11 @@ static void INT10_Seg40Init(void) {
 		real_writeb(BIOSMEM_SEG,BIOSMEM_MODESET_CTL,0x10|(DISP2_Active()?0:1));
     else
 #endif
+	if (IS_EGAVGA_ARCH) {
 		real_writeb(BIOSMEM_SEG,BIOSMEM_MODESET_CTL,0x51); // why is display switching enabled (bit 6) ?
-	// Set the  default MSR
+	}
+	// Set the default MSR
 	real_writeb(BIOSMEM_SEG,BIOSMEM_CURRENT_MSR,0x09);
-	// Set the pointer to video save pointer table
-	real_writed(BIOSMEM_SEG, BIOSMEM_VS_POINTER, int10.rom.video_save_pointers);
 }
 
 static void INT10_InitVGA(void) {
@@ -1166,6 +1168,7 @@ void INT10_Startup(Section *sec) {
 	int16_unmask_irq1_on_read = static_cast<Section_prop *>(control->GetSection("dosbox"))->Get_bool("unmask keyboard on int 16 read");
 	int16_ah_01_cf_undoc = static_cast<Section_prop *>(control->GetSection("dosbox"))->Get_bool("int16 keyboard polling undocumented cf behavior");
 	int10_vga_bios_vector = video_section->Get_bool("int 10h points at vga bios");
+	int size_override = video_section->Get_int("vga bios size override");
 
     if (!IS_PC98_ARCH) {
         if (!VGA_BIOS_use_rom) {
@@ -1181,7 +1184,7 @@ void INT10_Startup(Section *sec) {
             INT10_SetupBasicVideoParameterTable();
 
             LOG(LOG_MISC,LOG_DEBUG)("INT 10: VGA bios used %d / %d memory",(int)int10.rom.used,(int)VGA_BIOS_Size);
-            if (int10.rom.used > VGA_BIOS_Size) /* <- this is fatal, it means the Setup() functions scrozzled over the adjacent ROM or RAM area */
+            if (int10.rom.used > VGA_BIOS_Size && size_override > -512) /* <- this is fatal, it means the Setup() functions scrozzled over the adjacent ROM or RAM area */
                 E_Exit("VGA BIOS size too small %u > %u",(unsigned int)int10.rom.used,(unsigned int)VGA_BIOS_Size);
         }
 
