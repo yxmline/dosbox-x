@@ -5694,6 +5694,7 @@ unsigned char KEYBOARD_AUX_DevStatus();
 unsigned char KEYBOARD_AUX_Resolution();
 unsigned char KEYBOARD_AUX_SampleRate();
 void KEYBOARD_ClrBuffer(void);
+void KEYBOARD_AUX_LowerIRQ();
 
 static Bitu INT15_Handler(void) {
     if( ( machine==MCH_AMSTRAD ) && ( reg_ah<0x07 ) ) {
@@ -6005,6 +6006,7 @@ static Bitu INT15_Handler(void) {
                     KEYBOARD_AUX_Write(0xF6); /* set defaults */
                     Mouse_SetPS2State(false);
                     KEYBOARD_ClrBuffer();
+                    KEYBOARD_AUX_LowerIRQ(); /* HACK: Lower IRQ or else it will persist, which can cause problems with Windows 3.1 stock PS/2 mouse drivers */
                     CALLBACK_SCF(false);
                     reg_ah=0; // must return success. Fall through was well intended but, no, causes an error code that confuses mouse drivers
                     break;
@@ -6045,7 +6047,7 @@ static Bitu INT15_Handler(void) {
                 case 0x02: {        // set sampling rate
                     static const unsigned char tbl[7] = {10,20,40,60,80,100,200};
                     KEYBOARD_AUX_Write(0xF3);
-                    if (reg_bl > 6) reg_bl = 6;
+                    if (reg_bh > 6) reg_bh = 6;
                     KEYBOARD_AUX_Write(tbl[reg_bh]);
                     KEYBOARD_ClrBuffer();
                     CALLBACK_SCF(false);
@@ -6060,6 +6062,7 @@ static Bitu INT15_Handler(void) {
                     break;
                 case 0x04:      // get type
                     reg_bh=KEYBOARD_AUX_GetType();  // ID
+                    KEYBOARD_AUX_LowerIRQ(); /* HACK: Lower IRQ or else it will persist, which can cause problems with Windows 3.1 stock PS/2 mouse drivers */
                     LOG_MSG("INT 15h reporting mouse device ID 0x%02x\n",reg_bh);
                     KEYBOARD_ClrBuffer();
                     CALLBACK_SCF(false);
@@ -6074,6 +6077,7 @@ static Bitu INT15_Handler(void) {
                         reg_bx=KEYBOARD_AUX_DevStatus();
                         reg_cx=KEYBOARD_AUX_Resolution();
                         reg_dx=KEYBOARD_AUX_SampleRate();
+                        KEYBOARD_AUX_LowerIRQ(); /* HACK: Lower IRQ or else it will persist, which can cause problems with Windows 3.1 stock PS/2 mouse drivers */
                         KEYBOARD_ClrBuffer();
                         reg_ah=0;
                     }
