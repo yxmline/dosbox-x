@@ -3707,13 +3707,11 @@ static void LogXMS(void) {
     DEBUG_ShowMsg("Handle Status Location Size (bytes)");
     for (Bitu h = 1; h < XMS_GetTotalHandles(); h++) {
         if (XMS_GetHandleInfo(/*&*/phys_location,/*&*/size,/*&*/lockcount,/*&*/free, h)) {
-            if (!free || phys_location != 0 || size != 0) {
-                DEBUG_ShowMsg("%6lu %s 0x%08lx %lu",
-                        (unsigned long)h,
-                        free ? "FREE " : "ALLOC ",
-                        (unsigned long)phys_location,
-                        (unsigned long)size << 10UL); /* KB -> bytes */
-            }
+            DEBUG_ShowMsg("%6lu %s 0x%08lx %lu",
+                (unsigned long)h,
+                free ? "FREE " : "ALLOC ",
+                (unsigned long)phys_location,
+                (unsigned long)size << 10UL); /* KB -> bytes */
         }
     }
 
