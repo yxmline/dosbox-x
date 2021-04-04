@@ -179,7 +179,7 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <AdditionalOptions>$(SDL1AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /EHsc $(SDL1AdditionalOptions)</AdditionalOptions>
       <SDLCheck>
       </SDLCheck>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -216,7 +216,7 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <AdditionalOptions>$(SDL1AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /EHsc $(SDL1AdditionalOptions)</AdditionalOptions>
       <SDLCheck>
       </SDLCheck>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -319,7 +319,7 @@
       <PreprocessorDefinitions>_CRT_SECURE_NO_DEPRECATE;_WINDOWS;_WIN32_WINNT=0x0400;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <WarningLevel>Level3</WarningLevel>
-      <AdditionalOptions>$(SDL1AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /EHsc $(SDL1AdditionalOptions)</AdditionalOptions>
       <SDLCheck>
       </SDLCheck>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -353,7 +353,7 @@
       <PreprocessorDefinitions>_CRT_SECURE_NO_DEPRECATE;_WINDOWS;_WIN32_WINNT=0x0400;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <WarningLevel>Level3</WarningLevel>
-      <AdditionalOptions>$(SDL1AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /EHsc $(SDL1AdditionalOptions)</AdditionalOptions>
       <SDLCheck>
       </SDLCheck>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
