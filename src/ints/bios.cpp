@@ -1,4 +1,4 @@
-/*
+๏ปฟ/*
  *  Copyright (C) 2002-2021  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -3664,7 +3664,7 @@ static Bitu INT18_PC98_Handler(void) {
             }
             break;
         /* From this point on the INT 18h call list appears to wander off from the keyboard into CRT/GDC/display management. */
-        case 0x40: /* Start displaying the graphics screen (ใฐใฉใ•ใฃใใฏ็”ป้ขใฎ่กจ็คบ้–ๅง) */
+        case 0x40: /* Start displaying the graphics screen (รฃโ€ยฐรฃฦ’ยฉรฃฦ’โ€ขรฃโ€ยฃรฃฦ’ฦ’รฃโ€ยฏรงโ€ยปรฉยยขรฃยยฎรจยกยจรงยคยบรฉโ€“โ€นรฅยงโ€น) */
             pc98_gdc[GDC_SLAVE].force_fifo_complete();
             pc98_gdc[GDC_SLAVE].display_enable = true;
  
@@ -3673,7 +3673,7 @@ static Bitu INT18_PC98_Handler(void) {
                 mem_writeb(0x54C/*MEMB_PRXCRT*/,b | 0x80);
             }
             break;
-        case 0x41: /* Stop displaying the graphics screen (ใฐใฉใ•ใฃใใฏ็”ป้ขใฎ่กจ็คบ็ตไบ) */
+        case 0x41: /* Stop displaying the graphics screen (รฃโ€ยฐรฃฦ’ยฉรฃฦ’โ€ขรฃโ€ยฃรฃฦ’ฦ’รฃโ€ยฏรงโ€ยปรฉยยขรฃยยฎรจยกยจรงยคยบรงยตโ€รคยบโ€ ) */
             pc98_gdc[GDC_SLAVE].force_fifo_complete();
             pc98_gdc[GDC_SLAVE].display_enable = false;
 
@@ -3682,7 +3682,7 @@ static Bitu INT18_PC98_Handler(void) {
                 mem_writeb(0x54C/*MEMB_PRXCRT*/,b & (~0x80));
             }
             break;
-        case 0x42: /* Display area setup (่กจ็คบ้ ๅใฎ่จญๅฎ) */
+        case 0x42: /* Display area setup (รจยกยจรงยคยบรฉย หรฅลธลธรฃยยฎรจยจยญรฅยฎลก) */
             // HACK for Quarth: If the game has triggered vsync interrupt, wait for it.
             // Quarth's vsync interrupt will reprogram the display partitions back to what
             // it would have set for gameplay after this modeset and cause display problems
@@ -6947,12 +6947,12 @@ static void BIOS_Int10RightJustifiedPrint(const int x,int &y,const char *msg, bo
                 bo = (((unsigned int)y * 80u) + (unsigned int)(bios_pc98_posx++)) * 2u; /* NTS: note the post increment */
                 if (boxdraw) {
                     unsigned int ch = (unsigned char)*s;
-                    if (*s=='อ') ch = 0x250B;
-                    else if (*s=='บ') ch = 0x270B;
-                    else if (*s=='ษ') ch = 0x330B;
-                    else if (*s=='ป') ch = 0x370B;
-                    else if (*s=='ศ') ch = 0x3B0B;
-                    else if (*s=='ผ') ch = 0x3F0B;
+                    if (*s=='ร') ch = 0x250B;
+                    else if (*s=='ยบ') ch = 0x270B;
+                    else if (*s=='ร') ch = 0x330B;
+                    else if (*s=='ยป') ch = 0x370B;
+                    else if (*s=='ร') ch = 0x3B0B;
+                    else if (*s=='ยผ') ch = 0x3F0B;
                     mem_writew(0xA0000+bo,ch);
                 } else
                     mem_writew(0xA0000+bo,(unsigned char)*s);
@@ -6972,7 +6972,7 @@ static void BIOS_Int10RightJustifiedPrint(const int x,int &y,const char *msg, bo
 char *getSetupLine(const char *capt, const char *cont) {
     unsigned int pad1=25-strlen(capt), pad2=41-strlen(cont);
     static char line[90];
-    sprintf(line, "บ%*c%s%*c%s%*cบ", 12, ' ', capt, pad1, ' ', cont, pad2, ' ');
+    sprintf(line, "ยบ%*c%s%*c%s%*cยบ", 12, ' ', capt, pad1, ' ', cont, pad2, ' ');
     return line;
 }
 
@@ -7124,7 +7124,7 @@ void showBIOSSetup(const char* card, int x, int y) {
     char title[]="                               BIOS Setup Utility                               ";
     char *p=machine == MCH_PC98?title+2:title;
     BIOS_Int10RightJustifiedPrint(x,y,p);
-    BIOS_Int10RightJustifiedPrint(x,y,"ษออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออป", true);
+    BIOS_Int10RightJustifiedPrint(x,y,"รรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรยป", true);
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("", ""), true);
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("System date:", "0000-00-00"), true);
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("System time:", "00:00:00"), true);
@@ -7168,7 +7168,7 @@ void showBIOSSetup(const char* card, int x, int y) {
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("Video memory:", (std::to_string(vga.mem.memsize/1024)+"K").c_str()), true);
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("Total memory:", (std::to_string(MEM_TotalPages()*4096/1024)+"K").c_str()), true);
     BIOS_Int10RightJustifiedPrint(x,y,getSetupLine("", ""), true);
-    BIOS_Int10RightJustifiedPrint(x,y,"ศออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออผ", true);
+    BIOS_Int10RightJustifiedPrint(x,y,"รรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรยผ", true);
     if (machine == MCH_PC98)
         BIOS_Int10RightJustifiedPrint(x,y,"                                  ESC = Exit                                  ");
     else
