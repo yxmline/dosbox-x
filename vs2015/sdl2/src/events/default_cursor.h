@@ -1,4 +1,4 @@
-/*
+﻿/*
   Simple DirectMedia Layer
   Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
@@ -27,7 +27,7 @@
 #define DEFAULT_CHOTX   0
 #define DEFAULT_CHOTY   0
 
-/* Added a real MacOS cursor, at the request of Luc-Olivier de Charri�re */
+/* Added a real MacOS cursor, at the request of Luc-Olivier de Charrière */
 #define USE_MACOS_CURSOR
 
 #ifdef USE_MACOS_CURSOR
