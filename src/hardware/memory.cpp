@@ -543,9 +543,9 @@ PageHandler* lfb_memio_cb(MEM_CalloutObject &co,Bitu phys_page) {
     (void)co;//UNUSED
     if (memory.lfb.start_page == 0 || memory.lfb.pages == 0)
         return NULL;
-    if (phys_page >= memory.lfb.start_page || phys_page < memory.lfb.end_page)
+    if (phys_page >= memory.lfb.start_page && phys_page < memory.lfb.end_page)
         return memory.lfb.handler;
-    if (phys_page >= memory.lfb_mmio.start_page || phys_page < memory.lfb_mmio.end_page)
+    if (phys_page >= memory.lfb_mmio.start_page && phys_page < memory.lfb_mmio.end_page)
         return memory.lfb_mmio.handler;
 
     return NULL;
@@ -618,7 +618,7 @@ void MEM_SetLFB(Bitu page, Bitu pages, PageHandler *handler, PageHandler *mmioha
     memory.lfb_mmio.handler=mmiohandler;
     if (mmiohandler != NULL) {
         /* FIXME: Why is this hard-coded? There's more than just S3 emulation in this code's future! */
-        if (svgaCard == SVGA_S3Trio && (s3Card == S3_Trio64V || s3Card == S3_Vision868)) {
+        if (svgaCard == SVGA_S3Trio && (s3Card == S3_Trio64V || s3Card == S3_Vision868 || s3Card == S3_ViRGE)) {
             /* 64MB BAR. According to the datasheet, this 64MB region is split into two 32MB halves,
              * the lower half "little endian" and the upper half "big endian". Within the 32MB region,
              * the low 16MB is video memory and the high 16MB is MMIO. */
