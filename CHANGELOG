@@ -1,7 +1,10 @@
 0.83.13
+  - Added YUV (YUY2) overlay to S3 Trio64V+ card
+    emulation. Tested with XingMPEG under Windows 3.1
+    and ActiveMovie under Windows 98.
   - Added machine types for 5 different variations of
     S3 chipset: Vision864, Vision868, Trio32, Trio64,
-    and (experimental) Trio64V+ and ViRGE.
+    and (experimental) Trio64V+, ViRGE and ViRGE/VX.
   - Removed second PCI BAR for S3 MMIO register space.
     S3 datasheets do not show a second BAR. Windows 95
     is perfectly happy without it.
@@ -17,6 +20,10 @@
     that failed to map RAM as expected, and because of
     that, easily triggered a "corrupt MCB chain" error
     message.
+  - Worked around the mounting issue for disk or CD
+    image files with LaunchBox, by allowing a mounting
+    command-line with single quotes like IMGMOUNT D
+    'X:\FILES\DOS.IMG' on Windows systems. (Wengier)
   - Restored Pentium MMX emulation code for the dynamic
     x86 core to that of version 0.83.11 for better
     compatibility with some Windows 9x games. (Wengier)
