@@ -1,10 +1,21 @@
 0.83.13
+  - Fixed Tseng ET4000 640x480 256-color SVGA mode
+    when using the ET4000.BIN VGA BIOS, or Windows 98.
+  - Added segment limit checks in Normal core for
+    MOVSB/MOVSW/MOVSD and STOSB/STOSW/STOSD, which is
+    needed for DOSBox-X to work with the Windows 3.1
+    S3 86C928 display drivers that use segment limit
+    exceptions to fake a linear framebuffer.
+  - Added S3 XGA "byte swap" emulation, needed for
+    correct menu/titlebar display in Windows 3.1 when
+    using the S3 86C928 driver.
   - Added YUV (YUY2) overlay to S3 Trio64V+ card
     emulation. Tested with XingMPEG under Windows 3.1
     and ActiveMovie under Windows 98.
   - Added machine types for 5 different variations of
     S3 chipset: Vision864, Vision868, Trio32, Trio64,
-    and (experimental) Trio64V+, ViRGE and ViRGE/VX.
+    and (experimental) Trio64V+, ViRGE, ViRGE/VX, and
+    S3 86C928.
   - Removed second PCI BAR for S3 MMIO register space.
     S3 datasheets do not show a second BAR. Windows 95
     is perfectly happy without it.

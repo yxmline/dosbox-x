@@ -401,18 +401,27 @@ static Bitu Normal_Loop(void) {
         dosbox_allow_nonrecursive_page_fault = false;
         CPU_Exception(EXCEPTION_PF, pf.faultcode);
         dosbox_allow_nonrecursive_page_fault = saved_allow;
-    }
-    catch (int x) {
-        dosbox_allow_nonrecursive_page_fault = saved_allow;
-        if (x == 4/*CMOS shutdown*/) {
-            ret = 0;
+	}
+	catch (const GuestGenFaultException& gpf) {
+		Bitu FillFlags(void);
+
+		ret = 0;
+		FillFlags();
+		dosbox_allow_nonrecursive_page_fault = false;
+		CPU_Exception(EXCEPTION_GP, 0);
+		dosbox_allow_nonrecursive_page_fault = saved_allow;
+	}
+	catch (int x) {
+		dosbox_allow_nonrecursive_page_fault = saved_allow;
+		if (x == 4/*CMOS shutdown*/) {
+			ret = 0;
 //          LOG_MSG("CMOS shutdown reset acknowledged");
-        }
-        else {
-            throw;
-        }
-    }
-    return 0;
+		}
+		else {
+			throw;
+		}
+	}
+	return 0;
 }
 
 void increaseticks() { //Make it return ticksRemain and set it in the function above to remove the global variable.
@@ -992,6 +1001,7 @@ void DOSBOX_RealInit() {
     else if (mtype == "mda")           { machine = MCH_MDA; }
     else if (mtype == "ega")           { machine = MCH_EGA; }
     else if (mtype == "svga_s3")       { svgaCard = SVGA_S3Trio; s3Card = S3_Trio64; } /* DOSBox SVN behavior */
+    else if (mtype == "svga_s386c928") { svgaCard = SVGA_S3Trio; s3Card = S3_86C928; }
     else if (mtype == "svga_s3vision864"){svgaCard= SVGA_S3Trio; s3Card = S3_Vision864; }
     else if (mtype == "svga_s3vision868"){svgaCard= SVGA_S3Trio; s3Card = S3_Vision868; }
     else if (mtype == "svga_s3trio32") { svgaCard = SVGA_S3Trio; s3Card = S3_Trio32; }
@@ -1176,7 +1186,7 @@ void DOSBOX_SetupConfigSections(void) {
     /* Setup all the different modules making up DOSBox-X */
     const char* machines[] = {
         "hercules", "cga", "cga_mono", "cga_rgb", "cga_composite", "cga_composite2", "tandy", "pcjr", "ega",
-        "vgaonly", "svga_s3", "svga_s3vision864", "svga_s3vision868", "svga_s3trio32", "svga_s3trio64", "svga_s3trio64v+", "svga_s3virge", "svga_s3virgevx", "svga_et3000", "svga_et4000",
+        "vgaonly", "svga_s3", "svga_s386c928", "svga_s3vision864", "svga_s3vision868", "svga_s3trio32", "svga_s3trio64", "svga_s3trio64v+", "svga_s3virge", "svga_s3virgevx", "svga_et3000", "svga_et4000",
         "svga_paradise", "vesa_nolfb", "vesa_oldvbe", "amstrad", "pc98", "pc9801", "pc9821",
 
         "fm_towns", // STUB

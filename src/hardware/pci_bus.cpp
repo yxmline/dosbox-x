@@ -132,6 +132,8 @@ private:
 public:
 	static uint16_t GetDevice(void) {
 		switch (s3Card) {
+			case S3_86C928:
+				return 0x88B0; // FIXME: Datasheet does not list PCI info at all. @TC1995 suggests the PCI version return 0xb0 for CR30, so this is probably the same here.
 			case S3_Vision864:
 				return 0x88C0; // Vision864, 0x88C0 or 0x88C1
 			case S3_Vision868:
@@ -178,6 +180,7 @@ public:
 		host_writew(config_writemask+0x04,0x0023);	/* allow changing mem/io enable and VGA palette snoop */
 
 		switch (s3Card) {
+			case S3_86C928:
 			case S3_Vision864:
 			case S3_Trio32:
 			case S3_Trio64:
