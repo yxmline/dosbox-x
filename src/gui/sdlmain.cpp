@@ -8995,6 +8995,7 @@ bool DOSBOX_parse_argv() {
             if (!control->cmdline->NextOptArgv(custom_savedir)) return false;
         }
         else if (optname == "defaultdir") {
+            control->opt_used_defaultdir = true;
             if (control->cmdline->NextOptArgv(tmp)) {
                 struct stat st;
                 if (stat(tmp.c_str(), &st) == 0 && st.st_mode & S_IFDIR)
@@ -11517,6 +11518,69 @@ bool custom_bios = false;
 #define SDL_MAIN_NOEXCEPT
 #endif
 
+#if defined(WIN32) && !defined(HX_DOS)
+std::wstring win32_prompt_folder(void) {
+# if !defined(__MINGW32__) /* MinGW does not have these headers */
+    IFileDialog* ifd; /* Windows Vista file/folder picker interface COM object (shobjidl_core.h) */
+# endif
+    OPENFILENAMEW of;
+    std::wstring res;
+    WCHAR tmp[1024];
+
+# if !defined(__MINGW32__) /* MinGW does not have these headers */
+    /* Try the new picker first (Windows Vista or higher) which makes it possible to pick a folder */
+    if(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_IFileDialog, (void**)(&ifd)) == S_OK) {
+        HRESULT hr;
+
+        ifd->SetOptions(FOS_PICKFOLDERS|FOS_FORCEFILESYSTEM|FOS_PATHMUSTEXIST|FOS_DONTADDTORECENT);
+        ifd->SetTitle(L"Select folder where to run emulation, which will become DOSBox-X's working directory");
+        ifd->SetOkButtonLabel(L"Choose");
+        hr = ifd->Show(NULL);
+        if(hr == S_OK) {
+            IShellItem* sh = NULL;
+            if(ifd->GetFolder(&sh) == S_OK) {
+                LPWSTR str = NULL;
+
+                if(sh->GetDisplayName(SIGDN_FILESYSPATH, &str) == S_OK) {
+                    res = str;
+                    CoTaskMemFree(str);
+                }
+
+                sh->Release();
+            }
+
+            ifd->Release();
+            return res;
+        }
+        else if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED)) {
+            /* the user clicked cancel, sorry */
+            ifd->Release();
+            return std::wstring();
+        }
+        ifd->Release();
+        /* didn't work, try the other method below for Windows XP and below */
+    }
+# endif
+
+    tmp[0] = 0;
+    memset(&of, 0, sizeof(of));
+    of.lStructSize = sizeof(of);
+    of.lpstrFile = tmp;
+    of.nMaxFile = sizeof(tmp) / sizeof(tmp[0]); // Size in CHARACTERS not bytes
+    of.lpstrTitle = L"Select folder where to run emulation, which will become DOSBox-X's working directory";
+    of.Flags = OFN_LONGNAMES | OFN_NOCHANGEDIR | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+    of.lpstrFilter = L"DOSBox configuration file\0" L"dosbox.conf;dosbox-x.conf\0";
+    if (GetOpenFileNameW(&of)) {
+        if (of.nFileOffset >= sizeof(tmp)) return std::wstring();
+        while (of.nFileOffset > 0 && tmp[of.nFileOffset - 1] == '/' || tmp[of.nFileOffset - 1] == '\\') of.nFileOffset--;
+        if (of.nFileOffset == 0) return std::wstring();
+        res = std::wstring(tmp, (size_t)of.nFileOffset);
+    }
+
+    return res;
+}
+#endif
+
 #if defined(MACOSX)
 std::string osx_prompt_folder(void);
 #endif
@@ -11669,8 +11733,33 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         char cwd[512] = {0};
         getcwd(cwd,sizeof(cwd)-1);
 
+        /* default do not prompt if -conf is used, or if -userconf is used, */
+        if (control->opt_promptfolder < 0 && (!control->config_file_list.empty() || control->opt_userconf || control->opt_used_defaultdir)) {
+            control->opt_promptfolder = 0;
+        }
+
+#if !defined(MACOSX)
+        if(control->opt_promptfolder < 0) {
+            struct stat st;
+
+            /* if dosbox.conf or dosbox-x.conf already exists in the current working directory, then skip folder prompt */
+            if(stat("dosbox-x.conf", &st) == 0 || stat("dosbox.conf", &st) == 0) {
+                if(S_ISREG(st.st_mode)) {
+                    control->opt_promptfolder = 0;
+                }
+            }
+        }
+#endif
+
+#if defined(WIN32)
+        /* A Windows application cannot detect with isatty() if run from the command prompt.
+        *  isatty() returns true even though STDIN/STDOUT/STDERR do not exist even if run from the command prompt. */
+        if (control->opt_promptfolder < 0)
+            control->opt_promptfolder = 1;
+#else
         if (control->opt_promptfolder < 0)
             control->opt_promptfolder = (!isatty(0) || !strcmp(cwd,"/")) ? 1 : 0;
+#endif
 
         /* When we're run from the Finder, the current working directory is often / (the
            root filesystem) and there is no terminal. What to run, what directory to run
@@ -11698,6 +11787,12 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                 fprintf(stderr,"No path chosen by user, exiting\n");
                 return 1;
             }
+#elif defined(WIN32) && !defined(HX_DOS)
+            std::wstring path = win32_prompt_folder();
+            if(path.empty()) {
+                fprintf(stderr, "No path chosen by user, exiting\n");
+                return 1;
+            }
 #else
             char *cpath = tinyfd_selectFolderDialog("Select folder where to run emulation, which will become the DOSBox-X working directory:",NULL);
             std::string path = (cpath != NULL) ? cpath : "";
@@ -11713,6 +11808,15 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             SDL_QuitSubSystem(SDL_INIT_VIDEO);
 #endif
 
+#if defined(WIN32) && !defined(HX_DOS)
+            if(!path.empty()) {
+                /* our stat override makes wstat impossible */
+                if(_wchdir(path.c_str())) {
+                    MessageBoxW(NULL, path.c_str(), L"Failed to chdir() to path\n", MB_OK);
+                    return 1;
+                }
+            }
+#else
             if (!path.empty()) {
                 struct stat st;
                 if (stat(path.c_str(),&st)) {
@@ -11730,6 +11834,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 
                 fprintf(stderr,"User selected folder '%s', making that the current working directory.\n",path.c_str());
             }
+#endif
         }
     }
 #endif
