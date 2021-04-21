@@ -1162,7 +1162,7 @@ void DOSBOX_SetupConfigSections(void) {
     const char* irqssb[] = { "7", "5", "3", "9", "10", "11", "12", 0 };
     const char* dmasgus[] = { "3", "0", "1", "5", "6", "7", 0 };
     const char* dmassb[] = { "1", "5", "0", "3", "6", "7", 0 };
-    const char* oplemus[] = { "default", "compat", "fast", "nuked", "mame", "opl2board","opl3duoboard" ,0 };
+    const char* oplemus[] = { "default", "compat", "fast", "nuked", "mame", "opl2board", "opl3duoboard", "retrowave_opl3", 0 };
     const char *qualityno[] = { "0", "1", "2", "3", 0 };
     const char* tandys[] = { "auto", "on", "off", 0};
     const char* ps1opt[] = { "on", "off", 0};
@@ -1196,7 +1196,7 @@ void DOSBOX_SetupConfigSections(void) {
         0 };
 
     const char* workdiropts[] = {
-        "config", "custom", "default", "force", "noprompt", "program", "prompt",
+        "autoprompt", "config", "custom", "default", "force", "noprompt", "program", "prompt",
         0 };
 
     const char* switchoutputs[] = {
@@ -1288,9 +1288,10 @@ void DOSBOX_SetupConfigSections(void) {
     Pstring = secprop->Add_string("working directory option",Property::Changeable::OnlyAtStart,"default");
     Pstring->Set_values(workdiropts);
     Pstring->Set_help("Select an option for DOSBox-X's working directory when it runs.\n"
+            "autoprompt: DOSBox-X will auto-decide whether to prompt for a working directory.\n"
             "config: DOSBox-X will use the primary config file directory as the working directory.\n"
             "custom: Specify a working directory via the \"working directory default\" option.\n"
-            "default: DOSBox-X will decide whether to prompt for a working directory.\n"
+            "default: Similar to autoprompt, but DOSBox-X will ask whether to save the selected folder.\n"
             "force: Similar to \"custom\", while overriding -defaultdir command-line option if used.\n"
             "noprompt: DOSBox-X uses the current directory and never prompts for a working directory.\n"
             "program: DOSBox-X will use the DOSBox-X program directory as the working directory.\n"
@@ -2964,6 +2965,18 @@ void DOSBOX_SetupConfigSections(void) {
 
     Pstring = secprop->Add_string("oplport", Property::Changeable::WhenIdle, "");
 	Pstring->Set_help("Serial port of the OPL2 Audio Board when oplemu=opl2board, opl2mode will become 'opl2' automatically.");
+    Pstring->SetBasic(true);
+
+    Pstring = secprop->Add_string("retrowave_bus", Property::Changeable::WhenIdle, "serial");
+    Pstring->Set_help("Bus of the Retrowave series board (serial/spi). SPI is only supported on Linux.");
+    Pstring->SetBasic(true);
+
+    Pstring = secprop->Add_string("retrowave_spi_cs", Property::Changeable::WhenIdle, "0,6");
+    Pstring->Set_help("SPI chip select pin of the Retrowave series board. Only supported on Linux.");
+    Pstring->SetBasic(true);
+
+    Pstring = secprop->Add_string("retrowave_port", Property::Changeable::WhenIdle, "");
+    Pstring->Set_help("Serial port of the Retrowave series board.");
     Pstring->SetBasic(true);
 
     Phex = secprop->Add_hex("hardwarebase",Property::Changeable::WhenIdle,0x220);
