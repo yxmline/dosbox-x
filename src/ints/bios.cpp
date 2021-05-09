@@ -6970,7 +6970,7 @@ static void BIOS_Int10RightJustifiedPrint(const int x,int &y,const char *msg, bo
 }
 
 char *getSetupLine(const char *capt, const char *cont) {
-    unsigned int pad1=25-strlen(capt), pad2=41-strlen(cont);
+    unsigned int pad1=(unsigned int)(25-strlen(capt)), pad2=(unsigned int)(41-strlen(cont));
     static char line[90];
     sprintf(line, "º%*c%s%*c%s%*cº", 12, ' ', capt, pad1, ' ', cont, pad2, ' ');
     return line;
