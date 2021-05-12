@@ -53,10 +53,12 @@ extern bool log_int21, log_fileio;
 extern bool sync_time, manualtime;
 extern int lfn_filefind_handle;
 extern int autofixwarn;
+extern uint8_t lead[6];
 unsigned long totalc, freec;
 uint16_t countryNo = 0;
 Bitu INT29_HANDLER(void);
 uint32_t BIOS_get_PC98_INT_STUB(void);
+bool isDBCSCP(), isDBCSLB(uint8_t chr, uint8_t* lead);
 
 int ascii_toupper(int c) {
     if (c >= 'a' && c <= 'z')
@@ -73,9 +75,15 @@ bool shiftjis_lead_byte(int c) {
     return false;
 }
 
-char * shiftjis_upcase(char * str) {
+char * DBCS_upcase(char * str) {
+    for (int i=0; i<6; i++) lead[i] = 0;
+    if (isDBCSCP())
+        for (int i=0; i<6; i++) {
+            lead[i] = mem_readb(Real2Phys(dos.tables.dbcs)+i);
+            if (lead[i] == 0) break;
+        }
     for (char* idx = str; *idx ; ) {
-        if (shiftjis_lead_byte(*idx)) {
+        if ((IS_PC98_ARCH && shiftjis_lead_byte(*idx)) || (isDBCSCP() && isDBCSLB(*idx, lead))) {
             /* Shift-JIS is NOT ASCII and should not be converted to uppercase like ASCII.
              * The trailing byte can be mistaken for ASCII */
             idx++;
@@ -1619,7 +1627,7 @@ static Bitu DOS_21Handler(void) {
                     MEM_BlockWrite(SegPhys(ds)+reg_dx,dos_copybuf,toread);
                     reg_ax=toread;
 #if defined(USE_TTF)
-                    if (ttf.inUse && reg_bx == WPvga512CHMhandle)
+                    if (ttf.inUse && reg_bx == WPvga512CHMhandle){
                         if (toread == 26 || toread == 2) {
                             if (toread == 2)
                                 WP5chars = *(uint16_t*)dos_copybuf;
@@ -1636,6 +1644,7 @@ static Bitu DOS_21Handler(void) {
                             WPvga512CHMhandle = -1;
                             WPvga512CHMcheck = false;
                         }
+                    }
 #endif
                     CALLBACK_SCF(false);
                 }
@@ -2511,7 +2520,7 @@ static Bitu DOS_21Handler(void) {
 					info->available_allocation_units = freec?freec:free_clusters;
 					info->total_allocation_units = totalc?totalc:total_clusters;
 					MEM_BlockWrite(SegPhys(es)+reg_di,info,sizeof(ext_space_info_t));
-					delete(info);
+					delete info;
 					reg_ax=0;
 					CALLBACK_SCF(false);
 				}

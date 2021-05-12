@@ -480,6 +480,88 @@ std::string GetNewStr(const char *str) {
     return newstr;
 }
 
+void MenuBrowseCDImage(char drive, int num) {
+	if(control->SecureMode()) {
+#if !defined(HX_DOS)
+        tinyfd_messageBox("Error",MSG_Get("PROGRAM_CONFIG_SECURE_DISALLOW"),"ok","error", 1);
+#endif
+		return;
+	}
+
+    if (Drives[drive-'A']&&!strncmp(Drives[drive-'A']->GetInfo(), "isoDrive ", 9)) {
+#if !defined(HX_DOS)
+        std::string drive_warn = "CD drive "+(dos_kernel_disabled?std::to_string(num):std::string(1, drive)+":")+" is currently mounted with the image:\n"+std::string(Drives[drive-'A']->GetInfo()+9)+"\n\nDo you want to change the CD image now?";
+        if (!tinyfd_messageBox("Change CD image",drive_warn.c_str(),"yesno","question", 1)) return;
+#endif
+    } else
+        return;
+#if !defined(HX_DOS)
+    char CurrentDir[512];
+    char * Temp_CurrentDir = CurrentDir;
+    getcwd(Temp_CurrentDir, 512);
+    char const * lTheOpenFileName;
+    std::string files="", fname="";
+    const char *lFilterPatterns[] = {"*.iso","*.cue","*.bin","*.chd","*.mdf","*.gog","*.ins","*.ISO","*.CUE","*.BIN","*.CHD","*.MDF","*.GOG","*.INS"};
+    const char *lFilterDescription = "CD image files (*.iso, *.cue, *.bin, *.chd, *.mdf, *.gog, *.ins)";
+    lTheOpenFileName = tinyfd_openFileDialog("Select a CD image file","",14,lFilterPatterns,lFilterDescription,0);
+
+    if (lTheOpenFileName) {
+        uint8_t mediaid = 0xF8;
+        int error = -1;
+        qmount = true;
+        DOS_Drive* newDrive = new isoDrive(drive, lTheOpenFileName, mediaid, error);
+        qmount = false;
+        if (error) {
+            tinyfd_messageBox("Error","Could not mount the selected CD image.","ok","error", 1);
+            return;
+        }
+        DriveManager::ChangeDisk(drive-'A', newDrive);
+	}
+	chdir( Temp_CurrentDir );
+#endif
+}
+
+void MenuBrowseFDImage(char drive, int num, int type) {
+	if(control->SecureMode()) {
+#if !defined(HX_DOS)
+        tinyfd_messageBox("Error",MSG_Get("PROGRAM_CONFIG_SECURE_DISALLOW"),"ok","error", 1);
+#endif
+		return;
+	}
+
+    if (Drives[drive-'A']&&!strncmp(Drives[drive-'A']->GetInfo(), "fatDrive ", 9)) {
+#if !defined(HX_DOS)
+        std::string image = type==1?"El Torito floppy image":(type==2?"RAM floppy image":Drives[drive-'A']->GetInfo()+9);
+        std::string drive_warn = "Floppy drive "+(dos_kernel_disabled?std::to_string(num):std::string(1, drive)+":")+" is currently mounted with the image:\n"+image+"\n\nDo you want to change the floppy disk image now?";
+        if (!tinyfd_messageBox("Change floppy disk image",drive_warn.c_str(),"yesno","question", 1)) return;
+#endif
+    } else
+        return;
+#if !defined(HX_DOS)
+    char CurrentDir[512];
+    char * Temp_CurrentDir = CurrentDir;
+    getcwd(Temp_CurrentDir, 512);
+    char const * lTheOpenFileName;
+    std::string files="", fname="";
+    const char *lFilterPatterns[] = {"*.ima","*.img","*.IMA","*.IMG"};
+    const char *lFilterDescription = "Floppy image files (*.ima, *.img)";
+    lTheOpenFileName = tinyfd_openFileDialog("Select a floppy image file","",4,lFilterPatterns,lFilterDescription,0);
+
+    if (lTheOpenFileName) {
+        uint8_t mediaid = 0xF0;
+        std::vector<std::string> options;
+        if (mountiro[drive-'A']) options.push_back("readonly");
+        fatDrive *newDrive = new fatDrive(lTheOpenFileName, 0, 0, 0, 0, options);
+        if (!newDrive->created_successfully) {
+            tinyfd_messageBox("Error","Could not mount the selected floppy disk image.","ok","error", 1);
+            return;
+        }
+        DriveManager::ChangeDisk(drive-'A', newDrive);
+	}
+	chdir( Temp_CurrentDir );
+#endif
+}
+
 void MenuBrowseImageFile(char drive, bool arc, bool boot, bool multiple) {
 	std::string str(1, drive);
 	std::string drive_warn;
@@ -3278,7 +3360,6 @@ restart_int:
                     break;
                 default:
                     abort();
-                    break;
             }
 
             /* FAT32 increases reserved area to at least 7. Microsoft likes to use 32 */
@@ -3387,7 +3468,7 @@ restart_int:
                         case 12:    tmp_fatlimit = ((((vol_sectors / 20u) * (512u / fat_copies)) / 3u) * 2u) + 2u; break;
                         case 16:    tmp_fatlimit =  (((vol_sectors / 20u) * (512u / fat_copies)) / 2u)       + 2u; break;
                         case 32:    tmp_fatlimit =  (((vol_sectors / 20u) * (512u / fat_copies)) / 4u)       + 2u; break;
-                        default:    abort(); break;
+                        default:    abort();
                     }
 
                     while ((vol_sectors/sectors_per_cluster) >= (tmp_fatlimit - 2u) && sectors_per_cluster < 0x80u) sectors_per_cluster <<= 1;
@@ -7101,7 +7182,6 @@ public:
             }
             return;
         }
-        return;
     }
     void printHelp()
     {

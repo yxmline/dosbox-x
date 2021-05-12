@@ -87,6 +87,9 @@
 #include "cp872_uni.h"
 #include "cp874_uni.h"
 #include "cp932_uni.h"
+#include "cp936_uni.h"
+#include "cp949_uni.h"
+#include "cp950_uni.h"
 
 #if defined(PATH_MAX) && !defined(MAX_PATH)
 #define MAX_PATH PATH_MAX
@@ -125,7 +128,7 @@ static host_cnv_char_t cpcnv_temp[4096];
 static host_cnv_char_t cpcnv_ltemp[4096];
 static uint16_t ldid[256];
 static std::string ldir[256];
-extern bool rsize, force_sfn, enable_share_exe;
+extern bool rsize, force_sfn, enable_share_exe, isDBCSCP();
 extern int lfn_filefind_handle, freesizecap, file_access_tries;
 extern unsigned long totalc, freec;
 
@@ -193,13 +196,13 @@ template <class MT> bool String_SBCS_TO_HOST(host_cnv_char_t *d/*CROSS_LEN*/,con
 }
 
 /* needed for Wengier's TTF output and PC-98 mode */
-template <class MT> bool String_DBCS_TO_HOST_SHIFTJIS_uint16(uint16_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/,const MT *hitbl,const MT *rawtbl,const size_t rawtbl_max) {
+template <class MT> bool String_DBCS_TO_HOST_CJK_uint16(uint16_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/,const MT *hitbl,const MT *rawtbl,const size_t rawtbl_max) {
     const uint16_t* df = d + CROSS_LEN - 1;
 	const char *sf = s + CROSS_LEN - 1;
 
     while (*s != 0 && s < sf) {
         uint16_t ic = (unsigned char)(*s++);
-        if ((ic & 0xE0) == 0x80 || (ic & 0xE0) == 0xE0) {
+        if ((dos.loaded_codepage==932 &&((ic & 0xE0) == 0x80 || (ic & 0xE0) == 0xE0)) || ((dos.loaded_codepage==936 || dos.loaded_codepage==949 || dos.loaded_codepage==950) && (ic & 0x80) == 0x80)) {
             if (*s == 0) return false;
             ic <<= 8U;
             ic += (unsigned char)(*s++);
@@ -223,13 +226,13 @@ template <class MT> bool String_DBCS_TO_HOST_SHIFTJIS_uint16(uint16_t *d/*CROSS_
     return true;
 }
 
-template <class MT> bool String_DBCS_TO_HOST_SHIFTJIS(host_cnv_char_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/,const MT *hitbl,const MT *rawtbl,const size_t rawtbl_max) {
+template <class MT> bool String_DBCS_TO_HOST_CJK(host_cnv_char_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/,const MT *hitbl,const MT *rawtbl,const size_t rawtbl_max) {
     const host_cnv_char_t* df = d + CROSS_LEN - 1;
 	const char *sf = s + CROSS_LEN - 1;
 
     while (*s != 0 && s < sf) {
         uint16_t ic = (unsigned char)(*s++);
-        if ((ic & 0xE0) == 0x80 || (ic & 0xE0) == 0xE0) {
+        if ((dos.loaded_codepage==932 &&((ic & 0xE0) == 0x80 || (ic & 0xE0) == 0xE0)) || ((dos.loaded_codepage==936 || dos.loaded_codepage==949 || dos.loaded_codepage==950) && (ic & 0x80) == 0x80)) {
             if (*s == 0) return false;
             ic <<= 8U;
             ic += (unsigned char)(*s++);
@@ -269,7 +272,7 @@ template <class MT> int SBCS_From_Host_Find(int c,const MT *map,const size_t map
 }
 
 // TODO: This is SLOW. Optimize.
-template <class MT> int DBCS_SHIFTJIS_From_Host_Find(int c,const MT *hitbl,const MT *rawtbl,const size_t rawtbl_max) {
+template <class MT> int DBCS_CJK_From_Host_Find(int c,const MT *hitbl,const MT *rawtbl,const size_t rawtbl_max) {
     for (size_t h=0;h < 1024;h++) {
         MT ofs = hitbl[h];
 
@@ -285,7 +288,7 @@ template <class MT> int DBCS_SHIFTJIS_From_Host_Find(int c,const MT *hitbl,const
     return -1;
 }
 
-template <class MT> bool String_HOST_TO_DBCS_SHIFTJIS(char *d/*CROSS_LEN*/,const host_cnv_char_t *s/*CROSS_LEN*/,const MT *hitbl,const MT *rawtbl,const size_t rawtbl_max) {
+template <class MT> bool String_HOST_TO_DBCS_CJK(char *d/*CROSS_LEN*/,const host_cnv_char_t *s/*CROSS_LEN*/,const MT *hitbl,const MT *rawtbl,const size_t rawtbl_max) {
     const host_cnv_char_t *sf = s + CROSS_LEN - 1;
     const char* df = d + CROSS_LEN - 1;
 
@@ -298,7 +301,7 @@ template <class MT> bool String_HOST_TO_DBCS_SHIFTJIS(char *d/*CROSS_LEN*/,const
             return false; // non-representable
 #endif
 
-        int oc = DBCS_SHIFTJIS_From_Host_Find<MT>(ic,hitbl,rawtbl,rawtbl_max);
+        int oc = DBCS_CJK_From_Host_Find<MT>(ic,hitbl,rawtbl,rawtbl_max);
         if (oc < 0)
             return false; // non-representable
 
@@ -413,7 +416,13 @@ bool CodePageHostToGuest(char *d/*CROSS_LEN*/,const host_cnv_char_t *s/*CROSS_LE
         case 874:
             return String_HOST_TO_SBCS<uint16_t>(d,s,cp874_to_unicode,sizeof(cp874_to_unicode)/sizeof(cp874_to_unicode[0]));
         case 932:
-            return String_HOST_TO_DBCS_SHIFTJIS<uint16_t>(d,s,cp932_to_unicode_hitbl,cp932_to_unicode_raw,sizeof(cp932_to_unicode_raw)/sizeof(cp932_to_unicode_raw[0]));
+            return String_HOST_TO_DBCS_CJK<uint16_t>(d,s,cp932_to_unicode_hitbl,cp932_to_unicode_raw,sizeof(cp932_to_unicode_raw)/sizeof(cp932_to_unicode_raw[0]));
+        case 936:
+            return String_HOST_TO_DBCS_CJK<uint16_t>(d,s,cp936_to_unicode_hitbl,cp936_to_unicode_raw,sizeof(cp936_to_unicode_raw)/sizeof(cp936_to_unicode_raw[0]));
+        case 949:
+            return String_HOST_TO_DBCS_CJK<uint16_t>(d,s,cp949_to_unicode_hitbl,cp949_to_unicode_raw,sizeof(cp949_to_unicode_raw)/sizeof(cp949_to_unicode_raw[0]));
+        case 950:
+            return String_HOST_TO_DBCS_CJK<uint16_t>(d,s,cp950_to_unicode_hitbl,cp950_to_unicode_raw,sizeof(cp950_to_unicode_raw)/sizeof(cp950_to_unicode_raw[0]));
         default:
             /* at this time, it would be cruel and unusual to not allow any file I/O just because
              * our code page support is so limited. */
@@ -423,8 +432,6 @@ bool CodePageHostToGuest(char *d/*CROSS_LEN*/,const host_cnv_char_t *s/*CROSS_LE
             }
             return String_HOST_TO_ASCII(d,s);
     }
-
-    return false;
 }
 
 bool CodePageGuestToHostUint16(uint16_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/) {
@@ -466,12 +473,16 @@ bool CodePageGuestToHostUint16(uint16_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN
         case 874:
             return String_SBCS_TO_HOST_uint16<uint16_t>(d,s,cp874_to_unicode,sizeof(cp874_to_unicode)/sizeof(cp874_to_unicode[0]));
         case 932:
-            return String_DBCS_TO_HOST_SHIFTJIS_uint16<uint16_t>(d,s,cp932_to_unicode_hitbl,cp932_to_unicode_raw,sizeof(cp932_to_unicode_raw)/sizeof(cp932_to_unicode_raw[0]));
+            return String_DBCS_TO_HOST_CJK_uint16<uint16_t>(d,s,cp932_to_unicode_hitbl,cp932_to_unicode_raw,sizeof(cp932_to_unicode_raw)/sizeof(cp932_to_unicode_raw[0]));
+        case 936:
+            return String_DBCS_TO_HOST_CJK_uint16<uint16_t>(d,s,cp936_to_unicode_hitbl,cp936_to_unicode_raw,sizeof(cp936_to_unicode_raw)/sizeof(cp936_to_unicode_raw[0]));
+        case 949:
+            return String_DBCS_TO_HOST_CJK_uint16<uint16_t>(d,s,cp949_to_unicode_hitbl,cp949_to_unicode_raw,sizeof(cp949_to_unicode_raw)/sizeof(cp949_to_unicode_raw[0]));
+        case 950:
+            return String_DBCS_TO_HOST_CJK_uint16<uint16_t>(d,s,cp950_to_unicode_hitbl,cp950_to_unicode_raw,sizeof(cp950_to_unicode_raw)/sizeof(cp950_to_unicode_raw[0]));
         default: // Otherwise just use code page 437
             return String_SBCS_TO_HOST_uint16<uint16_t>(d,s,cp437_to_unicode,sizeof(cp437_to_unicode)/sizeof(cp437_to_unicode[0]));
     }
-
-    return false;
 }
 
 bool CodePageGuestToHost(host_cnv_char_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/) {
@@ -513,7 +524,13 @@ bool CodePageGuestToHost(host_cnv_char_t *d/*CROSS_LEN*/,const char *s/*CROSS_LE
         case 874:
             return String_SBCS_TO_HOST<uint16_t>(d,s,cp874_to_unicode,sizeof(cp874_to_unicode)/sizeof(cp874_to_unicode[0]));
         case 932:
-            return String_DBCS_TO_HOST_SHIFTJIS<uint16_t>(d,s,cp932_to_unicode_hitbl,cp932_to_unicode_raw,sizeof(cp932_to_unicode_raw)/sizeof(cp932_to_unicode_raw[0]));
+            return String_DBCS_TO_HOST_CJK<uint16_t>(d,s,cp932_to_unicode_hitbl,cp932_to_unicode_raw,sizeof(cp932_to_unicode_raw)/sizeof(cp932_to_unicode_raw[0]));
+        case 936:
+            return String_DBCS_TO_HOST_CJK<uint16_t>(d,s,cp936_to_unicode_hitbl,cp936_to_unicode_raw,sizeof(cp936_to_unicode_raw)/sizeof(cp936_to_unicode_raw[0]));
+        case 949:
+            return String_DBCS_TO_HOST_CJK<uint16_t>(d,s,cp949_to_unicode_hitbl,cp949_to_unicode_raw,sizeof(cp949_to_unicode_raw)/sizeof(cp949_to_unicode_raw[0]));
+        case 950:
+            return String_DBCS_TO_HOST_CJK<uint16_t>(d,s,cp950_to_unicode_hitbl,cp950_to_unicode_raw,sizeof(cp950_to_unicode_raw)/sizeof(cp950_to_unicode_raw[0]));
         default:
             /* at this time, it would be cruel and unusual to not allow any file I/O just because
              * our code page support is so limited. */
@@ -523,8 +540,6 @@ bool CodePageGuestToHost(host_cnv_char_t *d/*CROSS_LEN*/,const char *s/*CROSS_LE
             }
             return String_ASCII_TO_HOST(d,s);
     }
-
-    return false;
 }
 
 host_cnv_char_t *CodePageGuestToHost(const char *s) {
@@ -1024,7 +1039,7 @@ bool localDrive::FindFirst(const char * _dir,DOS_DTA & dta,bool fcb_findfirst) {
 	return FindNext(dta);
 }
 
-char * shiftjis_upcase(char * str);
+char * DBCS_upcase(char * str);
 
 bool localDrive::FindNext(DOS_DTA & dta) {
 
@@ -1092,8 +1107,8 @@ again:
 
 	if(strlen(dir_entcopy)<DOS_NAMELENGTH_ASCII){
 		strcpy(find_name,dir_entcopy);
-        if (IS_PC98_ARCH)
-            shiftjis_upcase(find_name);
+        if (IS_PC98_ARCH || isDBCSCP())
+            DBCS_upcase(find_name);
         else
             upcase(find_name);
     }
