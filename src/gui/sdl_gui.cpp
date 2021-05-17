@@ -110,6 +110,10 @@ void                        WindowsTaskbarUpdatePreviewRegion(void);
 void                        WindowsTaskbarResetPreviewRegion(void);
 #endif
 
+#if defined(MACOSX)
+void                        macosx_reload_touchbar(void);
+#endif
+
 const char *aboutmsg = "DOSBox-X version " VERSION " (" SDL_STRING ", "
 #if defined(_M_X64) || defined (_M_AMD64) || defined (_M_ARM64) || defined (_M_IA64) || defined(__ia64__) || defined(__LP64__) || defined(_WIN64) || defined(__x86_64__) || defined(__aarch64__) || defined(__powerpc64__)
 	"64"
@@ -448,8 +452,7 @@ static GUI::ScreenSDL *UI_Startup(GUI::ScreenSDL *screen) {
     running = true;
 
 #if defined(MACOSX)
-    void osx_reload_touchbar(void);
-    osx_reload_touchbar();
+    macosx_reload_touchbar();
 #endif
 
     return screen;
@@ -465,8 +468,7 @@ static void UI_Shutdown(GUI::ScreenSDL *screen) {
 #endif
 
 #if defined(MACOSX)
-    void osx_reload_touchbar(void);
-    osx_reload_touchbar();
+    macosx_reload_touchbar();
 #endif
 
 #if defined(C_SDL2)
@@ -1854,7 +1856,7 @@ protected:
 public:
     ShowMixerInfo(GUI::Screen *parent, int x, int y, const char *title) :
         ToplevelWindow(parent, x, y, 350, 270, title) {
-            std::string mixerinfo();
+            extern std::string mixerinfo();
             std::istringstream in(mixerinfo().c_str());
             int r=0;
             if (in)	for (std::string line; std::getline(in, line); ) {
@@ -1915,7 +1917,7 @@ public:
                 else if (name=="fluidsynth") name="FluidSynth";
                 else name[0]=toupper(name[0]);
             }
-            std::string getoplmode(), getoplemu();
+            extern std::string getoplmode(), getoplemu();
             std::string midiinfo = "MIDI available: "+std::string(midi.available?"Yes":"No")+"\nMIDI device: "+name+"\nMIDI soundfont file / ROM path:\n"+sffile+"\nOPL mode: "+getoplmode()+"\nOPL emulation: "+getoplemu();
             std::istringstream in(midiinfo.c_str());
             int r=0;
@@ -2082,7 +2084,7 @@ protected:
 public:
     ShowIDEInfo(GUI::Screen *parent, int x, int y, const char *title) :
         ToplevelWindow(parent, x, y, 300, 210, title) {
-            std::string GetIDEInfo();
+            extern std::string GetIDEInfo();
             std::istringstream in(GetIDEInfo().c_str());
             int r=0;
             if (in)	for (std::string line; std::getline(in, line); ) {

@@ -257,8 +257,8 @@ extern PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer;
 #ifdef MACOSX
 #include <CoreGraphics/CoreGraphics.h>
 extern bool has_touch_bar_support;
-bool osx_detect_nstouchbar(void);
-void osx_init_touchbar(void);
+bool macosx_detect_nstouchbar(void);
+void macosx_init_touchbar(void);
 void GetClipboard(std::string* result);
 bool SetClipboard(std::string value);
 #endif
@@ -267,7 +267,8 @@ static bool PasteClipboardNext();
 #if C_DIRECT3D
 void d3d_init(void);
 #endif
-bool TTF_using(void), isDBCSCP();
+bool TTF_using(void);
+extern bool isDBCSCP();
 void ShutDownMemHandles(Section * sec);
 void resetFontSize(), decreaseFontSize();
 void MAPPER_ReleaseAllKeys(), GFX_ReleaseMouse();
@@ -2416,8 +2417,6 @@ void MenuDrawTextChar(int x,int y,unsigned char c,Bitu color) {
         (unsigned int)(y+(int)fontHeight) > (unsigned int)sdl.surface->h)
         return;
 
-    unsigned char *bmp = (unsigned char*)int10_font_16 + (c * fontHeight);
-
     if (OpenGL_using()) {
 #if C_OPENGL
         unsigned int tx = (c % 16u) * 8u;
@@ -2437,7 +2436,14 @@ void MenuDrawTextChar(int x,int y,unsigned char c,Bitu color) {
 #endif
     }
     else {
-        unsigned char *scan;
+        unsigned char *scan, *bmp;
+        if (CurMode&&IS_VGA_ARCH&&dos.loaded_codepage&&dos.loaded_codepage!=437&&int10.rom.font_16!=0) {
+            PhysPt font16pt=Real2Phys(int10.rom.font_16);
+            uint8_t font[fontHeight];
+            for (int i=0; i<fontHeight; i++) font[i]=phys_readb(font16pt+c*fontHeight+i);
+            bmp = (unsigned char*)font;
+        } else
+            bmp = (unsigned char*)int10_font_16 + (c * fontHeight);
 
         assert(sdl.surface->pixels != NULL);
 
@@ -2483,8 +2489,6 @@ void MenuDrawTextChar2x(int x,int y,unsigned char c,Bitu color) {
         (unsigned int)(y+(int)fontHeight) > (unsigned int)sdl.surface->h)
         return;
 
-    unsigned char *bmp = (unsigned char*)int10_font_16 + (c * fontHeight);
-
     if (OpenGL_using()) {
 #if C_OPENGL
         unsigned int tx = (c % 16u) * 8u;
@@ -2504,7 +2508,14 @@ void MenuDrawTextChar2x(int x,int y,unsigned char c,Bitu color) {
 #endif
     }
     else { 
-        unsigned char *scan;
+        unsigned char *scan, *bmp;
+        if (CurMode&&IS_VGA_ARCH&&dos.loaded_codepage&&dos.loaded_codepage!=437&&int10.rom.font_16!=0) {
+            PhysPt font16pt=Real2Phys(int10.rom.font_16);
+            uint8_t font[fontHeight];
+            for (int i=0; i<fontHeight; i++) font[i]=phys_readb(font16pt+c*fontHeight+i);
+            bmp = (unsigned char*)font;
+        } else
+            bmp = (unsigned char*)int10_font_16 + (c * fontHeight);
 
         assert(sdl.surface->pixels != NULL);
 
@@ -4888,7 +4899,6 @@ static void SetPriority(PRIORITY_LEVELS level) {
     }
 }
 
-extern uint8_t int10_font_14[256 * 14];
 static void OutputString(Bitu x,Bitu y,const char * text,uint32_t color,uint32_t color2,SDL_Surface * output_surface) {
     uint32_t * draw=(uint32_t*)(((uint8_t *)output_surface->pixels)+((y)*output_surface->pitch))+x;
     while (*text) {
@@ -12862,6 +12872,10 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 				dpi_aware_enable = false;
 #elif defined(WIN32) && !defined(HX_DOS)
 				dpi_aware_enable = true;
+#if !defined(C_SDL2)
+                if (!control->opt_fullscreen && !static_cast<Section_prop *>(control->GetSection("sdl"))->Get_bool("fullscreen"))
+#endif
+                {
 				UINT dpi=0;
 				HMODULE __user32 = GetModuleHandle("USER32.DLL");
 				if (__user32) {
@@ -12880,6 +12894,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 					}
 				}
 				if (dpi&&dpi/96>1) dpi_aware_enable = false;
+                }
 #else
 				dpi_aware_enable = true;
 #endif
@@ -12900,14 +12915,14 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 #endif
 
 #ifdef MACOSX
-        osx_detect_nstouchbar();/*assigns to has_touch_bar_support*/
+        macosx_detect_nstouchbar();/*assigns to has_touch_bar_support*/
         if (has_touch_bar_support) {
             LOG_MSG("macOS: NSTouchBar support detected in system");
-            osx_init_touchbar();
+            macosx_init_touchbar();
         }
 
-        extern void osx_init_dock_menu(void);
-        osx_init_dock_menu();
+        extern void macosx_init_dock_menu(void);
+        macosx_init_dock_menu();
 
         void qz_set_match_monitor_cb(void);
         qz_set_match_monitor_cb();
@@ -13587,7 +13602,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                 if (!sdl.desktop.fullscreen) GFX_SwitchFullScreen();
 
                 /* Setup Mouse correctly if fullscreen */
-                if(sdl.desktop.fullscreen) GFX_CaptureMouse();
+                if(sdl.desktop.fullscreen&&sdl.mouse.autoenable) GFX_CaptureMouse();
             }
 
             // Shows menu bar (window)
