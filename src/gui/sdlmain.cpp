@@ -291,7 +291,8 @@ bool showbold = true;
 bool showital = true;
 bool showline = true;
 bool showsout = false;
-bool dbcs_sbcs=true;
+bool dbcs_sbcs = true;
+bool printfont = true;
 bool autoboxdraw = true;
 int outputswitch = -1;
 int wpType = 0;
@@ -315,7 +316,8 @@ typedef struct {
 	uint8_t alpha;		// unused
 } alt_rgb;
 alt_rgb altBGR0[16], altBGR1[16];
-static int prev_sline = -1, blinkCursor = -1;
+int blinkCursor = -1;
+static int prev_sline = -1;
 static alt_rgb *rgbColors = (alt_rgb*)render.pal.rgb;
 static bool blinkstate = false;
 bool colorChanged = false, justChanged = false;
@@ -3659,7 +3661,7 @@ bool readTTF(const char *fName, bool bold, bool ital) {
 void SetBlinkRate(Section_prop* section) {
     const char * blinkCstr = section->Get_string("ttf.blinkc");
     unsigned int num=-1;
-    if (!strcasecmp(blinkCstr, "false")) blinkCursor = -1;
+    if (!strcasecmp(blinkCstr, "false")||!strcmp(blinkCstr, "-1")) blinkCursor = -1;
     else if (1==sscanf(blinkCstr,"%u",&num)&&num>=0&&num<=7) blinkCursor = num;
     else blinkCursor = IS_PC98_ARCH?6:4; // default cursor blinking is slower on PC-98 systems
 }
@@ -3765,6 +3767,8 @@ void OUTPUT_TTF_Select(int fsize=-1) {
         showital = render_section->Get_bool("ttf.italic");
         showline = render_section->Get_bool("ttf.underline");
         showsout = render_section->Get_bool("ttf.strikeout");
+        printfont = render_section->Get_bool("ttf.printfont");
+        dbcs_sbcs = render_section->Get_bool("ttf.autodbcs");
         autoboxdraw = render_section->Get_bool("ttf.autoboxdraw");
         const char *outputstr=render_section->Get_string("ttf.outputswitch");
 #if C_DIRECT3D
@@ -4036,7 +4040,10 @@ void change_output(int output) {
     mainMenu.get_item("ttf_wpwp").enable(TTF_using()).check(wpType==1).refresh_item(mainMenu);
     mainMenu.get_item("ttf_wpws").enable(TTF_using()).check(wpType==2).refresh_item(mainMenu);
     mainMenu.get_item("ttf_wpxy").enable(TTF_using()).check(wpType==3).refresh_item(mainMenu);
-    mainMenu.get_item("ttf_blinkc").enable(TTF_using()).check(blinkCursor).refresh_item(mainMenu);
+    mainMenu.get_item("ttf_blinkc").enable(TTF_using()).check(blinkCursor>-1).refresh_item(mainMenu);
+#if C_PRINTER
+    mainMenu.get_item("ttf_printfont").enable(TTF_using()).check(printfont).refresh_item(mainMenu);
+#endif
     mainMenu.get_item("ttf_dbcs_sbcs").enable(TTF_using()&&!IS_PC98_ARCH&&enable_dbcs_tables).check(autoboxdraw).refresh_item(mainMenu);
     mainMenu.get_item("ttf_autoboxdraw").enable(TTF_using()&&!IS_PC98_ARCH&&enable_dbcs_tables).check(autoboxdraw).refresh_item(mainMenu);
 #endif
@@ -5057,6 +5064,14 @@ int setTTFCodePage() {
         return notMapped;
     } else
         return -1;
+}
+
+FT_Face GetTTFFace() {
+    if (ttf.inUse && ttfFont && ttfSize) {
+        TTF_Font *font = TTF_OpenFontRW(SDL_RWFromConstMem(ttfFont, (int)ttfSize), 1, ttf.pointsize);
+        return font?font->face:NULL;
+    } else
+        return NULL;
 }
 
 void GFX_SelectFontByPoints(int ptsize) {
@@ -10905,6 +10920,18 @@ bool ttf_auto_boxdraw_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const 
     return true;
 }
 
+#if C_PRINTER
+void UpdateDefaultPrinterFont();
+bool ttf_print_font_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    printfont=!printfont;
+    mainMenu.get_item("ttf_printfont").check(printfont).refresh_item(mainMenu);
+    UpdateDefaultPrinterFont();
+    return true;
+}
+#endif
+
 bool ttf_style_change_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     const char *mname = menuitem->get_name().c_str();
@@ -13251,7 +13278,11 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                     set_callback_function(ttf_wp_change_callback);
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"ttf_blinkc").set_text("Display TTF blinking cursor").
                     set_callback_function(ttf_blinking_cursor_callback);
-                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"ttf_dbcs_sbcs").set_text("CJK: Switch DBCS/SBCS mode").
+#if C_PRINTER
+                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"ttf_printfont").set_text("Use current TTF font for printing").
+                    set_callback_function(ttf_print_font_callback);
+#endif
+                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"ttf_dbcs_sbcs").set_text("CJK: Switch between DBCS/SBCS modes").
                     set_callback_function(ttf_dbcs_sbcs_callback);
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"ttf_autoboxdraw").set_text("CJK: Auto-detect box-drawing symbols").
                     set_callback_function(ttf_auto_boxdraw_callback);
@@ -13859,7 +13890,10 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.get_item("ttf_wpwp").enable(TTF_using()).check(wpType==1);
         mainMenu.get_item("ttf_wpws").enable(TTF_using()).check(wpType==2);
         mainMenu.get_item("ttf_wpxy").enable(TTF_using()).check(wpType==3);
-        mainMenu.get_item("ttf_blinkc").enable(TTF_using()).check(blinkCursor);
+        mainMenu.get_item("ttf_blinkc").enable(TTF_using()).check(blinkCursor>-1);
+#if C_PRINTER
+        mainMenu.get_item("ttf_printfont").enable(TTF_using()).check(printfont);
+#endif
         mainMenu.get_item("ttf_dbcs_sbcs").enable(TTF_using()&&!IS_PC98_ARCH&&enable_dbcs_tables).check(dbcs_sbcs);
         mainMenu.get_item("ttf_autoboxdraw").enable(TTF_using()&&!IS_PC98_ARCH&&enable_dbcs_tables).check(autoboxdraw);
 #endif
