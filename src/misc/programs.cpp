@@ -88,7 +88,8 @@ public:
 };
 
 static std::vector<InternalProgramEntry*> internal_progs;
-void EMS_Startup(Section* sec), EMS_DoShutDown(), resetFontSize();
+void EMS_Startup(Section* sec), EMS_DoShutDown(), resetFontSize(), UpdateDefaultPrinterFont();
+bool TTF_using();
 
 void PROGRAMS_Shutdown(void) {
 	LOG(LOG_MISC,LOG_DEBUG)("Shutting down internal programs list");
@@ -1331,7 +1332,7 @@ void CONFIG::Run(void) {
                             }
 
 #if defined(USE_TTF)
-							resetFontSize();
+							if (TTF_using()) resetFontSize();
 #endif
 						} else if (!strcasecmp(pvars[0].c_str(), "dos")) {
 							mountwarning = section->Get_bool("mountwarning");
@@ -1346,18 +1347,17 @@ void CONFIG::Run(void) {
 								mainMenu.get_item("dos_lfn_disable").check(enablelfn==0).refresh_item(mainMenu);
 								uselfn = enablelfn==1 || ((enablelfn == -1 || enablelfn == -2) && (dos.version.major>6 || winrun));
 							} else if (!strcasecmp(inputline.substr(0, 4).c_str(), "ver=")) {
-                                char ver[5];
-                                strcpy(ver, section->Get_string("ver"));
+								const char *ver = section->Get_string("ver");
 								if (!*ver) {
 									dos.version.minor=0;
 									dos.version.major=5;
 									dos_ver_menu(false);
-								} else if (set_ver(ver))
+								} else if (set_ver((char *)ver))
 									dos_ver_menu(false);
 							} else if (!strcasecmp(inputline.substr(0, 4).c_str(), "ems=")) {
 								EMS_DoShutDown();
 								EMS_Startup(NULL);
-                                update_dos_ems_menu();
+								update_dos_ems_menu();
 							} else if (!strcasecmp(inputline.substr(0, 32).c_str(), "shell configuration as commands=")) {
 								enable_config_as_shell_commands = section->Get_bool("shell configuration as commands");
 								mainMenu.get_item("shell_config_commands").check(enable_config_as_shell_commands).enable(true).refresh_item(mainMenu);
@@ -1382,6 +1382,9 @@ void CONFIG::Run(void) {
 							if (!strcasecmp(inputline.substr(0, 9).c_str(), "ttf.font=")) {
 #if defined(USE_TTF)
                                 ttf_reset();
+#if C_PRINTER
+                                if (TTF_using() && printfont) UpdateDefaultPrinterFont();
+#endif
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 9).c_str(), "ttf.lins=")||!strcasecmp(inputline.substr(0, 9).c_str(), "ttf.cols=")) {
 #if defined(USE_TTF)
@@ -1414,66 +1417,65 @@ void CONFIG::Run(void) {
                                 mainMenu.get_item("ttf_wpwp").check(wpType==1).refresh_item(mainMenu);
                                 mainMenu.get_item("ttf_wpws").check(wpType==2).refresh_item(mainMenu);
                                 mainMenu.get_item("ttf_wpxy").check(wpType==3).refresh_item(mainMenu);
-                                resetFontSize();
+                                if (TTF_using()) resetFontSize();
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 9).c_str(), "ttf.wpbg=")) {
 #if defined(USE_TTF)
                                 wpBG = section->Get_int("ttf.wpbg");
-                                resetFontSize();
+                                if (TTF_using()) resetFontSize();
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 9).c_str(), "ttf.wpfg=")) {
 #if defined(USE_TTF)
                                 wpFG = section->Get_int("ttf.wpfg");
                                 if (wpFG<0) wpFG = 7;
-                                resetFontSize();
+                                if (TTF_using()) resetFontSize();
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 9).c_str(), "ttf.bold=")) {
 #if defined(USE_TTF)
                                 showbold = section->Get_bool("ttf.bold");
                                 mainMenu.get_item("ttf_showbold").check(showbold).refresh_item(mainMenu);
-                                resetFontSize();
+                                if (TTF_using()) resetFontSize();
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 11).c_str(), "ttf.italic=")) {
 #if defined(USE_TTF)
                                 showital = section->Get_bool("ttf.italic");
                                 mainMenu.get_item("ttf_showital").check(showital).refresh_item(mainMenu);
-                                resetFontSize();
+                                if (TTF_using()) resetFontSize();
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 14).c_str(), "ttf.underline=")) {
 #if defined(USE_TTF)
                                 showline = section->Get_bool("ttf.underline");
                                 mainMenu.get_item("ttf_showline").check(showline).refresh_item(mainMenu);
-                                resetFontSize();
+                                if (TTF_using()) resetFontSize();
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 14).c_str(), "ttf.strikeout=")) {
 #if defined(USE_TTF)
                                 showsout = section->Get_bool("ttf.strikeout");
                                 mainMenu.get_item("ttf_showsout").check(showsout).refresh_item(mainMenu);
-                                resetFontSize();
+                                if (TTF_using()) resetFontSize();
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 12).c_str(), "ttf.char512=")) {
 #if defined(USE_TTF)
                                 char512 = section->Get_bool("ttf.char512");
-                                resetFontSize();
+                                if (TTF_using()) resetFontSize();
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 14).c_str(), "ttf.printfont=")) {
 #if defined(USE_TTF) && C_PRINTER
                                 printfont = section->Get_bool("ttf.printfont");
                                 mainMenu.get_item("ttf_printfont").check(printfont).refresh_item(mainMenu);
-                                void UpdateDefaultPrinterFont();
                                 UpdateDefaultPrinterFont();
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 13).c_str(), "ttf.autodbcs=")) {
 #if defined(USE_TTF)
                                 dbcs_sbcs = section->Get_bool("ttf.autodbcs");
                                 mainMenu.get_item("ttf_dbcs_sbcs").check(dbcs_sbcs).refresh_item(mainMenu);
-                                resetFontSize();
+                                if (TTF_using()) resetFontSize();
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 16).c_str(), "ttf.autoboxdraw=")) {
 #if defined(USE_TTF)
                                 autoboxdraw = section->Get_bool("ttf.autoboxdraw");
                                 mainMenu.get_item("ttf_autoboxdraw").check(autoboxdraw).refresh_item(mainMenu);
-                                resetFontSize();
+                                if (TTF_using()) resetFontSize();
 #endif
 							} else if (!strcasecmp(inputline.substr(0, 11).c_str(), "ttf.blinkc=")) {
 #if defined(USE_TTF)

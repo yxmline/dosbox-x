@@ -52,7 +52,7 @@ extern bool log_int21;
 extern bool log_fileio;
 extern bool enable_share_exe, enable_dbcs_tables;
 extern int dos_clipboard_device_access;
-extern char *dos_clipboard_device_name;
+extern const char *dos_clipboard_device_name;
 
 Bitu DOS_FILES = 127;
 DOS_File ** Files = NULL;
@@ -917,7 +917,7 @@ bool DOS_UnlinkFile(char const * const name) {
 				strcpy(temp, dir);
 				if (strlen(temp)&&temp[strlen(temp)-1]!='\\') strcat(temp, "\\");
 				strcat(temp, find_name);
-				cdirs.push_back(std::string(temp));
+				cdirs.emplace_back(std::string(temp));
 			}
 		} while ((ret=DOS_FindNext())==true);
 		lfn_filefind_handle=fbak;
