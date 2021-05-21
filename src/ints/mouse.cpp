@@ -51,10 +51,10 @@ void AUX_INT33_Takeover();
 int KEYBOARD_AUX_Active();
 void KEYBOARD_AUX_Event(float x,float y,Bitu buttons,int scrollwheel);
 extern bool MOUSE_IsLocked();
+extern bool usesystemcursor;
 
 bool en_int33=false;
 bool en_bios_ps2mouse=false;
-bool usesystemcursor=false;
 bool cell_granularity_disable=false;
 bool en_int33_hide_if_polling=false;
 bool en_int33_hide_if_intsub=false;
@@ -720,8 +720,6 @@ uint8_t Mouse_GetButtonState(void) {
     return mouse.buttons;
 }
 
-#if defined(WIN32) || defined(MACOSX) || defined(C_SDL2)
-#include "render.h"
 char text[5000];
 extern bool isDBCSCP();
 const char* Mouse_GetSelected(int x1, int y1, int x2, int y2, int w, int h, uint16_t *textlen) {
@@ -788,6 +786,8 @@ const char* Mouse_GetSelected(int x1, int y1, int x2, int y2, int w, int h, uint
 	return text;
 }
 
+#if defined(WIN32) || defined(MACOSX) || defined(C_SDL2)
+#include "render.h"
 void Mouse_Select(int x1, int y1, int x2, int y2, int w, int h, bool select) {
     int c1=x1, r1=y1, c2=x2, r2=y2, t;
     uint8_t page = real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
@@ -1800,8 +1800,6 @@ void MOUSE_Startup(Section *sec) {
         Mouse_SetSensitivity(50,50,50);
         return;
     }
-
-    usesystemcursor = section->Get_bool("usesystemcursor");
 
     cell_granularity_disable=section->Get_bool("int33 disable cell granularity");
 

@@ -64,6 +64,7 @@ extern bool force_load_state;
 extern bool use_quick_reboot;
 extern bool pc98_force_ibm_layout;
 extern bool enable_config_as_shell_commands;
+bool usesystemcursor = false;
 bool dos_kernel_disabled = true;
 bool winrun=false, use_save_file=false;
 bool maximize = false, direct_mouse_clipboard=false;
@@ -861,6 +862,27 @@ bool list_ideinfo_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const
     GFX_LosingFocus();
     return true;
 }
+
+#if C_PRINTER
+bool PRINTER_isInited();
+void PrintScreen(const char *text, uint16_t len);
+bool print_screen_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    if (!PRINTER_isInited()) {
+        systemmessagebox("Error","Printer support is not enabled in the configuration.","ok", "error", 1);
+        return false;
+    }
+    if (!CurMode||CurMode->type!=M_TEXT) {
+        systemmessagebox("Error","The current DOS screen is not in text mode.","ok", "error", 1);
+        return false;
+    }
+    uint16_t len=0;
+    const char* text = Mouse_GetSelected(0,0,(int)(currentWindowWidth-1-sdl.clip.x),(int)(currentWindowHeight-1-sdl.clip.y),(int)(currentWindowWidth-sdl.clip.x),(int)(currentWindowHeight-sdl.clip.y), &len);
+    if (len) PrintScreen(text, len);
+    return true;
+}
+#endif
 
 const char *drive_opts[][2] = {
 #if defined(WIN32)
@@ -5546,6 +5568,8 @@ static void GUI_StartUp() {
     else if (emulation == "never")
         sdl.mouse.emulation = MOUSE_EMULATION_NEVER;
 
+    usesystemcursor = section->Get_bool("usesystemcursor");
+
 #if C_XBRZ
     // initialize xBRZ parameters and check output type for compatibility
     xBRZ_Initialize();
@@ -7854,13 +7878,8 @@ void GFX_Events() {
 	if (paste_speed < 0) paste_speed = 30;
 
     static Bitu iPasteTicker = 0;
-    if (paste_speed && (iPasteTicker++ % paste_speed) == 0) { // emendelson: was 20 - good for WP51; Wengier: changed to 30 for better compatibility
-        int len = (int)strPasteBuffer.length();
+    if (paste_speed && (iPasteTicker++ % paste_speed) == 0) // emendelson: was 20 - good for WP51; Wengier: changed to 30 for better compatibility
         PasteClipboardNext();   // end added emendelson from dbDOS; improved by Wengier
-#if defined(USE_TTF)
-        if (len > strPasteBuffer.length() && TTF_using() && isDBCSCP()) resetFontSize();
-#endif
-    }
 }
 
 void Null_Init(Section *sec);
@@ -7971,6 +7990,10 @@ void SDL_SetupConfigSection() {
     Pbool->Set_help("Enable this setting to bypass your operating system's mouse acceleration and sensitivity settings.\n"
         "This works in fullscreen or when the mouse is captured in window mode (SDL2 builds only).");
 #endif
+
+    Pbool = sdl_sec->Add_bool("usesystemcursor",Property::Changeable::OnlyAtStart,false);
+    Pbool->Set_help("Use the mouse cursor of the host system instead of drawing a DOS mouse cursor. Activated when the mouse is not locked.");
+    Pbool->SetBasic(true);
 
     const char * emulation[] = {"integration", "locked", "always", "never", nullptr};
     Pstring  = sdl_sec->Add_string("mouse_emulation", Property::Changeable::Always, emulation[1]);
@@ -13585,7 +13608,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 
             {
                 DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"HelpCommandMenu");
-
                 item.set_text("DOS commands");
 
                 {
@@ -13823,7 +13845,9 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"make_diskimage").set_text("Create blank disk image...").set_callback_function(make_diskimage_menu_callback);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"list_drivenum").set_text("Show mounted drive numbers").set_callback_function(list_drivenum_menu_callback);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"list_ideinfo").set_text("Show IDE disk or CD status").set_callback_function(list_ideinfo_menu_callback);
-
+#if C_PRINTER
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"print_textscreen").set_text("Print text screen").set_callback_function(print_screen_menu_callback);
+#endif
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"pc98_use_uskb").set_text("Use US keyboard layout").set_callback_function(pc98_force_uskb_menu_callback).check(pc98_force_ibm_layout);
         MSG_Init();
 
@@ -13899,7 +13923,9 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.get_item("ttf_dbcs_sbcs").enable(TTF_using()&&!IS_PC98_ARCH&&enable_dbcs_tables).check(dbcs_sbcs);
         mainMenu.get_item("ttf_autoboxdraw").enable(TTF_using()&&!IS_PC98_ARCH&&enable_dbcs_tables).check(autoboxdraw);
 #endif
-
+#if C_PRINTER
+        mainMenu.get_item("print_textscreen").enable(!IS_PC98_ARCH);
+#endif
         mainMenu.get_item("pc98_5mhz_gdc").enable(IS_PC98_ARCH);
         mainMenu.get_item("pc98_allow_200scanline").enable(IS_PC98_ARCH);
         mainMenu.get_item("pc98_allow_4partitions").enable(IS_PC98_ARCH);
