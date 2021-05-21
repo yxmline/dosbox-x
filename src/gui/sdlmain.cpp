@@ -11433,7 +11433,7 @@ void refresh_slots() {
 		char name[6]="slot0";
 		name[4]='0'+i;
 		std::string command=SaveState::instance().getName(page*SaveState::SLOT_COUNT+i);
-		std::string str="Slot "+to_string(page*SaveState::SLOT_COUNT+i+1)+(command==""?"":" "+command);
+		std::string str=std::string(MSG_Get("SLOT"))+" "+to_string(page*SaveState::SLOT_COUNT+i+1)+(command==""?"":" "+command);
 		mainMenu.get_item(name).set_text(str.c_str()).refresh_item(mainMenu);
 	}
 }
@@ -13309,7 +13309,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 #endif
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"ttf_dbcs_sbcs").set_text("CJK: Switch between DBCS/SBCS modes").
                     set_callback_function(ttf_dbcs_sbcs_callback);
-                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"ttf_autoboxdraw").set_text("CJK: Auto-detect box-drawing symbols").
+                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"ttf_autoboxdraw").set_text("CJK: Auto-detect box-drawing characters").
                     set_callback_function(ttf_auto_boxdraw_callback);
             }
 #endif
@@ -13528,7 +13528,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 				char name[6]="slot0";
 				for (unsigned int i=0; i<SaveState::SLOT_COUNT; i++) {
 					name[4]='0'+i;
-					std::string str="Slot "+to_string(page*SaveState::SLOT_COUNT+i+1);
+					std::string str=std::string(MSG_Get("SLOT"))+" "+to_string(page*SaveState::SLOT_COUNT+i+1);
 					mainMenu.alloc_item(DOSBoxMenu::item_type_id,name).set_text(str.c_str()).set_callback_function(save_slot_callback);
 				}
             }
@@ -13846,7 +13846,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"list_drivenum").set_text("Show mounted drive numbers").set_callback_function(list_drivenum_menu_callback);
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"list_ideinfo").set_text("Show IDE disk or CD status").set_callback_function(list_ideinfo_menu_callback);
 #if C_PRINTER
-        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"print_textscreen").set_text("Print text screen").set_callback_function(print_screen_menu_callback);
+        mainMenu.alloc_item(DOSBoxMenu::item_type_id,"print_textscreen").set_text("Print DOS text screen").set_callback_function(print_screen_menu_callback);
 #endif
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"pc98_use_uskb").set_text("Use US keyboard layout").set_callback_function(pc98_force_uskb_menu_callback).check(pc98_force_ibm_layout);
         MSG_Init();
@@ -13855,7 +13855,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         for (unsigned int i=0; i<SaveState::SLOT_COUNT; i++) {
             name[4]='0'+i;
             std::string command=SaveState::instance().getName(page*SaveState::SLOT_COUNT+i);
-            std::string str="Slot "+to_string(page*SaveState::SLOT_COUNT+i+1)+(command==""?"":" "+command);
+            std::string str=std::string(MSG_Get("SLOT"))+" "+to_string(page*SaveState::SLOT_COUNT+i+1)+(command==""?"":" "+command);
             mainMenu.get_item(name).set_text(str.c_str());
         }
         mainMenu.get_item("wheel_updown").check(wheel_key==1).refresh_item(mainMenu);
@@ -13885,10 +13885,10 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         bool MENU_get_mute(void);
         mainMenu.get_item("mixer_mute").check(MENU_get_mute()).refresh_item(mainMenu);
 
-        mainMenu.get_item("scaler_forced").check(render.scale.forced);
+        mainMenu.get_item("scaler_forced").check(render.scale.forced).refresh_item(mainMenu);
 
-        mainMenu.get_item("debug_logint21").check(log_int21);
-        mainMenu.get_item("debug_logfileio").check(log_fileio);
+        mainMenu.get_item("debug_logint21").check(log_int21).refresh_item(mainMenu);
+        mainMenu.get_item("debug_logfileio").check(log_fileio).refresh_item(mainMenu);
 
         mainMenu.get_item("sync_host_datetime").enable(!IS_PC98_ARCH);
         mainMenu.get_item("vga_9widetext").enable(!IS_PC98_ARCH);
