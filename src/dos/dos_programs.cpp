@@ -935,7 +935,7 @@ public:
         DOS_DTA dta(dos.dta());
 
         WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_1"));
-        WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_FORMAT"),"Drive","Type","Label");
+        WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_FORMAT"),MSG_Get("DRIVE"),MSG_Get("TYPE"),MSG_Get("LABEL"));
         int cols=IS_PC98_ARCH?80:real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
         if (!cols) cols=80;
         for(int p = 0;p < cols;p++) WriteOut("-");
@@ -4404,7 +4404,7 @@ public:
         DOS_DTA dta(dos.dta());
 
         WriteOut(MSG_Get("PROGRAM_IMGMOUNT_STATUS_1"));
-        WriteOut(MSG_Get("PROGRAM_IMGMOUNT_STATUS_FORMAT"),"Drive","Type","Label","Swap slot");
+        WriteOut(MSG_Get("PROGRAM_IMGMOUNT_STATUS_FORMAT"),MSG_Get("DRIVE"),MSG_Get("TYPE"),MSG_Get("LABEL"),MSG_Get("SWAP_SLOT"));
         int cols=IS_PC98_ARCH?80:real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
         if (!cols) cols=80;
         for(int p = 0;p < cols;p++) WriteOut("-");
@@ -4432,7 +4432,7 @@ public:
         if (none) WriteOut(MSG_Get("PROGRAM_IMGMOUNT_STATUS_NONE"));
 		WriteOut("\n");
 		WriteOut(MSG_Get("PROGRAM_IMGMOUNT_STATUS_2"));
-		WriteOut(MSG_Get("PROGRAM_IMGMOUNT_STATUS_NUMBER_FORMAT"),"Drive number","Disk name","IDE position","Swap slot");
+		WriteOut(MSG_Get("PROGRAM_IMGMOUNT_STATUS_NUMBER_FORMAT"),MSG_Get("DRIVE_NUMBER"),MSG_Get("DISK_NAME"),MSG_Get("IDE_POSITION"),MSG_Get("SWAP_SLOT"));
         for(int p = 0;p < cols;p++) WriteOut("-");
         none=true;
 		for (int index = 0; index < MAX_DISK_IMAGES; index++)
@@ -7425,13 +7425,13 @@ void DOS_SetupPrograms(void) {
     MSG_Add("PROGRAM_LOADFIX_DEALLOCALL","Used memory freed.\n");
     MSG_Add("PROGRAM_LOADFIX_ERROR","Memory allocation error.\n");
     MSG_Add("PROGRAM_LOADFIX_HELP",
-        "Reduces the amount of available conventional or XMS memory.\n\n"
+        "Reduces the amount of available conventional or XMS/EMS memory.\n\n"
         "LOADFIX [-xms] [-ems] [-{ram}] [{program}] [{options}]\n"
         "LOADFIX -f [-xms] [-ems]\n\n"
         "  -xms        Allocates memory from XMS rather than conventional memory\n"
         "  -ems        Allocates memory from EMS rather than conventional memory\n"
         "  -{ram}      Specifies the amount of memory to allocate in KB\n"
-        "                 Defaults to 64kb for conventional memory; 1MB for XMS memory\n"
+        "                 Defaults to 64kb for conventional memory; 1MB for XMS/EMS memory\n"
         "  -a          Auto allocates enough memory to fill the lowest 64KB memory\n"
         "  -f (or -d)  Frees previously allocated memory\n"
         "  {program}   Runs the specified program\n"
@@ -7531,9 +7531,9 @@ void DOS_SetupPrograms(void) {
         "For information about CD-ROM support, type \033[34;1mintro cdrom\033[0m\n"
         "For information about special keys, type \033[34;1mintro special\033[0m\n"
         "For information about usage, type \033[34;1mintro usage\033[0m\n\n"
-        "For the latest version of DOSBox-X, go to its GitHub site:\033[34;1m\n"
+        "For the latest version of DOSBox-X, go to its homepage:\033[34;1m\n"
         "\n"
-        "\033[34;1mhttps://github.com/joncampbell123/dosbox-x\033[0m\n"
+        "\033[34;1mhttps://dosbox-x.com/\033[0m or \033[34;1mhttp://dosbox-x.software\033[0m\n"
         "\n"
         "For more information about DOSBox-X, please take a look at its Wiki:\n"
         "\n"

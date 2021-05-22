@@ -1,5 +1,28 @@
 :DOSBOX-X:VERSION:0.83.14
+:DOSBOX-X:LANGUAGE:English
 :DOSBOX-X:CODEPAGE:437
+:DOSBOX-X:REMARK:
+:DRIVE
+Drive
+.
+:TYPE
+Type
+.
+:LABEL
+Label
+.
+:DRIVE_NUMBER
+Drive number
+.
+:DISK_NAME
+Disk name
+.
+:IDE_POSITION
+IDE position
+.
+:SWAP_SLOT
+Swap slot
+.
 :AUTOEXEC_CONFIGFILE_HELP
 Lines in this section will be run at startup.◙You can put your MOUNT lines here.◙
 .
@@ -293,7 +316,7 @@ Used memory freed.◙
 Memory allocation error.◙
 .
 :PROGRAM_LOADFIX_HELP
-Reduces the amount of available conventional or XMS memory.
+Reduces the amount of available conventional or XMS/EMS memory.
 
 LOADFIX [-xms] [-ems] [-{ram}] [{program}] [{options}]
 LOADFIX -f [-xms] [-ems]
@@ -301,7 +324,7 @@ LOADFIX -f [-xms] [-ems]
   -xms        Allocates memory from XMS rather than conventional memory
   -ems        Allocates memory from EMS rather than conventional memory
   -{ram}      Specifies the amount of memory to allocate in KB
-                 Defaults to 64kb for conventional memory; 1MB for XMS memory
+                 Defaults to 64kb for conventional memory; 1MB for XMS/EMS memory
   -a          Auto allocates enough memory to fill the lowest 64KB memory
   -f (or -d)  Frees previously allocated memory
   {program}   Runs the specified program
@@ -449,9 +472,9 @@ For information about CD-ROM support, type [34;1mintro cdrom[0m
 For information about special keys, type [34;1mintro special[0m
 For information about usage, type [34;1mintro usage[0m
 
-For the latest version of DOSBox-X, go to its GitHub site:[34;1m
+For the latest version of DOSBox-X, go to its homepage:[34;1m
 
-[34;1mhttps://github.com/joncampbell123/dosbox-x[0m
+[34;1mhttps://dosbox-x.com/[0m or \033[34;1mhttp://dosbox-x.software\033[0m
 
 For more information about DOSBox-X, please take a look at its Wiki:
 
@@ -1295,7 +1318,7 @@ SUBST [drive1: [drive2:]path]◙SUBST drive1: /D◙◙  drive1:       Specifies 
 Loads a program into upper memory (requires XMS and UMB memory).◙
 .
 :SHELL_CMD_LOADHIGH_HELP_LONG
-LH              [drive1:][path]filename [parameters]◙LOADHIGH        [drive1:][path]filename [parameters]◙
+LH              [drive:][path]filename [parameters]◙LOADHIGH        [drive:][path]filename [parameters]◙
 .
 :SHELL_CMD_CHOICE_HELP
 Waits for a keypress and sets ERRORLEVEL.◙
