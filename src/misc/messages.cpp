@@ -115,15 +115,16 @@ void LoadMessageFile(const char * fname) {
 	}
     msgcodepage = 0;
     langname = langnote = "";
-	char linein[LINE_IN_MAXLEN];
-	char name[LINE_IN_MAXLEN], menu_name[LINE_IN_MAXLEN];
+	char linein[LINE_IN_MAXLEN+1024];
+	char name[LINE_IN_MAXLEN+1024], menu_name[LINE_IN_MAXLEN];
 	char string[LINE_IN_MAXLEN*10], temp[4096];
 	/* Start out with empty strings */
 	name[0]=0;string[0]=0;
+	morelen=true;
     bool res=true;
     int cp=dos.loaded_codepage;
     if (!dos.loaded_codepage) res=InitCodePage();
-	while(fgets(linein, LINE_IN_MAXLEN, mfile)!=0) {
+	while(fgets(linein, LINE_IN_MAXLEN+1024, mfile)!=0) {
 		/* Parse the read line */
 		/* First remove characters 10 and 13 from the line */
 		char * parser=linein;
@@ -183,6 +184,7 @@ void LoadMessageFile(const char * fname) {
 			strcat(string,"\n");
 		}
 	}
+	morelen=false;
 	fclose(mfile);
     menu_update_autocycle();
     dos.loaded_codepage=cp;
@@ -203,7 +205,8 @@ bool MSG_Write(const char * location, const char * name) {
 	FILE* out=fopen(location,"w+t");
 	if(out==NULL) return false;//maybe an error?
 	fprintf(out,":DOSBOX-X:VERSION:%s\n",VERSION);
-	if (name!=NULL||langname!="") fprintf(out,":DOSBOX-X:LANGUAGE:%s\n",name!=NULL?name:langname.c_str());
+	if (name!=NULL) langname=std::string(name);
+	if (langname!="") fprintf(out,":DOSBOX-X:LANGUAGE:%s\n",langname.c_str());
 	if (dos.loaded_codepage) fprintf(out,":DOSBOX-X:CODEPAGE:%d\n",dos.loaded_codepage);
 	fprintf(out,":DOSBOX-X:REMARK:%s\n",langnote.c_str());
 	morelen=true;
