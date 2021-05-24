@@ -211,7 +211,7 @@ static void LogEMUMem(void) {
 
     DEBUG_ShowMsg("Emulator memory:");
     DEBUG_ShowMsg("A20 gate:                    %s",MEM_A20_Enabled() ? "ON" : "OFF");
-    DEBUG_ShowMsg("CPU address bits:            %u",(unsigned int)MEM_get_address_bits());
+    DEBUG_ShowMsg("CPU address bits:            %u",MEM_get_address_bits());
     DEBUG_ShowMsg("CPU address mask:            0x%lx",((unsigned long)MEM_PageMask() << 12UL) | 0xFFFUL);
     DEBUG_ShowMsg("CPU address mask current:    0x%lx",((unsigned long)MEM_PageMaskActive() << 12UL) | 0xFFFUL);
     DEBUG_ShowMsg("Memory reported size:        %lu bytes",(unsigned long)MEM_TotalPages() << 12UL);
@@ -364,7 +364,7 @@ static bool F80TestUpdate(int regIndex) {
 #endif
 }
 
-static const uint64_t mem_no_address = (uint64_t)(~0ULL);
+static const uint64_t mem_no_address = (~0ULL);
 
 uint64_t LinMakeProt(uint16_t selector, uint32_t offset)
 {
@@ -972,9 +972,16 @@ static void DrawData(void) {
                 wattrset (dbg.win_data,0);
                 mvwprintw (dbg.win_data,y,14+3*x,"%02X",ch);
                 if(showPrintable) {
-                    if (ch<32 || !isprint(*reinterpret_cast<unsigned char*>(&ch))) ch='.';
-                    mvwprintw (dbg.win_data,y,63+x,"%c",ch);
-                } else mvwaddch(dbg.win_data,y,63+x,ch);
+                    if (ch<32 || !isprint(ch)) ch='.';
+                    mvwaddch(dbg.win_data, y, 63 + x, ch);
+                } else {
+#ifdef __PDCURSES__
+                    mvwaddrawch(dbg.win_data, y, 63 + x, ch);
+#else
+                    if(ch < 32) ch = '.';
+                    mvwaddch(dbg.win_data, y, 63 + x, ch);
+#endif
+                }
 
                 add++;
             }
@@ -991,7 +998,7 @@ static void DrawData(void) {
                         wattrset (dbg.win_data,0);
                         mvwprintw (dbg.win_data,y,14+3*x,"%02X",ch);
                         if(showPrintable) {
-                            if (ch<32 || !isprint(*reinterpret_cast<unsigned char*>(&ch))) ch='.';
+                            if (ch<32 || !isprint(ch)) ch='.';
                             mvwprintw (dbg.win_data,y,63+x,"%c",ch);
                         } else mvwaddch(dbg.win_data,y,63+x,ch);
                     }
@@ -2195,7 +2202,7 @@ bool ParseCommand(char* str) {
                 (unsigned long)vga.draw.lines_done,(unsigned long)vga.draw.split_line);
             DEBUG_ShowMsg("byte-pan-shft=%lu render-stop=%lu render-max=%lu scrn-ratio=%.3f",
                 (unsigned long)vga.draw.byte_panning_shift,(unsigned long)vga.draw.render_step,
-                (unsigned long)vga.draw.render_max,(double)vga.draw.screen_ratio);
+                (unsigned long)vga.draw.render_max,vga.draw.screen_ratio);
             DEBUG_ShowMsg("blinking=%lu blink=%u char9dot=%u has-split=%u vret-trig=%u",
                 (unsigned long)vga.draw.blinking,vga.draw.blink?1:0,
                 vga.draw.char9dot?1:0,vga.draw.has_split?1:0,
@@ -2239,13 +2246,13 @@ bool ParseCommand(char* str) {
                 (unsigned int)vga.config.data_rotate,
                 (unsigned int)vga.config.raster_op);
             DEBUG_ShowMsg("fbmsk=%x fmmsk=%x fnmmsk=%x fsr=%x fnesr=%x fesr=%x feasr=%x",
-                (unsigned int)vga.config.full_bit_mask,
-                (unsigned int)vga.config.full_map_mask,
-                (unsigned int)vga.config.full_not_map_mask,
-                (unsigned int)vga.config.full_set_reset,
-                (unsigned int)vga.config.full_not_enable_set_reset,
-                (unsigned int)vga.config.full_enable_set_reset,
-                (unsigned int)vga.config.full_enable_and_set_reset);
+                vga.config.full_bit_mask,
+                vga.config.full_map_mask,
+                vga.config.full_not_map_mask,
+                vga.config.full_set_reset,
+                vga.config.full_not_enable_set_reset,
+                vga.config.full_enable_set_reset,
+                vga.config.full_enable_and_set_reset);
         }
         else {
             return false;
@@ -2551,7 +2558,7 @@ bool ParseCommand(char* str) {
 
     if (command == "OUTD") {
         uint16_t port = (uint16_t)GetHexValue(found,found);
-        uint32_t r = (uint32_t)GetHexValue(found,found);
+        uint32_t r = GetHexValue(found,found);
         IO_WriteD(port,r);
         return true;
     }
@@ -3004,6 +3011,16 @@ uint32_t DEBUG_CheckKeys(void) {
 		case PADSTAR:	key='*';	break;
 		case PADMINUS:	key='-';	break;
 		case PADPLUS:	key='+';	break;
+		case PADSTOP:	key=KEY_DC;		break;
+		case PAD0:		key=KEY_IC;		break;
+		case KEY_A1:	key=KEY_HOME;	break;
+		case KEY_A2:	key=KEY_UP;		break;
+		case KEY_A3:	key=KEY_PPAGE;	break;
+		case KEY_B1:	key=KEY_LEFT;	break;
+		case KEY_B3:	key=KEY_RIGHT;	break;
+		case KEY_C1:	key=KEY_END;	break;
+		case KEY_C2:	key=KEY_DOWN;	break;
+		case KEY_C3:	key=KEY_NPAGE;	break;
 		case ALT_D:
 			if (ungetch('D') != ERR) key=27;
 			break;
@@ -3937,7 +3954,7 @@ const char *FPU_tag(unsigned int i) {
 static void LogFPUInfo(void) {
     DEBUG_BeginPagedContent();
 
-    DEBUG_ShowMsg("FPU TOP=%u",(unsigned int)fpu.top);
+    DEBUG_ShowMsg("FPU TOP=%u",fpu.top);
 
     for (unsigned int i=0;i < 8;i++) {
         unsigned int adj = STV(i);
@@ -4280,7 +4297,7 @@ void CDebugVar::DeleteAll(void)
 {
 	std::vector<CDebugVar*>::iterator i;
 	for(i=varList.begin(); i != varList.end(); ++i) {
-		CDebugVar* bp = static_cast<CDebugVar*>(*i);
+		CDebugVar* bp = *i;
 		delete bp;
 	}
 	(varList.clear)();
@@ -4292,7 +4309,7 @@ CDebugVar* CDebugVar::FindVar(PhysPt pt)
 
 	std::vector<CDebugVar*>::size_type s = varList.size();
 	for(std::vector<CDebugVar*>::size_type i = 0; i != s; i++) {
-		CDebugVar* bp = static_cast<CDebugVar*>(varList[i]);
+		CDebugVar* bp = varList[i];
 		if (bp->GetAdr() == pt) return bp;
 	}
 	return 0;
@@ -4311,7 +4328,7 @@ bool CDebugVar::SaveVars(char* name) {
 	std::vector<CDebugVar*>::iterator i;
 	CDebugVar* bp;
 	for(i=varList.begin(); i != varList.end(); ++i) {
-		bp = static_cast<CDebugVar*>(*i);
+		bp = *i;
 		// name
 		fwrite(bp->GetName(),1,16,f);
 		// adr
@@ -4432,7 +4449,7 @@ static void DrawVariables(void) {
 			break;
 		}
 
-		CDebugVar *dv = static_cast<CDebugVar*>(CDebugVar::varList[i]);
+		CDebugVar *dv = CDebugVar::varList[i];
 		uint16_t value;
 		bool varchanges = false;
 		bool has_no_value = mem_readw_checked(dv->GetAdr(),&value);
