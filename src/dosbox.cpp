@@ -3917,16 +3917,22 @@ void DOSBOX_SetupConfigSections(void) {
                       "If set to \"a20fix\" or \"loadfix\", DOSBox-X will show the message for the a20fix or the loadfix only.");
     Pstring->SetBasic(true);
 
-    Pbool = secprop->Add_bool("startcmd",Property::Changeable::OnlyAtStart,false);
-    Pbool->Set_help("Allow starting Windows programs or commands to run on the Windows host including the use of START command.");
+    Pbool = secprop->Add_bool("startcmd",Property::Changeable::
+#if defined(WIN32) && !defined(HX_DOS)
+    WhenIdle
+#else
+    OnlyAtStart
+#endif
+    ,false);
+    Pbool->Set_help("Enable START command to start programs to run on the host system. On Windows host programs or commands may also be launched directly.");
     Pbool->SetBasic(true);
 
     Pbool = secprop->Add_bool("startwait",Property::Changeable::WhenIdle,true);
-    Pbool->Set_help("Specify whether DOSBox-X should wait for the Windows applications after they are started.");
+    Pbool->Set_help("Specify whether DOSBox-X should wait for the host system applications after they are started.");
     Pbool->SetBasic(true);
 
     Pbool = secprop->Add_bool("startquiet",Property::Changeable::WhenIdle,false);
-    Pbool->Set_help("If set, before launching Windows applications to run on the host DOSBox-X will not show messages like \"Now run it as a Windows application\".");
+    Pbool->Set_help("If set, before launching host system applications to run on the host DOSBox-X will not show messages like \"Now run it as a Windows application\".");
     Pbool->SetBasic(true);
 
     Pstring = secprop->Add_string("startincon",Property::Changeable::OnlyAtStart,"assoc attrib chcp copy dir echo for ftype help if set type ver vol xcopy");

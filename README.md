@@ -63,6 +63,8 @@ Although based on the DOSBox project, DOSBox-X is now a separate project because
 
 * Support for printing features, either to a real or to a virtual printer
 
+* Support for starting programs to run on the host systems (-hostrun option)
+
 * Support for 3dfx Voodoo chip and Glide emulation (including Glide wrapper)
 
 * Support for cue sheets with FLAC, MP3, WAV, OGG Vorbis and Opus CD-DA tracks
@@ -75,7 +77,7 @@ Although based on the DOSBox project, DOSBox-X is now a separate project because
 
 * Plus many more..
 
-While the great majority of features in DOSBox-X are cross-platform, DOSBox-X does also have several notable platform-dependent features, such as support for automatic drive mounting, Direct3D output and starting programs to run on the host (-winrun) on the Windows platform. These features cannot be easily ported to other platforms. More information about DOSBox-X's features can be found in [DOSBox-X’s Feature Highlights](https://dosbox-x.com/wiki/DOSBox%E2%80%90X%E2%80%99s-Feature-Highlights) page in the [DOSBox-X Wiki](https://dosbox-x.com/wiki).
+While the vast majority of features in DOSBox-X are cross-platform, DOSBox-X does also have several notable platform-dependent features, such as Direct3D output and support for automatic drive mounting on the Windows platform. These features cannot be easily ported to other platforms. More information about DOSBox-X's features can be found in [DOSBox-X’s Feature Highlights](https://dosbox-x.com/wiki/DOSBox%E2%80%90X%E2%80%99s-Feature-Highlights) page in the [DOSBox-X Wiki](https://dosbox-x.com/wiki).
 
 DOSBox-X officially supports both SDL 1.2 and SDL 2.0; both 32-bit and 64-bit builds are also supported.
 
@@ -128,7 +130,7 @@ greatly appreciated:
     - The normal operation of DOS games and applications
     - Software or hardware emulation accuracy, helped by for example demoscene software
     - Windows 1.0/2.x/3.x & Windows 9x/ME guest system support
-    - New DOS developments
+    - Developments of new DOS software
   - Bug fixes, patches, improvements, refinements
   - Suggestions, ideas, assistance of other users, and/or general conversation
   - Platform support (Windows, Linux, macOS, DOS, but others are welcome)
@@ -351,6 +353,14 @@ See also the [CREDITS](CREDITS.md) page for crediting of the source code.
   easy to print and create PDFs from DOS applications. It is customized for use with applications, not games.
 
   URL: http://www.columbia.edu/~em36/dosboxapp.html
+
+* DOSBoxWP (for WordPerfect for DOS) by emendelson
+
+  DOSBoxWP is a customized version of DOSBox-X targetted for users of WordPerfect for DOS.
+
+  URL (Windows): http://www.columbia.edu/~em36/wpdos/dosboxwp.html
+
+  URL (macOS): http://www.columbia.edu/~em36/wpdos/wpdosboxmac.html
 
 * Win31DOSBox (Windows 3.1 for 64-bit Windows) by emendelson
 
