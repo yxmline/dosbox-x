@@ -49,6 +49,9 @@
   - SETCOLOR command can now change the text-mode color
     schemes in outputs rather than the TrueType font
     output too (VGA mode only). (Wengier)
+  - Added support for new TTF word processor type "FE"
+    for FastEdit, a new DOS text editor with functions
+    to view and change text styles. (Wengier)
   - Added the ability to toggle between Shift-JIS and
     graphical modes using Ctrl+F4 key (or ESC )3 and
     ESC )0 escape sequences) in the PC-98 mode. There
@@ -130,6 +133,8 @@
   - Fixed the mouse not automatically captured when
     DOSBox-X starts with the settings fullscreen=true
     and autolock=true. (Wengier)
+  - Fixed inputs in the Configuration Tool when the
+    Configuration Tool is scaled. (Wengier)
   - Fixed keys may not work after loading a saved state
     for the game Buck Rogers. (Wengier)
   - Fixed Windows detection for the game "Tex Murphy:
