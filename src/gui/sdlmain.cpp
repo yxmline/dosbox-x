@@ -9193,8 +9193,11 @@ bool DOSBOX_parse_argv() {
             control->opt_break_start = true;
         }
         else if (optname == "silent") {
+            putenv(const_cast<char*>("SDL_AUDIODRIVER=dummy"));
             putenv(const_cast<char*>("SDL_VIDEODRIVER=dummy"));
             control->opt_exit = true;
+            control->opt_silent = true;
+            control->opt_nomenu = true;
             control->opt_fastlaunch = true;
         }
         else if (optname == "exit") {
@@ -12367,7 +12370,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
     }
 
     /* default do not prompt if -conf, -userconf, -defaultconf, or -defaultdir is used */
-    if (control->opt_promptfolder < 0 && (!control->config_file_list.empty() || control->opt_userconf || control->opt_defaultconf || control->opt_used_defaultdir || workdiropt == "noprompt")) {
+    if (control->opt_promptfolder < 0 && (!control->config_file_list.empty() || control->opt_userconf || control->opt_defaultconf || control->opt_used_defaultdir || control->opt_fastlaunch || workdiropt == "noprompt")) {
         control->opt_promptfolder = 0;
     }
 
@@ -13953,6 +13956,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         MSG_Init();
 
         char name[6]="slot0";
+        if (!control->opt_silent)
         for (unsigned int i=0; i<SaveState::SLOT_COUNT; i++) {
             name[4]='0'+i;
             std::string command=SaveState::instance().getName(page*SaveState::SLOT_COUNT+i);

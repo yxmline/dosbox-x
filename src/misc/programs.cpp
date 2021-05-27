@@ -572,7 +572,7 @@ void CONFIG::Run(void) {
 		"-l", "-rmconf", "-h", "-help", "-?", "-axclear", "-axadd", "-axtype",
 		"-avistart","-avistop",
 		"-startmapper",
-		"-get", "-set",
+		"-get", "-set", "-setf",
 		"-writelang", "-wl", "-securemode", "-setup", "-all", "-mod", "-norem", "-errtest", "-gui", NULL };
 	enum prs {
 		P_NOMATCH, P_NOPARAMS, // fixed return values for GetParameterFromList
@@ -584,7 +584,7 @@ void CONFIG::Run(void) {
 		P_AUTOEXEC_CLEAR, P_AUTOEXEC_ADD, P_AUTOEXEC_TYPE,
 		P_REC_AVI_START, P_REC_AVI_STOP,
 		P_START_MAPPER,
-		P_GETPROP, P_SETPROP,
+		P_GETPROP, P_SETPROP, P_SETFORCE,
 		P_WRITELANG, P_WRITELANG2,
 		P_SECURE, P_SETUP, P_ALL, P_MOD, P_NOREM, P_ERRTEST, P_GUI
 	} presult = P_NOMATCH;
@@ -1002,6 +1002,51 @@ void CONFIG::Run(void) {
                             WriteOut("%d\n",rect.bottom-rect.top);
                             first_shell->SetEnv("CONFIG",std::to_string(rect.bottom-rect.top).c_str());
 #endif
+                        } else if (!strcasecmp(pvars[0].c_str(), "hostos")) {
+                            const char *hostos =
+#if defined(HX_DOS)
+                            "DOS"
+#elif defined(WIN32)
+                            "Windows"
+#elif defined(LINUX)
+                            "Linux"
+#elif defined(MACOSX)
+                            "macOS"
+#elif defined(OS2)
+                            "OS/2"
+#else
+                            "Other"
+#endif
+                            ;
+                            WriteOut("%s\n",hostos);
+                            first_shell->SetEnv("CONFIG",hostos);
+                        } else if (!strcasecmp(pvars[0].c_str(), "workdir")) {
+                            if (securemode_check()) return;
+                            char cwd[512] = {0};
+                            char *res = getcwd(cwd,sizeof(cwd)-1);
+                            WriteOut("%s\n",res==NULL?"":cwd);
+                            first_shell->SetEnv("CONFIG",res==NULL?"":cwd);
+                        } else if (!strcasecmp(pvars[0].c_str(), "programdir")) {
+                            if (securemode_check()) return;
+                            std::string GetDOSBoxXPath(bool withexe=false), exepath=GetDOSBoxXPath();
+                            WriteOut("%s\n",exepath.c_str());
+                            first_shell->SetEnv("CONFIG",exepath.c_str());
+                        } else if (!strcasecmp(pvars[0].c_str(), "userconfigdir")) {
+                            if (securemode_check()) return;
+                            std::string config_path;
+                            Cross::GetPlatformConfigDir(config_path);
+                            WriteOut("%s\n",config_path.c_str());
+                            first_shell->SetEnv("CONFIG",config_path.c_str());
+                        } else if (!strcasecmp(pvars[0].c_str(), "configdir")) {
+                            if (securemode_check()) return;
+                            std::string configdir=control->configfiles.size()?control->configfiles[control->configfiles.size()-1]:"";
+                            if (configdir.size()) {
+                                std::string::size_type pos = configdir.rfind(CROSS_FILESPLIT);
+                                if(pos == std::string::npos) pos = 0;
+                                configdir.erase(pos);
+                            }
+                            WriteOut("%s\n",configdir.c_str());
+                            first_shell->SetEnv("CONFIG",configdir.c_str());
                         } else
                             WriteOut(MSG_Get("PROGRAM_CONFIG_PROPERTY_ERROR"));
 						return;
@@ -1064,7 +1109,7 @@ void CONFIG::Run(void) {
 			}
 			return;
 		}
-		case P_SETPROP:	{
+		case P_SETPROP: case P_SETFORCE:	{
 			// Code for the configuration changes
 			// Official format: config -set "section property=value"
 			// Accepted: with or without -set, 
@@ -1162,7 +1207,7 @@ void CONFIG::Run(void) {
 				return;
 			}
 			Property *p = static_cast<Section_prop *>(sec2)->Get_prop(pvars[1]);
-			if (p==NULL||p->getChange()==Property::Changeable::OnlyAtStart) {
+			if ((p==NULL||p->getChange()==Property::Changeable::OnlyAtStart)&&presult!=P_SETFORCE) {
 				WriteOut(MSG_Get("PROGRAM_CONFIG_HLP_NOCHANGE"));
 				return;
 			}
@@ -1577,7 +1622,7 @@ void PROGRAMS_Init() {
 	MSG_Add("PROGRAM_CONFIG_NOCONFIGFILE","No config file loaded!\n");
 	MSG_Add("PROGRAM_CONFIG_PRIMARY_CONF","Primary config file: \n%s\n");
 	MSG_Add("PROGRAM_CONFIG_ADDITIONAL_CONF","Additional config files:\n");
-	MSG_Add("PROGRAM_CONFIG_CONFDIR","DOSBox-X %s configuration directory: \n%s\n\n");
+	MSG_Add("PROGRAM_CONFIG_CONFDIR","DOSBox-X %s user configuration directory: \n%s\n\n");
 	MSG_Add("PROGRAM_CONFIG_WORKDIR","DOSBox-X's working directory: \n%s\n\n");
 	
 	// writeconf
@@ -1592,8 +1637,7 @@ void PROGRAMS_Init() {
 		"-wl (or -writelang) with filename: Writes the current language strings.\n"\
 		"-wcp [filename] Writes file to program directory (dosbox-x.conf or filename).\n"\
 		"-wcd Writes to the default config file in the config directory.\n"\
-		"-all Use this with -wc, -wcp, or -wcd to write ALL options to the config file.\n"\
-		"-mod Use this with -wc, -wcp, or -wcd to write modified config options only.\n"\
+		"-all, -mod Use with -wc, -wcp, or -wcd to write ALL or only modified options.\n"\
 		"-wcboot, -wcpboot, or -wcdboot will reboot DOSBox-X after writing the file.\n"\
 		"-bootconf (or -bc) reboots with specified config file (or primary loaded file).\n"\
 		"-norem Use this with -wc, -wcp, or -wcd to not write config option remarks.\n"\
@@ -1607,8 +1651,8 @@ void PROGRAMS_Init() {
 		"-securemode Enables secure mode where features like mounting will be disabled.\n"\
 		"-startmapper Starts the DOSBox-X mapper editor.\n"\
 		"-gui Starts the graphical configuration tool.\n"
-		"-get \"section property\" returns the value of the property.\n"\
-		"-set \"section property=value\" sets the value of the property.\n");
+		"-get \"section property\" returns the value of the property (also to %%CONFIG%%).\n"\
+		"-set (-setf for force) \"section property=value\" sets the value of the property.\n");
 	MSG_Add("PROGRAM_CONFIG_HLP_PROPHLP","Purpose of property \"%s\" (contained in section \"%s\"):\n%s\n\nPossible Values: %s\nDefault value: %s\nCurrent value: %s\n");
 	MSG_Add("PROGRAM_CONFIG_HLP_LINEHLP","Purpose of section \"%s\":\n%s\nCurrent value:\n%s\n");
 	MSG_Add("PROGRAM_CONFIG_HLP_NOCHANGE","This property cannot be changed at runtime.\n");
