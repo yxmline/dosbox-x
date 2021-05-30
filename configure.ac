@@ -1001,7 +1001,7 @@ case "$host" in
 esac
 
 dnl FEATURE: Whether to use libslirp, and enable userspace TCP/IP emulation
-AH_TEMPLATE(C_SLIRP,[Define to 1 to enable userspace TCP/IP emulation], requires libslirp)
+AH_TEMPLATE(C_SLIRP, [Define to 1 to enable userspace TCP/IP emulation, requires libslirp])
 AC_ARG_ENABLE(libslirp,AC_HELP_STRING([--disable-libslirp],[Disable libslirp support]),enable_libslirp=$enableval,enable_libslirp=yes)
 if test x$enable_libslirp == xyes ; then
   case "$host" in
