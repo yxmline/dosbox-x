@@ -22,7 +22,7 @@
 #include "../ints/int10.h"
 #include <string.h>
 #include "inout.h"
-#include "jega.h"
+#include "jfont.h"
 #include "shiftjis.h"
 #include "callback.h"
 
