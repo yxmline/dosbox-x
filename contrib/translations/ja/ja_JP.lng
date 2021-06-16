@@ -25,6 +25,12 @@ DOSBox-X 設定ツール
 :CONFIG_TOOL_EXIT
 設定ツールを終了する
 .
+:MAPPER_EDITOR_EXIT
+マッパーエディター終了する
+.
+:SAVE_MAPPER_FILE
+マッパーファイルを保存
+.
 :WARNING
 注意
 .
@@ -205,7 +211,7 @@ IDE ポジション
 < 前のページ
 .
 :NEXT_PAGE
-次のページ >
+   次のページ >
 .
 :SELECT_EVENT
 設定変更するイベントを選択
@@ -3294,7 +3300,7 @@ FM/OPL 出力を保存
 クリップボードにコピー
 .
 :MAPPER:cycauto
-サイクル自動設定切替
+サイクル自動設定 切替
 .
 :MAPPER:debugger
 デバッガーを表示

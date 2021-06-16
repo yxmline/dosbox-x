@@ -20,6 +20,12 @@ Herramienta de configuración de DOSBox-X
 :CONFIG_TOOL_EXIT
 Salir de la herramienta de configuración
 .
+:MAPPER_EDITOR_EXIT
+Exit mapper editor
+.
+:SAVE_MAPPER_FILE
+Save mapper file
+.
 :WARNING
 Aviso
 .
@@ -198,7 +204,7 @@ Slot
 < Previous Page
 .
 :NEXT_PAGE
- Next Page >
+    Next Page >
 .
 :SELECT_EVENT
 Select an event to change.
