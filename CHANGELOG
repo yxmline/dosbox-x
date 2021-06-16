@@ -17,9 +17,12 @@
     Turbo (Fast Forward) mode at start. You can also
     change it from the command-line via CONFIG command
     (e.g. "config -set turbo=true"). (Wengier)
+  - Added value "quiet" to "log console" config option
+    to only log DOS console outputs. (Wengier)
   - It is now possible to translate text for graphical
-    Configuration Tool interface. The size or position
-    of some buttons are adjusted accordingly. (Wengier)
+    Configuration Tool and Mapper Editor interfaces.
+    The size/position of some buttons in Configuration
+    Tool are adjusted accordingly as well. (Wengier)
   - Config option "usescancodes=auto" now implies false
     for PC-98 mode in SDL1 builds. (Wengier)
   - For PC-98 mode, if both FONT.ROM and FREECG98.BMP
@@ -30,9 +33,9 @@
     for the TrueType font (TTF) output too. This option
     is now enabled by default for JP mode. (Wengier)
   - Added support for showing Chinese/Japanese/Korean
-    characters in the SDL-drawn menu (except for OpenGL
-    outputs, where only SBCS code pages are supported)
-    and Configuration Tool interface (so for example
+    characters in the SDL-drawn menu (and characters in
+    different SBCS code pages in OpenGL outputs) and
+    the Configuration Tool interface (so for example
     the DOS command help will show correctly). You can
     change the DBCS font used by the Configuration Tool
     interface via jdbcsfont14 config option. (Wengier)

@@ -38,6 +38,21 @@ Cancel
 :CLOSE
 Close
 .
+:ADD
+Add
+.
+:DEL
+Del
+.
+:NEXT
+Next
+.
+:CAPT
+Capt
+.
+:EXIT
+Exit
+.
 :SAVE
 Save
 .
@@ -91,6 +106,39 @@ Getting Started
 .
 :CDROM_SUPPORT
 CD-ROM Support
+.
+:DRIVE_INFORMATION
+Drive information
+.
+:MOUNTED_DRIVE_NUMBER
+Mounted drive numbers
+.
+:IDE_CONTROLLER_ASSIGNMENT
+IDE controller assignment
+.
+:HELP_COMMAND
+Help on DOS command
+.
+:CURRENT_VOLUME
+Current sound mixer volumes
+.
+:CURRENT_SBCONFIG
+Sound Blaster configuration
+.
+:CURRENT_MIDICONFIG
+Current MIDI configuration
+.
+:CREATE_IMAGE
+Create blank disk image
+.
+:NETWORK_LIST
+Network interface list
+.
+:PRINTER_LIST
+Printer device list
+.
+:INTRODUCTION_TO
+Introduction to DOSBox-X
 .
 :INTRODUCTION
 Introduction
@@ -154,6 +202,21 @@ Empty slot
 .
 :SLOT
 Slot
+.
+:PREVIOUS_PAGE
+< Previous Page
+.
+:NEXT_PAGE
+ Next Page >
+.
+:SELECT_EVENT
+Select an event to change.
+.
+:SELECT_DIFFERENT_EVENT
+Select a different event or hit the Add/Del/Next buttons.
+.
+:MAPPER_FILE_SAVED
+Mapper file saved
 .
 :AUTO_CYCLE_MAX
 Auto cycles [max]
@@ -2392,4 +2455,82 @@ Print DOS text screen
 .
 :MENU:pc98_use_uskb
 Use US keyboard layout
+.
+:MAPPER:caprawopl
+Record FM/OPL output
+.
+:MAPPER:copyall
+Copy to clipboard
+.
+:MAPPER:cycauto
+Toggle auto cycles
+.
+:MAPPER:debugger
+Show debugger
+.
+:MAPPER:decsize
+Decrease TTF size
+.
+:MAPPER:dynamic
+CPU: dynamic core
+.
+:MAPPER:fastedit
+Quick edit mode
+.
+:MAPPER:full
+CPU: full core
+.
+:MAPPER:incsize
+Increase TTF size
+.
+:MAPPER:loadmap
+Load mapper file
+.
+:MAPPER:nextslot
+Next save slot
+.
+:MAPPER:normal
+CPU: normal core
+.
+:MAPPER:paste
+Paste from clipboard
+.
+:MAPPER:pasteend
+Stop clipboard paste
+.
+:MAPPER:pauseints
+Pause with interrupt
+.
+:MAPPER:prevslot
+Previous save slot
+.
+:MAPPER:quickrun
+Quick launch program
+.
+:MAPPER:reboot
+Reboot DOS system
+.
+:MAPPER:recmtwave
+Record to M.T. AVI
+.
+:MAPPER:recvoldown
+Decrease rec. volume
+.
+:MAPPER:recvolup
+Increase rec. volume
+.
+:MAPPER:rescanall
+Rescan drives
+.
+:MAPPER:reset
+Reset DOSBox-X
+.
+:MAPPER:showstate
+Display state info
+.
+:MAPPER:simple
+CPU: simple core
+.
+:MAPPER:togmenu
+Toggle menu bar
 .

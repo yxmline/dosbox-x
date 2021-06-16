@@ -43,6 +43,21 @@ OK
 :CLOSE
 閉じる
 .
+:ADD
+追加
+.
+:DEL
+削除
+.
+:NEXT
+次
+.
+:CAPT
+キャプチャ
+.
+:EXIT
+終了
+.
 :SAVE
 保存
 .
@@ -56,7 +71,7 @@ OK
 保存後に再起動
 .
 :PASTE_CLIPBOARD
-クリップボードを貼付け
+クリップボードを貼付
 .
 :APPEND_HISTORY
 履歴を追加
@@ -100,8 +115,11 @@ CD-ROM サポート
 :INTRODUCTION
 紹介
 .
+:INTRODUCTION_TO
+DOSBox-X 紹介
+.
 :ABOUT
-DOSBox-Xについて
+について
 .
 :CONFIGURE_GROUP
 設定するグループを選択:
@@ -110,13 +128,13 @@ DOSBox-Xについて
 詳細オプションの表示
 .
 :USE_PRIMARYCONFIG
-プライマリ設定ファイルを使用
+プライマリ設定ファイル
 .
 :USE_PORTABLECONFIG
-ポータブル設定ファイルを使用
+ポータブル設定ファイル
 .
 :USE_USERCONFIG
-ユーザ設定ファイルを使用
+ユーザ設定ファイル
 .
 :CONFIG_SAVETO
 保存する設定ファイルの名前を入力:
@@ -131,7 +149,9 @@ DOSBox-Xについて
 言語ファイル名 (オプション):
 .
 :INTRO_MESSAGE
-DOSBox-Xへようこそ。無料で完全なDOSエミュレーションパッケージです。\nDOSBox-Xは一般的なDOSに似たDOSシェルを表示します。\nDOSマシンからWindows 3.x や 95/98を動作させることもできます。
+DOSBox-Xへようこそ。無料で完全なDOSエミュレーションパッケージです。
+DOSBox-Xは一般的なDOSに似たDOSシェルを表示します。
+DOSマシンからWindows 3.x や 95/98を動作させることもできます。
 .
 :DRIVE
 ドライブ
@@ -159,6 +179,21 @@ IDE ポジション
 .
 :SLOT
 スロット
+.
+:PREVIOUS_PAGE
+< 前のページ
+.
+:NEXT_PAGE
+次のページ >
+.
+:SELECT_EVENT
+設定変更するイベントを選択
+.
+:SELECT_DIFFERENT_EVENT
+イベントを選択または、追加/削除/次ボタンを押してください
+.
+:MAPPER_FILE_SAVED
+マッバーファイルを保存しました
 .
 :AUTO_CYCLE_MAX
 自動サイクル設定 [最大]
@@ -2062,7 +2097,7 @@ DOSBox-X コマンド・シェルの起動
 DOSBox-Xを終了する
 .
 :MENU:mapper_capmouse
-マウスをキャプチャする
+マウスをキャプチャ
 .
 :MENU:mapper_fastedit
 クイック編集: 選択時コピーとテキスト貼付け
@@ -2092,16 +2127,16 @@ DOS画面上のテキストをすべてコピー
 全画面表示との切替
 .
 :MENU:mapper_resetsize
-ウィンドウサイズのリセット
+ウィンドウサイズ初期化
 .
 :MENU:mapper_incsize
-TTFフォントサイズ 大きくする
+TTFフォントサイズ: 拡大
 .
 :MENU:mapper_decsize
-TTFフォントサイズ 小さくする
+TTFフォントサイズ: 縮小
 .
 :MENU:mapper_togmenu
-メニューバーの表示・非表示
+メニューバー表示切替
 .
 :MENU:MainMenu
 メイン
@@ -2983,7 +3018,7 @@ FM (OPL) 出力を保存
 動画をAVIに保存
 .
 :MENU:mapper_scrshot
-スクリーンショットを撮る
+スクリーンショット
 .
 :MENU:mapper_debugger
 DOSBox-X デバッガの起動
@@ -3076,7 +3111,7 @@ Pentium Pro
 デバッグ用ライン表示 (CRTCステータス読取り)
 .
 :MENU:mapper_swapimg
-フロッピードライブを入替
+フロッピーを入替
 .
 :MENU:mapper_swapcd
 CD ドライブを入替
@@ -3224,4 +3259,82 @@ DOS テキスト画面を印刷
 .
 :MENU:pc98_use_uskb
 USキーボードレイアウトを使用
+.
+:MAPPER:caprawopl
+FM/OPL 出力を保存
+.
+:MAPPER:copyall
+クリップボードにコピー
+.
+:MAPPER:cycauto
+サイクル自動設定 切替
+.
+:MAPPER:debugger
+デバッガーを表示
+.
+:MAPPER:decsize
+TTF サイズ: 縮小
+.
+:MAPPER:dynamic
+CPU:ダイナミックコア
+.
+:MAPPER:fastedit
+クイック編集モード
+.
+:MAPPER:full
+CPU:完全コア
+.
+:MAPPER:incsize
+TTF サイズ: 拡大
+.
+:MAPPER:loadmap
+マッパーファイル読込
+.
+:MAPPER:nextslot
+次のセーブスロット
+.
+:MAPPER:normal
+CPU:標準コア
+.
+:MAPPER:paste
+クリップボードを貼付
+.
+:MAPPER:pasteend
+クリップボード停止
+.
+:MAPPER:pauseints
+一時停止(割込有効)
+.
+:MAPPER:prevslot
+前のセーブスロット
+.
+:MAPPER:quickrun
+クイック起動
+.
+:MAPPER:recmtwave
+M.T. AVI形式で保存
+.
+:MAPPER:reboot
+DOSシステムの再起動
+.
+:MAPPER:recvoldown
+録音レベル: 下
+.
+:MAPPER:recvolup
+録音レベル: 上
+.
+:MAPPER:rescanall
+ドライブを再スキャン
+.
+:MAPPER:reset
+DOSBox-Xを再起動
+.
+:MAPPER:showstate
+ステートの情報表示
+.
+:MAPPER:simple
+CPU:簡易コア
+.
+:MAPPER:togmenu
+メニューバー表示切替
 .

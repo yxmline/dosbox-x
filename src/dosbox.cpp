@@ -3788,8 +3788,10 @@ void DOSBOX_SetupConfigSections(void) {
                     "NOTE: This option has no effect in PC-98 mode where MS-DOS systems integrate ANSI.SYS into the DOS kernel.");
     Pbool->SetBasic(true);
 
-    Pbool = secprop->Add_bool("log console",Property::Changeable::WhenIdle,false);
-    Pbool->Set_help("If set, log DOS CON output to the log file.");
+    Pstring = secprop->Add_string("log console",Property::Changeable::WhenIdle,"false");
+    Pstring->Set_values(automountopts);
+    Pstring->Set_help("If set, log DOS CON output to the log file. Setting to \"quiet\" will log DOS CON output only (no debugging output).");
+    Pstring->SetBasic(true);
 
     Pint = secprop->Add_int("dos sda size",Property::Changeable::WhenIdle,0);
     Pint->Set_help("SDA (swappable data area) size, in bytes. Set to 0 to use a reasonable default.");
@@ -4424,6 +4426,11 @@ void DOSBOX_SetupConfigSections(void) {
     MSG_Add("OK","OK");
     MSG_Add("CANCEL","Cancel");
     MSG_Add("CLOSE","Close");
+    MSG_Add("ADD","Add");
+    MSG_Add("DEL","Del");
+    MSG_Add("NEXT","Next");
+    MSG_Add("CAPT","Capt");
+    MSG_Add("EXIT","Exit");
     MSG_Add("SAVE","Save");
     MSG_Add("SAVE_CONFIGURATION","Save configuration");
     MSG_Add("SAVE_LANGUAGE","Save language file");
@@ -4442,6 +4449,17 @@ void DOSBOX_SetupConfigSections(void) {
     MSG_Add("VISIT_HOMEPAGE","Visit Homepage");
     MSG_Add("GET_STARTED","Getting Started");
     MSG_Add("CDROM_SUPPORT","CD-ROM Support");
+    MSG_Add("DRIVE_INFORMATION","Drive information");
+    MSG_Add("MOUNTED_DRIVE_NUMBER","Mounted drive numbers");
+    MSG_Add("IDE_CONTROLLER_ASSIGNMENT","IDE controller assignment");
+    MSG_Add("HELP_COMMAND","Help on DOS command");
+    MSG_Add("CURRENT_VOLUME","Current sound mixer volumes");
+    MSG_Add("CURRENT_SBCONFIG","Sound Blaster configuration");
+    MSG_Add("CURRENT_MIDICONFIG","Current MIDI configuration");
+    MSG_Add("CREATE_IMAGE","Create blank disk image");
+    MSG_Add("NETWORK_LIST","Network interface list");
+    MSG_Add("PRINTER_LIST","Printer device list");
+    MSG_Add("INTRODUCTION_TO","Introduction to DOSBox-X");
     MSG_Add("INTRODUCTION","Introduction");
     MSG_Add("ABOUT","About");
     MSG_Add("CONFIGURE_GROUP", "Choose a settings group to configure:");
@@ -4463,6 +4481,11 @@ void DOSBOX_SetupConfigSections(void) {
     MSG_Add("SWAP_SLOT","Swap slot");
     MSG_Add("EMPTY_SLOT","Empty slot");
     MSG_Add("SLOT","Slot");
+    MSG_Add("PREVIOUS_PAGE","< Previous Page");
+    MSG_Add("NEXT_PAGE"," Next Page >");
+    MSG_Add("SELECT_EVENT", "Select an event to change.");
+    MSG_Add("SELECT_DIFFERENT_EVENT", "Select a different event or hit the Add/Del/Next buttons.");
+    MSG_Add("MAPPER_FILE_SAVED", "Mapper file saved");
     MSG_Add("AUTO_CYCLE_MAX","Auto cycles [max]");
     MSG_Add("AUTO_CYCLE_AUTO","Auto cycles [auto]");
     MSG_Add("AUTO_CYCLE_OFF","Auto cycles [off]");
