@@ -7319,8 +7319,13 @@ void SetIMPosition() {
 		nrows=(IS_EGAVGA_ARCH?real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS):24)+1;
 		ncols=real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
     }
-    if (y>=nrows-1) y=nrows-8;
-    if (x>=ncols-4) x=ncols-4;
+    if (dos.loaded_codepage == 936 || dos.loaded_codepage == 950) {
+        if (y>=nrows-1) y=nrows-8;
+        if (x>=ncols-4) x=ncols-4;
+    } else {
+        x--;
+        y--;
+    }
 
 	if ((im_x != x || im_y != y) && GetTicks() - last_ticks > 100) {
 		last_ticks = GetTicks();
@@ -8225,6 +8230,10 @@ void SDL_SetupConfigSection() {
     Pstring = sdl_sec->Add_string("output", Property::Changeable::Always, "default");
     Pstring->Set_help("What video system to use for output (openglnb = OpenGL nearest; openglpp = OpenGL perfect; ttf = TrueType font output).");
     Pstring->Set_values(outputs);
+    Pstring->SetBasic(true);
+
+    Pstring = sdl_sec->Add_string("videodriver",Property::Changeable::WhenIdle, "");
+    Pstring->Set_help("Forces a video driver (e.g. windib/windows, directx, x11, fbcon, dummy, etc) for the SDL library to use.");
     Pstring->SetBasic(true);
 
     Pbool = sdl_sec->Add_bool("maximize",Property::Changeable::OnlyAtStart,false);
@@ -13278,6 +13287,12 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         putenv(const_cast<char*>("SDL_DISABLE_LOCK_KEYS=1"));
         LOG(LOG_GUI,LOG_DEBUG)("SDL 1.2.14 hack: SDL_DISABLE_LOCK_KEYS=1");
 #endif
+
+        std::string videodriver = static_cast<Section_prop *>(control->GetSection("sdl"))->Get_string("videodriver");
+        if (videodriver.size()) {
+            videodriver = "SDL_VIDEODRIVER="+videodriver;
+            putenv(videodriver.c_str());
+        }
 
 #ifdef WIN32
         /* hack: Encourage SDL to use windib if not otherwise specified */
