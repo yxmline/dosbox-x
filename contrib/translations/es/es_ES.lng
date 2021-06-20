@@ -2220,6 +2220,9 @@ Aplicaciones de host
 :MENU:dos_win_autorun
 Lanzar para ejecutar en host Windows
 .
+:MENU:dos_win_transpath
+Traducir rutas a rutas del sistema host
+.
 :MENU:dos_win_wait
 Esperar a la aplicación si es posible
 .
@@ -2504,6 +2507,9 @@ TRUENAME
 .
 :MENU:DebugMenu
 Depurador
+.
+:MENU:HelpDebugMenu
+Consola de registro
 .
 :MENU:debug_blankrefreshtest
 Prueba de refresco (pantalla en blanco)

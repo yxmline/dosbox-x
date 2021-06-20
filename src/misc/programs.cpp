@@ -54,7 +54,7 @@ Bitu call_program;
 extern const char *modifier;
 extern std::string langname;
 extern int enablelfn, paste_speed, wheel_key, freesizecap, wpType, wpVersion, wpBG, wpFG, lastset, blinkCursor;
-extern bool dos_kernel_disabled, force_nocachedir, wpcolon, lockmount, enable_config_as_shell_commands, load, winrun, winautorun, startcmd, startwait, startquiet, mountwarning, wheel_guest, clipboard_dosapi, noremark_save_state, force_load_state, sync_time, manualtime, showbold, showital, showline, showsout, char512, printfont, dbcs_sbcs, autoboxdraw, halfwidthkana, ticksLocked;
+extern bool dos_kernel_disabled, force_nocachedir, wpcolon, lockmount, enable_config_as_shell_commands, load, winrun, winautorun, startcmd, startwait, startquiet, starttranspath, mountwarning, wheel_guest, clipboard_dosapi, noremark_save_state, force_load_state, sync_time, manualtime, showbold, showital, showline, showsout, char512, printfont, dbcs_sbcs, autoboxdraw, halfwidthkana, ticksLocked;
 
 /* This registers a file on the virtual drive and creates the correct structure for it*/
 
@@ -1445,6 +1445,15 @@ void CONFIG::Run(void) {
 								mainMenu.get_item("dos_win_autorun").check(winautorun).enable(true).refresh_item(mainMenu);
 #endif
 #if defined(WIN32) && !defined(HX_DOS) || defined(LINUX) || defined(MACOSX)
+							} else if (!strcasecmp(inputline.substr(0, 15).c_str(), "starttranspath=")) {
+								starttranspath = section->Get_bool("starttranspath");
+								mainMenu.get_item("dos_win_transpath").check(starttranspath).enable(
+#if defined(WIN32) && !defined(HX_DOS)
+                                true
+#else
+                                startcmd
+#endif
+                                ).refresh_item(mainMenu);
 							} else if (!strcasecmp(inputline.substr(0, 10).c_str(), "startwait=")) {
 								startwait = section->Get_bool("startwait");
                                 mainMenu.get_item("dos_win_wait").check(startwait).enable(

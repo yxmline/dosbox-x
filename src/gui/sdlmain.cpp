@@ -10222,19 +10222,26 @@ bool dos_lfn_disable_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * co
 }
 
 #if defined(WIN32) && !defined(HX_DOS) || defined(LINUX) || defined(MACOSX)
+extern bool winautorun, startwait, startquiet, starttranspath;
 bool dos_win_autorun_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
-    extern bool winautorun;
     winautorun = !winautorun;
     mainMenu.get_item("dos_win_autorun").check(winautorun).refresh_item(mainMenu);
+    return true;
+}
+
+bool dos_win_transpath_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    starttranspath = !starttranspath;
+    mainMenu.get_item("dos_win_transpath").check(starttranspath).refresh_item(mainMenu);
     return true;
 }
 
 bool dos_win_wait_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
-    extern bool startwait;
     startwait = !startwait;
     mainMenu.get_item("dos_win_wait").check(startwait).refresh_item(mainMenu);
     return true;
@@ -10243,7 +10250,6 @@ bool dos_win_wait_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const
 bool dos_win_quiet_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
-    extern bool startquiet;
     startquiet = !startquiet;
     mainMenu.get_item("dos_win_quiet").check(startquiet).refresh_item(mainMenu);
     return true;
@@ -13291,7 +13297,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         std::string videodriver = static_cast<Section_prop *>(control->GetSection("sdl"))->Get_string("videodriver");
         if (videodriver.size()) {
             videodriver = "SDL_VIDEODRIVER="+videodriver;
-            putenv(videodriver.c_str());
+            putenv((char *)videodriver.c_str());
         }
 
 #ifdef WIN32
@@ -13878,6 +13884,8 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                     .enable(false)
 #endif
                     ;
+                    mainMenu.alloc_item(DOSBoxMenu::item_type_id,"dos_win_transpath").set_text("Translate paths to host system paths").
+                        set_callback_function(dos_win_transpath_menu_callback);
                     mainMenu.alloc_item(DOSBoxMenu::item_type_id,"dos_win_wait").set_text("Wait for the application if possible").
                         set_callback_function(dos_win_wait_menu_callback);
                     mainMenu.alloc_item(DOSBoxMenu::item_type_id,"dos_win_quiet").set_text("Quiet mode - no start messages").
@@ -14038,13 +14046,13 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             {
 #if C_DEBUG
                 DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"DebugMenu");
-
                 item.set_text("Debug");
+                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"HelpDebugMenu")
 #else
                 DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"HelpDebugMenu");
-
-                item.set_text("Logging console");
+                item
 #endif
+                .set_text("Logging console");
 
                 {
                     mainMenu.alloc_item(DOSBoxMenu::item_type_id,"debug_blankrefreshtest").set_text("Refresh test (blank display)").set_callback_function(refreshtest_menu_callback);
