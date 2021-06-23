@@ -1,4 +1,9 @@
 0.83.15
+  - Added menu command to spawn a new instance of
+    DOSBox-X to Mac OS X builds to work around the
+    singular app instance model the Finder tends to
+    prefer, so that users can run multiple instances
+    if they wish. (joncampbell123)
   - Mac OS X builds will once again have Fluidsynth,
     libslirp, and FFMPEG support from revised .app
     building code. For best results support is enabled
@@ -59,18 +64,19 @@
     are not found in the directory, then DOSBox-X will
     now use internal Japanese font (also used by DOS/V
     and JEGA systems) in addition to built-in 8x16 SBCS
-    font generated from FREECG98.BMP. (Wengier)
+    font pre-generated from FREECG98.BMP. (Wengier)
   - The config option ttf.halfwidthkana (now in [ttf]
     section) will enable low ASCII boxing characters
     for the TrueType font (TTF) output too. This option
-    is now enabled by default for JP mode. (Wengier)
+    is now enabled by default for JP mode, and printing
+    these characters is also supported. (Wengier)
   - Added support for showing Chinese/Japanese/Korean
-    characters in the SDL-drawn menu (and characters in
-    different SBCS code pages in OpenGL outputs) and
-    the Configuration Tool interface (so for example
-    the DOS command help will show correctly). You can
-    change the DBCS font used by the Configuration Tool
-    interface via jdbcsfont14 config option. (Wengier)
+    characters in the SDL-drawn menu (in addition to
+    characters in different SBCS code pages) and the
+    Configuration Tool interface (so e.g. DOS command
+    help will show correctly for these languages). You
+    can change the DBCS font used by Configuration Tool
+    interface via fontxdbcs14 config option. (Wengier)
   - Added support for inputing DBCS characters using
     system input method (IME) in Windows SDL1 build.
     Chinese (Simplified & Traditional) IME should work
