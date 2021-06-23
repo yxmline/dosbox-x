@@ -1,4 +1,17 @@
 0.83.15
+  - Mac OS X builds will once again have Fluidsynth,
+    libslirp, and FFMPEG support from revised .app
+    building code. For best results support is enabled
+    at compile time only if Brew is installed along
+    with Brew builds of those packages. (joncampbell123)
+  - Mac OS X coreaudio MIDI support will continue
+    with the default soundfont rather than give up
+    if it cannot select the custom soundfont specified
+    in dosbox.conf (joncampbell123)
+  - Fixed Mac OS X bug where coremidi would attempt
+    MIDI output even if no MIDI destinations are
+    available, which is apparently the case on
+    Big Sur. (joncampbell123)
   - MOUNT command followed by a drive letter only will
     show the current status of the drive, or show that
     the drive is not mounted if so. You can make the
@@ -26,10 +39,16 @@
     (e.g. "config -set turbo=true"). (Wengier)
   - Added value "quiet" to "log console" config option
     to only log DOS console outputs. (Wengier)
-  - You can now check the installed DOSBox-X version by
-    calling Int21h/AX=2B03h/CX=2442h in your program -
-    AL will become 0, and BX will return the DOSBox-X
-    version (e.g. BH = 83, BL = 15). (Wengier)
+  - There is now a special DOS function for DOSBox-X at
+    Int21h/AH=2B/CX=0x4442h('DB')/DX=0x2D58h('-X'), as
+    follows: AL=0h (DOSBox-X installation check), AL=1h
+    (SDL version check), AL=2h (platform check), AL=3h
+    (machine type check), and AL=4h (DOSBox-X version
+    check). For example, you can get installed DOSBox-X
+    version by calling the function Int21h/AX=2B04h/CX=
+    0x4442h/DX=0x2D58h in your program - AL and AH will
+    become 0, and BX will return the DOSBox-X version
+    number after "0." (e.g. BH=83, BL=15). (Wengier)
   - It is now possible to translate text for graphical
     Configuration Tool and Mapper Editor interfaces.
     The sizes and/or positions of some buttons in these
@@ -69,11 +88,12 @@
     the default fonts will be used for them. (Wengier)
   - Added support for DOS/V (Japanese mode) by adopting
     code from DOSVAXJ3. Also added support for Chinese
-    and Korean DOS/V modes. Set "dosv" to "jp", "chs",
-    "cht", or "ko" in [dosv] section of the config file
-    to enable DOS/V for different CJK modes. There are
-    also various font-related options added in [dosv]
-    section for the DOS/V support. (Wengier)
+    and Korean DOS/V modes. Set option "dosv" to "jp",
+    "chs" (or "cn"), "cht" (or "tw"), or "ko" in [dosv]
+    section of the config file to enable DOS/V mode for
+    different CJK languages. There are now also various
+    font-related (and V-text screen mode) options added
+    in [dosv] section for the DOS/V support. (Wengier)
   - Added "videodriver" config option in [sdl] section
     to force a video driver (such as windib/windows,
     x11, dummy) for the SDL library to use. The video
@@ -84,6 +104,9 @@
     from [render] section to this section. The Windows
     installer will also automatically transfer previous
     TTF options to the new [ttf] section. (Wengier)
+  - When setting to "auto", config option "allow lmsw
+    to exit protected mode" will be active for Pentium+
+    CPUs instead of 486+ CPUs. (Wengier)
   - Fixed a bug which may lead to crash when pasting
     text via the DOS clipboard API (e.g. the 4DOS CLIP:
     device) in non-Windows platforms. (Wengier)
