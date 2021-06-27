@@ -34,10 +34,10 @@
 #include "inout.h"
 #include "int10.h"
 #include "bios.h"
+#include "jfont.h"
 #include "dos_inc.h"
 #include "support.h"
 #include "setup.h"
-#include "render.h"
 #include "control.h"
 #include "SDL.h"
 
@@ -600,6 +600,7 @@ static inline bool GFX_IsFullscreen(void) {
     return false;
 }
 #endif
+#include "render.h"
 
 void KEYBOARD_AUX_LowerIRQ() {
     if (MOUSE_IRQ != 0)
@@ -724,6 +725,7 @@ uint8_t Mouse_GetButtonState(void) {
 
 char text[5000];
 extern bool isDBCSCP();
+extern std::vector<std::pair<int,int>> jtbs;
 const char* Mouse_GetSelected(int x1, int y1, int x2, int y2, int w, int h, uint16_t *textlen) {
 	uint16_t result=0, len=0;
 	uint8_t page = real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
@@ -796,8 +798,14 @@ const char* Mouse_GetSelected(int x1, int y1, int x2, int y2, int w, int h, uint
                 } else
 					text[len++]=result;
 			} else {
-				ReadCharAttr(j,i,page,&result);
-				text[len++]=result;
+                if (!isJEGAEnabled()||j>c1||std::find(jtbs.begin(), jtbs.end(), std::make_pair(i,j)) == jtbs.end()) {
+                    ReadCharAttr(j,i,page,&result);
+                    text[len++]=result;
+                }
+                if (isJEGAEnabled()&&j==c2&&c2<c-1&&std::find(jtbs.begin(), jtbs.end(), std::make_pair(i,j+1)) != jtbs.end()) {
+                    ReadCharAttr(j+1,i,page,&result);
+                    text[len++]=result;
+                }
 			}
 		}
 		while (len>0&&text[len-1]==32) text[--len]=0;
