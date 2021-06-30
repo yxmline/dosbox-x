@@ -3685,7 +3685,7 @@ static Bitu INT18_PC98_Handler(void) {
             }
             break;
         /* From this point on the INT 18h call list appears to wander off from the keyboard into CRT/GDC/display management. */
-        case 0x40: /* Start displaying the graphics screen (ã‚°ãƒ©ãƒ•ã‚£ãƒƒã‚¯ç”»é¢ã®è¡¨ç¤ºé–‹å§‹) */
+        case 0x40: /* Start displaying the graphics screen (グラフィック画面の表示開始) */
             pc98_gdc[GDC_SLAVE].force_fifo_complete();
             pc98_gdc[GDC_SLAVE].display_enable = true;
  
@@ -3694,7 +3694,7 @@ static Bitu INT18_PC98_Handler(void) {
                 mem_writeb(0x54C/*MEMB_PRXCRT*/,b | 0x80);
             }
             break;
-        case 0x41: /* Stop displaying the graphics screen (ã‚°ãƒ©ãƒ•ã‚£ãƒƒã‚¯ç”»é¢ã®è¡¨ç¤ºçµ‚äº†) */
+        case 0x41: /* Stop displaying the graphics screen (グラフィック画面の表示終了) */
             pc98_gdc[GDC_SLAVE].force_fifo_complete();
             pc98_gdc[GDC_SLAVE].display_enable = false;
 
@@ -3703,7 +3703,7 @@ static Bitu INT18_PC98_Handler(void) {
                 mem_writeb(0x54C/*MEMB_PRXCRT*/,b & (~0x80));
             }
             break;
-        case 0x42: /* Display area setup (è¡¨ç¤ºé ˜åŸŸã®è¨­å®š) */
+        case 0x42: /* Display area setup (表示領域の設定) */
             // HACK for Quarth: If the game has triggered vsync interrupt, wait for it.
             // Quarth's vsync interrupt will reprogram the display partitions back to what
             // it would have set for gameplay after this modeset and cause display problems
