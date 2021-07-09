@@ -1341,6 +1341,12 @@ void SHELL_Init() {
 			"Note: External commands like \033[33;1mMOUNT\033[0m and \033[33;1mIMGMOUNT\033[0m are not listed by HELP [/A].\n"
 			"      These commands can be found on the Z: drive as programs (e.g. MOUNT.COM).\n"
             "      Type \033[33;1mcommand /?\033[0m or \033[33;1mHELP command\033[0m for help information for that command.\n");
+    MSG_Add("SHELL_CMD_LS_HELP","Lists directory contents.\n");
+    MSG_Add("SHELL_CMD_LS_HELP_LONG","LS [drive:][path][filename] [/A] [/L] [/P] [/Z]\n\n"
+            "  /A     Lists hidden and system files also.\n"
+            "  /L     Lists names one per line.\n"
+            "  /P     Pauses after each screenful of information.\n"
+            "  /Z     Displays short names even if LFN support is available.\n");
 	MSG_Add("SHELL_CMD_MKDIR_HELP","Creates a directory.\n");
 	MSG_Add("SHELL_CMD_MKDIR_HELP_LONG","MKDIR [drive:][path]\n"
 	        "MD [drive:][path]\n");
