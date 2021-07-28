@@ -3806,7 +3806,7 @@ bool readTTF(const char *fName, bool bold, bool ital) {
             }
         }
 #elif defined(LINUX)
-        strcpy(fontdir, "/usr/share/fonts/truetype/");
+        strcpy(fontdir, "/usr/share/fonts/");
 #elif defined(MACOSX)
         strcpy(fontdir, "/Library/Fonts/");
 #else
@@ -3820,6 +3820,42 @@ bool readTTF(const char *fName, bool bold, bool ital) {
             strcpy(ttfPath, fontdir);
             strcat(ttfPath, fName);
             ttf_fh = fopen(ttfPath, "rb");
+#if defined(LINUX) || defined(MACOSX)
+            if (!ttf_fh) {
+#if defined(LINUX)
+                strcpy(fontdir, "/usr/share/fonts/truetype/");
+#else
+                strcpy(fontdir, "/System/Library/Fonts/");
+#endif
+                strcpy(ttfPath, fontdir);
+                strcat(ttfPath, fName);
+                strcat(ttfPath, ".ttf");
+                ttf_fh = fopen(ttfPath, "rb");
+                if (!ttf_fh) {
+                    strcpy(ttfPath, fontdir);
+                    strcat(ttfPath, fName);
+                    ttf_fh = fopen(ttfPath, "rb");
+                    if (!ttf_fh) {
+                        std::string in;
+#if defined(LINUX)
+                        in = "~/.fonts/";
+#else
+                        in = "~/Library/Fonts/";
+#endif
+                        Cross::ResolveHomedir(in);
+                        strcpy(ttfPath, in.c_str());
+                        strcat(ttfPath, fName);
+                        strcat(ttfPath, ".ttf");
+                        ttf_fh = fopen(ttfPath, "rb");
+                        if (!ttf_fh) {
+                            strcpy(ttfPath, in.c_str());
+                            strcat(ttfPath, fName);
+                            ttf_fh = fopen(ttfPath, "rb");
+                        }
+                    }
+                }
+            }
+#endif
         }
     }
     if (ttf_fh) {
@@ -7378,7 +7414,7 @@ void* GetSetSDLValue(int isget, std::string& target, void* setval) {
 }
 
 #if (defined(WIN32) && !defined(HX_DOS) || defined(LINUX) && C_X11) && !defined(C_SDL2) && defined(SDL_DOSBOX_X_SPECIAL)
-static Bitu im_x, im_y;
+static uint8_t im_x, im_y;
 static uint32_t last_ticks;
 void SetIMPosition() {
 	uint8_t x, y;
@@ -7392,24 +7428,26 @@ void SetIMPosition() {
 		ncols=real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
     }
     if (IS_PC98_ARCH && x<ncols-3) x+=2;
-    x--;
-    y--;
 
 	if ((im_x != x || im_y != y) && GetTicks() - last_ticks > 100) {
 		last_ticks = GetTicks();
 		im_x = x;
 		im_y = y;
-#if DOSBOXMENU_TYPE == DOSBOXMENU_SDLDRAW
-		y+=mainMenu.menuBarHeightBase;
+#if defined(LINUX)
+		y++;
 #endif
 		uint8_t height = IS_PC98_ARCH?16:real_readb(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT);
         uint8_t width = CurMode && DOSV_CheckCJKVideoMode() ? CurMode->cwidth : (height / 2);
 #if defined(USE_TTF)
         if (ttf.inUse)
-            SDL_SetIMPosition((x+1) * ttf.width, (y+1) * ttf.height);
+            SDL_SetIMPosition(x * ttf.width, y * ttf.height);
         else
 #endif
-        SDL_SetIMPosition((x+1) * width, (y+1) * height - (IS_DOSV?-1:(DOSV_CheckCJKVideoMode()?2:0)));
+#if DOSBOXMENU_TYPE == DOSBOXMENU_SDLDRAW /* SDL drawn menus */
+        SDL_SetIMPosition(x * width, y * height - (IS_DOSV?-1:(DOSV_CheckCJKVideoMode()?2:0)) + mainMenu.menuBarHeightBase);
+#else
+        SDL_SetIMPosition(x * width, y * height - (IS_DOSV?-1:(DOSV_CheckCJKVideoMode()?2:0)));
+#endif
 	}
 }
 #endif
@@ -8244,8 +8282,8 @@ void GFX_Events() {
 #endif
         default:
 #if defined(WIN32) && !defined(HX_DOS) && defined(SDL_DOSBOX_X_SPECIAL)
-            if(event.key.keysym.scancode == 0x70 || event.key.keysym.scancode == 0x94) {
-                if(event.key.keysym.scancode == 0x94 && dos.im_enable_flag) {
+            if(event.key.keysym.scancode == 0x70 || event.key.keysym.scancode == 0x94 || event.key.keysym.scancode == 0x29) {
+                if((event.key.keysym.scancode == 0x94 || event.key.keysym.scancode == 0x29) && dos.im_enable_flag) {
                     break;
                 }
                 event.type = SDL_KEYDOWN;

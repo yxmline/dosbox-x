@@ -1,4 +1,11 @@
 0.83.16
+  - Added support for extended MS-DOS partitions that
+    reside in extended partitions. These partitions
+    can be manually mounted using -o partidx=n where
+    n is 4 or larger. To assist in partition indexes,
+    the FAT driver will also print the partition
+    table to your log file and console when asked to
+    print debug information (joncampbell123)
   - Added dosbox-x.conf options to control VESA BIOS
     window size and window granularity. This allows
     DOS development to test VESA BIOS support against
@@ -31,13 +38,24 @@
     reducing the sizes of installers significantly
     while adding the SarasaGothicFixed TTF font and
     a language selection page for choosing existing
-    language translations. (Wengier)
+    language translations (with new language files
+    for French and Traditional Chinese). (Wengier)
   - DOSBox-X will now search for more paths (such as
     user config directory and "languages" subfolder)
-    for loading language files before fail. (Wengier)
+    for loading language files before failing, and
+    on Linux and macOS platforms will also search for
+    additional directories such as /Library/Fonts/
+    (Linux) or /Library/Fonts/ (macOS) for TrueType
+    fonts when using the TTF output. (Wengier)
   - DOSBox-X will try to load the SarasaGothicFixed
     TTF font when no external TTF font is specified
     and a CJK code page detected at start. (Wengier)
+  - LH/LOADHIGH command can now load programs into UMB
+    memory if it is available. Also added "shellhigh"
+    config option to decide whether to load builtin
+    command shell to UMB memory (with default setting
+    of "auto", it is enabled if reported DOS version
+    is at least 7, similar to MS-DOS 7+). (cimarronm)
   - HELP command is now an external command appearing
     on Z drive rather than an internal shell command
     (it is never a DOS internal command). (Wengier)
@@ -108,8 +126,6 @@
   - Fixed bug related to DBCS vector table. (nanshiki)
   - Fixed running e.g. built-in DEBUG command from a
     drive other than Z may not work. (cimarronm)
-  - Fixed LH/LOADHIGH command not able to load programs
-    into the UMB memory. (cimarronm)
   - Fixed the command "FOR %I ..." not working when
     executed from the command line. (Wengier)
   - For audio/video recording, DOSBox-X will display
