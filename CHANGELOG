@@ -50,6 +50,9 @@
   - DOSBox-X will try to load the SarasaGothicFixed
     TTF font when no external TTF font is specified
     and a CJK code page detected at start. (Wengier)
+  - Added Shift+Tab shortcut in Debugger to switch to
+    previous window complimenting existing function of
+    Tab switching to the next window. (cimarronm)
   - LH/LOADHIGH command can now load programs into UMB
     memory if it is available. Also added "shellhigh"
     config option to decide whether to load builtin
@@ -135,6 +138,10 @@
   - For audio/video recording, DOSBox-X will display
     a message box showing the saved file name when the
     recording has been completed. (Wengier)
+  - Removed the special DOS function at Int21h/AH=2B/
+    CX=0x4442h/DX=0x2D58h in favor of the DOSBox-X
+    Integration Device at I/O ports 28h-2Bh which works
+    for both integrated DOS and guest OS environments.
   - Enabled MT-32 emulation on ARM-based Mac OS X
     builds (joncampbell123)
   - For Configuration Tool, ensure mouse coordinates
@@ -157,6 +164,9 @@
     (introduced in version 0.83.15). (Wengier)
   - Fixed line endings for SBCS language files such as
     English and Spanish translations. (Wengier)
+  - Fixed resetting the TTF screen when exiting from
+    Configuration Tool or Mapper Editor when TrueType
+    font (TTF) output is active. (Wengier)
   - Fixed the option "drive z expand path" not working
     if Virtual Drive Z: has been moved to a different
     drive letter (e.g. Drive Y:). (Wengier)
