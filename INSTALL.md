@@ -14,7 +14,7 @@ Once you get DOSBox-X installed and running, you probably want to look at the DO
 ## Packages for Supported Platforms
 
 - [Windows Packages (Installer or Portable)](#windows-packages-installer-or-portable)
-- [Linux Packages (Flatpak or RPM)](#linux-packages-flatpak-or-rpm)
+- [Linux Packages (Flatpak or Fedora package)](#linux-packages-flatpak-or-fedora-package)
 - [macOS Packages (Portable)](#macos-packages-portable)
 - [DOS Packages (Portable)](#dos-packages-portable)
 - [Source Code Packages (zip or tar.gz)](#source-code-packages-zip-or-targz)
@@ -35,22 +35,22 @@ If you see the message ```Windows Defender SmartScreen prevented an unrecognized
 
 You can easily upgrade from a previous version of DOSBox-X to the new version with the Windows installer. The Windows installer in fact offers an option to automatically upgrade the config file (dosbox-x.conf) to the new version format while keeping all the user-customized settings already made. When you select this (recommended), the config file will include all options of the latest DOSBox-X version and also will keep all the changes already done previously by the user.
 
-Apart from the Windows installers, you can find six zip packages (three before 0.83.13) for each DOSBox-X version for the Windows platform in the [Releases](https://github.com/joncampbell123/dosbox-x/releases) page as an alternative way to install DOSBox-X. These zip files are portable packages containing binaries built with Visual Studio 2019 (Win32, Win64, ARM32, ARM64 respectively), MinGW (Win32 and Win64 respectively). For the current DOSBox-X version 0.83.16, these portable Visual Studio builds are separately available from:
+Apart from the Windows installers, you can find six zip packages (three before 0.83.13) for each DOSBox-X version for the Windows platform in the [Releases](https://github.com/joncampbell123/dosbox-x/releases) page as an alternative way to install DOSBox-X. These zip files are portable packages containing binaries built with Visual Studio 2019 (Win32, Win64, ARM32, ARM64 respectively), MinGW (Win32 and Win64 respectively). For the current DOSBox-X version 0.83.16, these portable builds are separately available from:
 
 * [dosbox-x-vsbuild-win32-20210801012924.zip](https://github.com/joncampbell123/dosbox-x/releases/download/dosbox-x-v0.83.16/dosbox-x-vsbuild-win32-20210801012924.zip) (Visual Studio Win32 builds)
 * [dosbox-x-vsbuild-win64-20210801012924.zip](https://github.com/joncampbell123/dosbox-x/releases/download/dosbox-x-v0.83.16/dosbox-x-vsbuild-win64-20210801012924.zip) (Visual Studio Win64 builds)
 * [dosbox-x-vsbuild-arm32-20210801012924.zip](https://github.com/joncampbell123/dosbox-x/releases/download/dosbox-x-v0.83.16/dosbox-x-vsbuild-arm32-20210801012924.zip) (Visual Studio ARM32 builds)
 * [dosbox-x-vsbuild-arm64-20210801012924.zip](https://github.com/joncampbell123/dosbox-x/releases/download/dosbox-x-v0.83.16/dosbox-x-vsbuild-arm64-20210801012924.zip) (Visual Studio ARM64 builds)
+* [dosbox-x-mingw-win32-20210801203638.zip](https://github.com/joncampbell123/dosbox-x/releases/download/dosbox-x-v0.83.16/dosbox-x-mingw-win32-20210801203638.zip) (MinGW Win32 builds)
+* [dosbox-x-mingw-win64-20210801221927.zip](https://github.com/joncampbell123/dosbox-x/releases/download/dosbox-x-v0.83.16/dosbox-x-mingw-win64-20210801221927.zip) (MinGW Win64 builds)
 
 The Visual Studio builds are the default Windows builds to use, but they only run on Windows Vista and later (Windows 7, 8, and 10). The MinGW builds will be required if you are running Windows XP. You may also want to use one of the MinGW builds (plain, lowend, etc) if you encounter specific problem(s) with the Visual Studio builds. In addition, while the SDL1 version is the default version, the SDL2 version may be prefered over the SDL1 version for certain features (particularly related to input handling) such as better international keyboard support.
 
 If you prefer to use one of the portable packages, please select the zip package you want to download for your platform and unzip, then you will find various folders or subdirectories, which are some supported targets. For Visual Studio builds, these correspond to Win32 (x86), Win64 (x64), ARM32 and ARM64 (either SDL1 or SDL2 version), which are the build platforms. For MinGW builds, the targets are plain MinGW SDL1 build (mingw), MinGW SDL1 build for lower-end systems (mingw-lowend), MinGW SDL1 build with custom drawn menu (mingw-sdldraw), and MinGW SDL2 build (mingw-sdl2). Go to a target folder for your platform and run dosbox-x.exe inside it, then DOSBox-X will be launched and ready to be used. Unlike the Windows installer version however, there is no documentation included in these packages, and you may not see all such packages for some DOSBox-X versions.
 
-## Linux Packages (Flatpak or RPM)
+## Linux Packages (Flatpak or Fedora package)
 
-(Linux packages for version 0.83.16 coming soon)
-
-Both Flatpak and RPM packages are officially released for the Linux operating system (with X11). You can select one of these packages depending on your Linux system and your needs. The Linux Fatpak package has the advantage of being supported by most or all Linux distributions, but it will run in a sandbox on your Linux system so that you may not able to access some system-wide resources.
+Both Flatpak and Fedora/RPM packages are officially released for the Linux operating system (with X11). You can select one of these packages depending on your Linux system and your needs. The Linux Fatpak package has the advantage of being supported by most or all Linux distributions, but it will run in a sandbox on your Linux system so that you may not able to access some system-wide resources.
 
 Flatpak packages are standalone applications independent of Linux distributions. For the current DOSBox-X version 0.83.1 the Linux Flatpak is available from:
 
@@ -76,15 +76,11 @@ In addition, if an earlier DOSBox-X Flatpak is already installed in the system y
 
 Or just "flatpak update" to update all Flatpak packages.
 
-Official RPM packages are not available for the current version 0.83.15; you can however get locally built 64-bit Fedora RPM package for it from:
+Alternatively, if you use Fedora Linux you can also get the Fedora Copr package for DOSBox-X from:
 
-* [dosbox-x-0.83.15-1.fc34.x86_64.rpm](https://github.com/rderooy/dosbox-x-rpm/raw/master/dosbox-x-0.83.15-1.fc34.x86_64.rpm)
+* [Fedora Copr DOSBox-X page](https://copr.fedorainfracloud.org/coprs/rob72/DOSBox-X/)
 
-The Fedora RPM source code package:
-
-* [dosbox-x-0.83.15-1.fc34.src.rpm](https://github.com/rderooy/dosbox-x-rpm/raw/master/dosbox-x-0.83.15-1.fc34.src.rpm)
-
-Pick a RPM package of the version you want to use for your Linux platform and install. On CentOS, RHEL or Fedora platforms, you can install a RPM package with a command line like this:
+Official RPM packages are not available for the current version 0.83.16, but they are available for some previous DOSBox-X versions. Simply pick the RPM package(s) for the version you want to use for your Linux platform and install. On CentOS, RHEL or Fedora platforms, you can install a RPM package with a command line like this:
 
 ``sudo rpm -i <filename>.rpm``
 
