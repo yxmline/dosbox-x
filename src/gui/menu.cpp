@@ -144,6 +144,7 @@ static const char *def_menu_main[] =
     "--",
     "restartconf",
     "restartlang",
+    "--",
     "mapper_shutdown",
 #endif
     NULL
@@ -277,6 +278,8 @@ static const char *def_menu_cpu_type[] =
     "cputype_pentium",
     "cputype_pentium_mmx",
     "cputype_ppro_slow",
+    "--",
+    "cputype_experimental",
     NULL
 };
 
