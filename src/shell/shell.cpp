@@ -30,6 +30,7 @@
 #include "menu.h"
 #include "cpu.h"
 #include "callback.h"
+#include "dos_inc.h"
 #include "support.h"
 #include "builtin.h"
 #include "mapper.h"
@@ -102,7 +103,7 @@ typedef std::list<std::string>::iterator auto_it;
 
 void VFILE_Remove(const char *name,const char *dir="");
 void runRescan(const char *str), DOSBox_SetSysMenu(void);
-void SetupDBCSTable(), toSetCodePage(DOS_Shell *shell, int newCP, int opt);
+void toSetCodePage(DOS_Shell *shell, int newCP, int opt);
 
 #if defined(WIN32)
 void MountAllDrives(Program * program, bool quiet) {
@@ -657,7 +658,7 @@ void DOS_Shell::Prepare(void) {
                 WriteOut(ParseMsg((std::string("\033[32m")+(MSG_Get("SHELL_STARTUP_LAST")+std::string("                                                       ")).substr(0,79)+std::string("\033[0m\n")).c_str()));
             }
         } else if (CurMode->type==M_TEXT || IS_PC98_ARCH)
-            WriteOut("[2J");
+            WriteOut("\033[2J");
 		if (!countryNo) {
 #if defined(WIN32)
 			char buffer[128];

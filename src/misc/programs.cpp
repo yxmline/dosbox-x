@@ -41,6 +41,7 @@
 #include "jfont.h"
 #include "render.h"
 #include "../ints/int10.h"
+#include "sdlmain.h"
 #if defined(WIN32)
 #include "windows.h"
 extern RECT monrect;
@@ -95,8 +96,6 @@ public:
 static std::vector<InternalProgramEntry*> internal_progs;
 void EMS_Startup(Section* sec), EMS_DoShutDown(), resetFontSize(), UpdateDefaultPrinterFont();
 void DOSBOX_UnlockSpeed2( bool pressed ), GFX_ForceRedrawScreen(void), SetWindowTransparency(int trans);
-bool TTF_using();
-int setTTFCodePage();
 
 void PROGRAMS_Shutdown(void) {
 	LOG(LOG_MISC,LOG_DEBUG)("Shutting down internal programs list");
@@ -1514,7 +1513,7 @@ void CONFIG::Run(void) {
                                 else if (!CurMode)
                                     ;
                                 else if (CurMode->type==M_TEXT || IS_PC98_ARCH)
-                                    WriteOut("[2J");
+                                    WriteOut("\033[2J");
                                 else {
                                     reg_ax=CurMode->mode;
                                     CALLBACK_RunRealInt(0x10);

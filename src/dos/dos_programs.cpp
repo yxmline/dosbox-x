@@ -6031,7 +6031,6 @@ void runImgmount(const char *str) {
 Bitu DOS_SwitchKeyboardLayout(const char* new_layout, int32_t& tried_cp);
 Bitu DOS_LoadKeyboardLayout(const char * layoutname, int32_t codepage, const char * codepagefile);
 const char* DOS_GetLoadedLayout(void);
-void SetupDBCSTable();
 
 class KEYB : public Program {
 public:
@@ -6856,10 +6855,10 @@ void COLOR::Run()
     } else
        back=true;
     if (back)
-        WriteOut("[0m");
+        WriteOut("\033[0m");
     else {
         bool fgl=fg>='0'&&fg<='7', bgl=bg>='0'&&bg<='7';
-        WriteOut(("["+std::string(fgl||bgl?"0;":"")+std::string(fgl?"":"1;")+std::string(bgl?"":"5;")+std::to_string(fgc)+";"+std::to_string(bgc)+"m").c_str());
+        WriteOut(("\033["+std::string(fgl||bgl?"0;":"")+std::string(fgl?"":"1;")+std::string(bgl?"":"5;")+std::to_string(fgc)+";"+std::to_string(bgc)+"m").c_str());
     }
 }
 

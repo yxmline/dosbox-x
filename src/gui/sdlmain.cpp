@@ -54,7 +54,6 @@ int selerow = -1, selecol = -1;
 bool selmark = false;
 extern int enablelfn;
 extern int autosave_second;
-extern int customcp, altcp;
 extern bool swapad;
 extern bool blinking;
 extern bool dpi_aware_enable;
@@ -286,7 +285,6 @@ static bool PasteClipboardNext();
 #if C_DIRECT3D
 void d3d_init(void);
 #endif
-bool TTF_using(void);
 void ShutDownMemHandles(Section * sec);
 void resetFontSize(), decreaseFontSize();
 void MAPPER_ReleaseAllKeys(), GFX_ReleaseMouse();
@@ -5239,7 +5237,7 @@ void RebootGuest(bool pressed) {
 	}
 	if (!dos_kernel_disabled) {
 	    if (CurMode->type==M_TEXT || IS_PC98_ARCH) {
-			char msg[]="[2J";
+			char msg[]="\033[2J";
 			uint16_t s = (uint16_t)strlen(msg);
 			DOS_WriteFile(STDERR,(uint8_t*)msg,&s);
             throw int(6);
@@ -11355,7 +11353,7 @@ bool clear_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuit
         INT10_ScrollWindow(0, 0, rows, static_cast<uint8_t>(cols), -rows, 0x7, 0xff);
         INT10_SetCursorPos(0, 0, 0);
     } else if (IS_PC98_ARCH) {
-        char msg[]="[2J";
+        char msg[]="\033[2J";
         uint16_t s = (uint16_t)strlen(msg);
         DOS_WriteFile(STDERR,(uint8_t*)msg,&s);
     } else {
