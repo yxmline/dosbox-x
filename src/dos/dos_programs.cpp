@@ -261,7 +261,7 @@ void MountHelper(char drive, const char drive2[DOS_PATHLENGTH], std::string driv
 	std::string temp_line;
 	std::string str_size;
 	uint16_t sizes[4];
-	uint8_t mediaid;
+	uint8_t mediaid=0;
 
 	if(drive_type=="CDROM") {
 		mediaid=0xF8;		/* Hard Disk */
@@ -6047,7 +6047,7 @@ void KEYB::Run(void) {
             std::string cp_string="";
             int32_t tried_cp = -1;
             cmd->FindCommand(2,cp_string);
-            int tocp=!strcmp(temp_line.c_str(), "jp")?932:(!strcmp(temp_line.c_str(), "ko")?949:((!strcmp(temp_line.c_str(), "tw")||!strcmp(temp_line.c_str(), "hk")||!strcmp(temp_line.c_str(), "zh")&&(cp_string.size()&&atoi(cp_string.c_str())==950)||!cp_string.size()&&dos.loaded_codepage==950)?950:(!strcmp(temp_line.c_str(), "cn")||!strcmp(temp_line.c_str(), "zh")?936:0)));
+            int tocp=!strcmp(temp_line.c_str(), "jp")?932:(!strcmp(temp_line.c_str(), "ko")?949:((!strcmp(temp_line.c_str(), "tw")||!strcmp(temp_line.c_str(), "hk")||(!strcmp(temp_line.c_str(), "zh")&&(cp_string.size()&&atoi(cp_string.c_str())==950))||(!cp_string.size()&&dos.loaded_codepage==950))?950:(!strcmp(temp_line.c_str(), "cn")||!strcmp(temp_line.c_str(), "zh")?936:0)));
             if (tocp && !IS_PC98_ARCH) {
                 dos.loaded_codepage=tocp;
                 const char* layout_name = DOS_GetLoadedLayout();
@@ -6517,7 +6517,7 @@ bool AUTOTYPE::ReadDoubleArg(const std::string &name,
 	if (cmd->FindString(flag, str_value, true)) {
 		// Can the user's value be parsed?
 		const double user_value = to_finite<double>(str_value);
-#if defined(MACOSX) || defined(EMSCRIPTEN) || ((defined(ANDROID) || defined(__ANDROID__)) && defined(__clang__))
+#if defined(__FreeBSD__) || defined(MACOSX) || defined(EMSCRIPTEN) || ((defined(ANDROID) || defined(__ANDROID__)) && defined(__clang__))
 		if (isfinite(user_value)) { /* *sigh* Really, clang, really? */
 #else
 		if (std::isfinite(user_value)) {
