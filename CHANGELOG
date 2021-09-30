@@ -1,4 +1,6 @@
 0.83.18
+  - Fixed the names of virtual files and files on mounted
+    FAT drive images being logged as "(null)". (Allofich)
   - Fixed packed structure alignment problem with MSVC
     (Microsoft C++) builds regarding some disk image
     formats. These problems prevented VS2019 builds from
@@ -12,6 +14,9 @@
   - PC-98 INT DCh emulation fixed to better represent the
     function key shortcuts as real DOS does (Nanshiki)
   - Emulator fix for HX-DOS builds (Wengier)
+  - Integrated commits from mainline (Allofich)
+    - Fix the return value of register al from INT10 ah=0x0F
+    for non EGA/VGA machines.
 0.83.17
   - Added FISTTP instruction to experimental cputype (LBi)
   - Updated debugger to support and decode fisttp, fcomi,
