@@ -55,8 +55,8 @@ extern bool dos_shell_running_program, mountwarning;
 extern bool halfwidthkana, force_conversion, gbk;
 extern bool addovl, addipx, addne2k, enableime;
 extern const char* RunningProgram;
+extern int enablelfn, msgcodepage;
 extern uint16_t countryNo;
-extern int enablelfn;
 bool usecon = true;
 bool shellrun = false;
 
@@ -693,21 +693,23 @@ void DOS_Shell::Prepare(void) {
 		bool zdirpath = section->Get_bool("drive z expand path");
 		strcpy(config_data, "");
 		section = static_cast<Section_prop *>(control->GetSection("config"));
-		if (section!=NULL&&!control->opt_noconfig) {
+		if (section!=NULL&&!control->opt_noconfig||control->opt_langcp) {
 			char *countrystr = (char *)section->Get_string("country"), *r=strchr(countrystr, ',');
 			int country = 0;
-			if (r==NULL || !*(r+1))
+			if ((r==NULL || !*(r+1)) && !control->opt_langcp)
 				country = atoi(trim(countrystr));
 			else {
-				*r=0;
+				if (r!=NULL) *r=0;
 				country = atoi(trim(countrystr));
-				int newCP = atoi(trim(r+1));
-				*r=',';
+				int newCP = r==NULL?dos.loaded_codepage:atoi(trim(r+1));
+                if (control->opt_langcp && msgcodepage>0 && isSupportedCP(msgcodepage) && msgcodepage != newCP)
+                    newCP = msgcodepage;
+				if (r!=NULL) *r=',';
                 if (!IS_PC98_ARCH&&!IS_JEGA_ARCH) {
 #if defined(USE_TTF)
                     if (ttf.inUse) {
                         if (newCP) toSetCodePage(this, newCP, control->opt_fastlaunch?1:0);
-                        else WriteOut(MSG_Get("SHELL_CMD_CHCP_INVALID"), trim(r+1));
+                        else if (r!=NULL) WriteOut(MSG_Get("SHELL_CMD_CHCP_INVALID"), trim(r+1));
                     } else
 #endif
                     if (!newCP && IS_DOSV) {
@@ -911,12 +913,7 @@ private:
 	AutoexecObject autoexec_echo;
     AutoexecObject autoexec_auto_bat;
 public:
-	AUTOEXEC(Section* configuration):Module_base(configuration) {
-		/* Register a virtual AUTOEXEC.BAT file */
-		const Section_line * section=static_cast<Section_line *>(configuration);
-
-		/* Check -securemode switch to disable mount/imgmount/boot after running autoexec.bat */
-		bool secure = control->opt_securemode;
+    void RunAdditional() {
         force_conversion = true;
         int cp=dos.loaded_codepage;
         InitCodePage();
@@ -929,7 +926,7 @@ public:
             for (unsigned int i=0;i<control->auto_bat_additional.size();i++) {
                 if (!strncmp(control->auto_bat_additional[i].c_str(), "@mount c: ", 10)) {
                     cmd += control->auto_bat_additional[i]+"\n";
-                    cmd += "@c:\n";
+                    cmd += "@c:";
                 } else {
                     std::string batname;
                     //LOG_MSG("auto_bat_additional %s\n", control->auto_bat_additional[i].c_str());
@@ -966,13 +963,23 @@ public:
 #if defined(WIN32) && !defined(HX_DOS)
                     if (!winautorun) cmd += "@config -set startcmd=false\n";
 #endif
-                    cmd += "@mount c: -q -u\n";
+                    cmd += "@mount c: -q -u";
                 }
+                if (control->opt_prerun) cmd += "\n";
             }
 
             autoexec_auto_bat.Install(cmd);
         }
         dos.loaded_codepage = cp;
+    }
+	AUTOEXEC(Section* configuration):Module_base(configuration) {
+		/* Register a virtual AUTOEXEC.BAT file */
+		const Section_line * section=static_cast<Section_line *>(configuration);
+
+		/* Check -securemode switch to disable mount/imgmount/boot after running autoexec.bat */
+		bool secure = control->opt_securemode;
+
+		if (control->opt_prerun) RunAdditional();
 
 		/* add stuff from the configfile unless -noautexec or -securemode is specified. */
 		const char * extra = section->data.c_str();
@@ -1007,6 +1014,8 @@ public:
 
 		/* Check for the -exit switch which causes dosbox to when the command on the commandline has finished */
 		bool addexit = control->opt_exit;
+
+		if (!control->opt_prerun) RunAdditional();
 
 #if 0/*FIXME: This is ugly. I don't care to follow through on this nonsense for now. When needed, port to new command line switching. */
 		/* Check for first command being a directory or file */
