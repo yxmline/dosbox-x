@@ -1401,7 +1401,7 @@ void DOSBOX_SetupConfigSections(void) {
     Pstring->SetBasic(true);
 
     Pstring = secprop->Add_string("ime",Property::Changeable::OnlyAtStart,"auto");
-    Pstring->Set_help("Enables support for the system input methods (IME) for inputting characters in Windows SDL1 builds.\n"
+    Pstring->Set_help("Enables support for the system input methods (IME) for inputting characters in Windows and Linux builds.\n"
                       "If set to auto, this feature is only enabled if DOSBox-X starts with a Chinese/Japanese/Korean code page.");
     Pstring->Set_values(truefalseautoopt);
     Pstring->SetBasic(true);
@@ -3933,7 +3933,7 @@ void DOSBOX_SetupConfigSections(void) {
 
     Pbool = secprop->Add_bool("network redirector",Property::Changeable::WhenIdle,true);
     Pbool->Set_help("Report DOS network redirector as resident. This will allow the host name to be returned unless the secure mode is enabled.\n"
-            "You can also directly access UNC network paths in the form \\MACHINE\\SHARE even if they are not mounted as drives on Windows systems.\n"
+            "You can also directly access UNC network paths in the form \\\\MACHINE\\SHARE even if they are not mounted as drives on Windows systems.\n"
             "Set either \"ipx=true\" in [ipx] section or \"ne2000=true\" in [ne2000] section for a full network redirector environment.");
     Pbool->SetBasic(true);
 
