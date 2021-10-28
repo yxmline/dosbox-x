@@ -51,6 +51,8 @@ int transparency=0;
 int switchoutput=-1;
 int selsrow = -1, selscol = -1;
 int selerow = -1, selecol = -1;
+int middleunlock = 1;
+bool rtl = false;
 bool selmark = false;
 extern int enablelfn;
 extern int autosave_second;
@@ -4041,6 +4043,7 @@ void OUTPUT_TTF_Select(int fsize=-1) {
         else
             switchoutput = -1;
 
+        rtl = ttf_section->Get_bool("righttoleft");
         ttf.lins = ttf_section->Get_int("lins");
         ttf.cols = ttf_section->Get_int("cols");
         if (fsize&&!IS_PC98_ARCH&&!IS_EGAVGA_ARCH) ttf.lins = 25;
@@ -4294,6 +4297,7 @@ void change_output(int output) {
     mainMenu.get_item("ttf_wpxy").enable(TTF_using()).check(wpType==3).refresh_item(mainMenu);
     mainMenu.get_item("ttf_wpfe").enable(TTF_using()).check(wpType==4).refresh_item(mainMenu);
     mainMenu.get_item("ttf_blinkc").enable(TTF_using()).check(blinkCursor>-1).refresh_item(mainMenu);
+    mainMenu.get_item("ttf_right_left").enable(TTF_using()).check(rtl).refresh_item(mainMenu);
 #if C_PRINTER
     mainMenu.get_item("ttf_printfont").enable(TTF_using()).check(printfont).refresh_item(mainMenu);
 #endif
@@ -4842,7 +4846,7 @@ void GFX_EndTextLines(bool force=false) {
                     colorBG = colorFG;
                     colorFG = color;
                 }
-				ttf_textRect.x = ttf.offX+x*ttf.width;
+				ttf_textRect.x = ttf.offX+(rtl?(ttf.cols-x-1):x)*ttf.width;
 				ttf_bgColor.r = colorChanged&&!IS_VGA_ARCH?altBGR1[colorBG&15].red:rgbColors[colorBG].red;
 				ttf_bgColor.g = colorChanged&&!IS_VGA_ARCH?altBGR1[colorBG&15].green:rgbColors[colorBG].green;
 				ttf_bgColor.b = colorChanged&&!IS_VGA_ARCH?altBGR1[colorBG&15].blue:rgbColors[colorBG].blue;
@@ -4859,15 +4863,13 @@ void GFX_EndTextLines(bool force=false) {
                     if (dw) {
                         curAC[x] = newAC[x];
                         x++;
+                        if (rtl) ttf_textRect.x -= ttf.width;
                     }
                 }
                 else {
                     uint8_t ascii = newAC[x].chr&255;
-#if defined(USE_TTF)
-                    if(ttf_dosv && ascii == 0x5c) {
+                    if(ttf_dosv && ascii == 0x5c)
                         ascii = 0x9d;
-                    }
-#endif
                     curAC[x] = newAC[x];
                     if (ascii > 175 && ascii < 179 && !IS_PC98_ARCH && !IS_JEGA_ARCH && dos.loaded_codepage != 864 && dos.loaded_codepage != 874 && !(dos.loaded_codepage == 932 && halfwidthkana) && (dos.loaded_codepage<1250 || dos.loaded_codepage>1258) && !(altcp && dos.loaded_codepage == altcp)) {	// special: shade characters 176-178 unless PC-98
                         ttf_bgColor.b = (ttf_bgColor.b*(179-ascii) + ttf_fgColor.b*(ascii-175))>>2;
@@ -4958,7 +4960,7 @@ void GFX_EndTextLines(bool force=false) {
 				// first redraw character
 				SDL_Surface* textSurface = TTF_RenderUNICODE_Shaded(ttf.SDL_font, unimap, ttf_fgColor, ttf_bgColor, ttf.width*(dw?2:1));
 				ttf_textClip.w = ttf.width*(dw?2:1);
-				ttf_textRect.x = ttf.offX+x*ttf.width;
+				ttf_textRect.x = ttf.offX+(rtl?(ttf.cols-x-(dw?2:1)):x)*ttf.width;
 				ttf_textRect.y = ttf.offY+y*ttf.height;
 				SDL_BlitSurface(textSurface, &ttf_textClip, sdl.surface, &ttf_textRect);
 				SDL_FreeSurface(textSurface);
@@ -4976,7 +4978,7 @@ void GFX_EndTextLines(bool force=false) {
 	}
 	if (xmin <= xmax) {												// if any changes
         SDL_Rect *rect = &sdl.updateRects[0];
-        rect->x = ttf.offX+xmin*ttf.width; rect->y = ttf.offY+ymin*ttf.height; rect->w = (xmax-xmin+1)*ttf.width; rect->h = (ymax-ymin+1)*ttf.height;
+        rect->x = ttf.offX+(rtl?(ttf.cols-xmax-1):xmin)*ttf.width; rect->y = ttf.offY+ymin*ttf.height; rect->w = (xmax-xmin+1)*ttf.width; rect->h = (ymax-ymin+1)*ttf.height;
 #if defined(C_SDL2)
         SDL_UpdateWindowSurfaceRects(sdl.window, sdl.updateRects, 4);
 #else
@@ -5688,6 +5690,16 @@ static void GUI_StartUp() {
         sdl.mouse.autolock_feedback = AUTOLOCK_FEEDBACK_BEEP;
     else if (feedback == "flash")
         sdl.mouse.autolock_feedback = AUTOLOCK_FEEDBACK_FLASH;
+
+    const std::string munlock = section->Get_string("middle_unlock");
+    if (munlock == "none")
+        middleunlock = 0;
+    else if (munlock == "auto")
+        middleunlock = 2;
+    else if (munlock == "both")
+        middleunlock = 3;
+    else if (munlock == "manual")
+        middleunlock = 1;
 
     const char *clip_mouse_button = section->Get_string("clip_mouse_button");
     if (!strcmp(clip_mouse_button, "middle")) mbutton=2;
@@ -7194,7 +7206,7 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEven
             // Don't pass click to mouse handler
             break;
         }
-        if (!sdl.mouse.autoenable && sdl.mouse.autolock && mouse_notify_mode == 0 && button->button == SDL_BUTTON_MIDDLE) {
+        if (((middleunlock == 1 && !sdl.mouse.autoenable) || (middleunlock == 2 && sdl.mouse.autoenable) || middleunlock == 3) && sdl.mouse.autolock && mouse_notify_mode == 0 && button->button == SDL_BUTTON_MIDDLE) {
             GFX_CaptureMouse();
             break;
         }
@@ -8517,6 +8529,13 @@ void SDL_SetupConfigSection() {
     Pstring = sdl_sec->Add_string("autolock_feedback", Property::Changeable::Always, feeds[1]);
     Pstring->Set_help("Autolock status feedback type, i.e. visual, auditive, none.");
     Pstring->Set_values(feeds);
+
+    const char* unlocks[] = { "none", "manual", "auto", "both", nullptr};
+    Pstring = sdl_sec->Add_string("middle_unlock",Property::Changeable::Always, unlocks[1]);
+    Pstring->Set_help("Whether you can press the middle mouse button to unlock the mouse when the mouse has been locked.\n"
+        "If set to \"manual\", it works only with \"autolock=false\"; if set to \"auto\", it works only with \"autolock=true\".");
+    Pstring->SetBasic(true);
+    Pstring->Set_values(unlocks);
 
 	const char* clipboardbutton[] = { "none", "middle", "right", "arrows", 0};
 	Pstring = sdl_sec->Add_string("clip_mouse_button",Property::Changeable::Always, "right");
@@ -11593,6 +11612,15 @@ bool ttf_blinking_cursor_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * con
     return true;
 }
 
+bool ttf_right_left_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    rtl=!rtl;
+    mainMenu.get_item("ttf_right_left").check(rtl).refresh_item(mainMenu);
+    resetFontSize();
+    return true;
+}
+
 bool ttf_dbcs_sbcs_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
@@ -14095,6 +14123,8 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                     set_callback_function(ttf_wp_change_callback);
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"ttf_blinkc").set_text("Display TTF blinking cursor").
                     set_callback_function(ttf_blinking_cursor_callback);
+                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"ttf_right_left").set_text("Display text from right to left").
+                    set_callback_function(ttf_right_left_callback);
 #if C_PRINTER
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"ttf_printfont").set_text("Use current TTF font for printing").
                     set_callback_function(ttf_print_font_callback);
@@ -14743,6 +14773,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.get_item("ttf_wpxy").enable(TTF_using()).check(wpType==3);
         mainMenu.get_item("ttf_wpfe").enable(TTF_using()).check(wpType==4);
         mainMenu.get_item("ttf_blinkc").enable(TTF_using()).check(blinkCursor>-1);
+        mainMenu.get_item("ttf_right_left").enable(TTF_using()).check(rtl);
 #if C_PRINTER
         mainMenu.get_item("ttf_printfont").enable(TTF_using()).check(printfont);
 #endif
