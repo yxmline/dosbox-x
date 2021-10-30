@@ -38,7 +38,7 @@ Apart from the Windows installers, you can find six zip packages (three before 0
 * [dosbox-x-vsbuild-arm64-20211001115143.zip](https://github.com/joncampbell123/dosbox-x/releases/download/dosbox-x-v0.83.18/dosbox-x-vsbuild-arm64-20211001115143.zip) (Visual Studio ARM64 builds)
 * [dosbox-x-mingw-win32-20211001122248.zip](https://github.com/joncampbell123/dosbox-x/releases/download/dosbox-x-v0.83.18/dosbox-x-mingw-win32-20211001122248.zip) (MinGW Win32 builds)
 
-The Visual Studio builds are the default Windows builds to use, but they may require Windows Vista and later (Windows 7, 8, and 10). On the other hand, the MinGW builds may run in Windows XP but will not have the debugger. You may also want to use one of the MinGW builds (plain, lowend, etc) if you encounter specific problem(s) with the Visual Studio builds, or you want the Slirp backend support for the NE2000 networking. In addition, while the SDL1 version is the default version, the SDL2 version may be preferred over the SDL1 version for certain features (particularly related to input handling) such as better international keyboard support.
+The Visual Studio builds are the default Windows builds to use, which include the debugger. On the other hand, the MinGW builds of DOSBox-X versions support the Slirp backend for the NE2000 networking, but since version 0.83.16 they won't run in Windows XP. You may also want to use one of the MinGW builds (plain, lowend, etc) if you encounter specific problem(s) with the Visual Studio builds (such as floating point precision issues). In addition, while the SDL1 version is the default version, which uses the native Windows menus, the SDL2 version may be preferred over the SDL1 version for certain features (particularly related to input handling) such as better international keyboard support.
 
 If you prefer to use one of the portable packages, please select the zip package you want to download for your platform and unzip, then you will find various folders or subdirectories, which are some supported targets. For Visual Studio builds, these correspond to Win32 (x86), Win64 (x64), ARM32 and ARM64 (either SDL1 or SDL2 version), which are the build platforms. For MinGW builds, the targets are plain MinGW SDL1 build (mingw), MinGW SDL1 build for lower-end systems (mingw-lowend), MinGW SDL1 build with custom drawn menu (mingw-sdldraw), and MinGW SDL2 build (mingw-sdl2). Go to a target folder for your platform and run dosbox-x.exe inside it, then DOSBox-X will be launched and ready to be used. Unlike the Windows installer version however, there is no documentation included in these packages, and you may not see all such packages for some DOSBox-X versions.
 
@@ -104,7 +104,7 @@ But please note the DOSBox-X Linux packages on this website are built and update
 
 ### AUR Package
 DOSBox-X is packaged for archlinux, and available in the user contributed AUR Package Repository.
-But please note that this package is not built or updated by the DOSBox-X team.
+But please note that this package is not built or updated by the DOSBox-X Team.
 
 - SDL1 built: https://aur.archlinux.org/packages/dosbox-x/
 - SDL2 built: https://aur.archlinux.org/packages/dosbox-x-sdl2/
@@ -155,7 +155,7 @@ macOS versions earlier than 10.12 (Sierra) are not officially supported. If you 
 
 Besides Windows, Linux and macOS packages, there are also packages released for the DOS operating system. Yes, DOSBox-X can officially run on DOS systems as well, as some DOS users seem to prefer to run DOS applications and games through a DOS emulator. With DOSBox-X running in DOS you are able to emulate another DOS system with a different PC configuration (such as different machine types, video and sound cards etc) that works better for the purpose of the users. But please note that due to the limitations of this environment not all features of DOSBox-X that are available in other platforms can be supported in the DOS version.
 
-For the previuos DOSBox-X version 0.83.16, the official DOS version is available in the following zip package:
+For the previous DOSBox-X version 0.83.16, the official DOS version is available in the following zip package:
 
 * [dosbox-x-mingw-hx-dos-20210801212637.zip](https://github.com/joncampbell123/dosbox-x/releases/download/dosbox-x-v0.83.16/dosbox-x-mingw-hx-dos-20210801212637.zip)
 
@@ -173,7 +173,7 @@ Note: You may not see DOS packages for some DOSBox-X versions. For example, the 
 
 Full source code packages of DOSBox-X are also available in both zip and tar.gz formats. Both contain the full source code, but you probably want to download the source code in zip format if you are using Windows, and the source code in tar.gz format if you are using Linux. For the current DOSBox-X version 0.83.18, the source code packages are:
 
-* [dosbox-x-v0.83.18.zip](hhttps://github.com/joncampbell123/dosbox-x/archive/refs/tags/dosbox-x-v0.83.18.zip)
+* [dosbox-x-v0.83.18.zip](https://github.com/joncampbell123/dosbox-x/archive/refs/tags/dosbox-x-v0.83.18.zip)
 * [dosbox-x-v0.83.18.tar.gz](https://github.com/joncampbell123/dosbox-x/archive/refs/tags/dosbox-x-v0.83.18.tar.gz)
 
 If you prefer you can compile DOSBox-X from the source code by yourself. The source code packages as listed in the [Releases](https://github.com/joncampbell123/dosbox-x/releases) page contain the source code for that released version, and in this example the current DOSBox-X 0.83.18 version. On the other hand, if you are looking for the latest source code of DOSBox-X (including the most recent development changes in the source code), you may want to use the source code in the repository instead, or you can browse the latest source code using [Doxygen](https://dosbox-x.com/doxygen/html/index.html).
