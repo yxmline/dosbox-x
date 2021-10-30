@@ -310,6 +310,7 @@ ScreenSizeInfo screen_size_info;
 void RebootLanguage(std::string filename, bool confirm=false);
 bool CodePageHostToGuestUTF16(char *d/*CROSS_LEN*/,const uint16_t *s/*CROSS_LEN*/);
 bool CodePageGuestToHostUTF16(uint16_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/);
+int FileDirExistCP(const char *name), FileDirExistUTF8(std::string &localname, const char *name);
 
 #if (defined(WIN32) && !defined(HX_DOS) || defined(LINUX) && C_X11) && defined(C_SDL2)
 static std::string ime_text = "";
@@ -4872,7 +4873,7 @@ void GFX_EndTextLines(bool force=false) {
                     if(ttf_dosv && ascii == 0x5c)
                         ascii = 0x9d;
                     curAC[x] = newAC[x];
-                    if (ascii > 175 && ascii < 179 && !IS_PC98_ARCH && !IS_JEGA_ARCH && dos.loaded_codepage != 864 && dos.loaded_codepage != 874 && !(dos.loaded_codepage == 932 && halfwidthkana) && (dos.loaded_codepage<1250 || dos.loaded_codepage>1258) && !(altcp && dos.loaded_codepage == altcp)) {	// special: shade characters 176-178 unless PC-98
+                    if (ascii > 175 && ascii < 179 && !IS_PC98_ARCH && !IS_JEGA_ARCH && dos.loaded_codepage != 864 && dos.loaded_codepage != 874 && !(dos.loaded_codepage == 932 && halfwidthkana) && (dos.loaded_codepage<1250 || dos.loaded_codepage>1258) && !(altcp && dos.loaded_codepage == altcp) && !(customcp && dos.loaded_codepage == customcp)) {	// special: shade characters 176-178 unless PC-98
                         ttf_bgColor.b = (ttf_bgColor.b*(179-ascii) + ttf_fgColor.b*(ascii-175))>>2;
                         ttf_bgColor.g = (ttf_bgColor.g*(179-ascii) + ttf_fgColor.g*(ascii-175))>>2;
                         ttf_bgColor.r = (ttf_bgColor.r*(179-ascii) + ttf_fgColor.r*(ascii-175))>>2;
@@ -9950,19 +9951,22 @@ bool DOSBOX_parse_argv() {
     while (!control->cmdline->CurrentArgvEnd()) {
         control->cmdline->GetCurrentArgv(tmp);
         trim(tmp);
-        {
-            struct stat st;
-            const char *ext = strrchr(tmp.c_str(),'.'); /* if it looks like a file... with an extension */
-            if (stat(tmp.c_str(), &st) == 0) {
-                if (st.st_mode & S_IFDIR || (ext != NULL && S_ISREG(st.st_mode) && (!strcasecmp(ext,".zip") || !strcasecmp(ext,".7z")))) {
-                    control->auto_bat_additional.push_back("@mount c: \""+tmp+"\"");
-                    control->cmdline->EatCurrentArgv();
-                    continue;
-                } else if (ext != NULL && S_ISREG(st.st_mode) && (!strcasecmp(ext,".bat") || !strcasecmp(ext,".exe") || !strcasecmp(ext,".com"))) { /* .BAT files given on the command line trigger automounting C: to run it */
-                    control->auto_bat_additional.push_back(tmp);
-                    control->cmdline->EatCurrentArgv();
-                    continue;
-                }
+        std::string localname = tmp;
+        int rescp = FileDirExistCP(tmp.c_str()), resutf8 = rescp||!tmp.size()?0:FileDirExistUTF8(localname, tmp.c_str());
+        if (!rescp && resutf8) {
+            tmp = localname;
+            rescp = resutf8;
+        }
+        const char *ext = strrchr(tmp.c_str(),'.'); /* if it looks like a file... with an extension */
+        if (rescp) {
+            if (rescp == 2 || (ext != NULL && rescp == 1 && (!strcasecmp(ext,".zip") || !strcasecmp(ext,".7z")))) {
+                control->auto_bat_additional.push_back("@mount c: \""+tmp+"\"");
+                control->cmdline->EatCurrentArgv();
+                continue;
+            } else if (ext != NULL && rescp == 1 && (!strcasecmp(ext,".bat") || !strcasecmp(ext,".exe") || !strcasecmp(ext,".com"))) { /* .BAT files given on the command line trigger automounting C: to run it */
+                control->auto_bat_additional.push_back(tmp);
+                control->cmdline->EatCurrentArgv();
+                continue;
             }
         }
 
@@ -13256,6 +13260,10 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         /* -- -- second the -conf switches from the command line */
         for (size_t si=0;si < control->config_file_list.size();si++) {
             std::string &cfg = control->config_file_list[si];
+#if defined(WIN32) && defined(C_SDL2)
+            std::string localname = cfg;
+            if (!FileDirExistCP(cfg.c_str()) && FileDirExistUTF8(localname, cfg.c_str())) cfg = localname;
+#endif
             if (!control->ParseConfigFile(cfg.c_str())) {
                 // try to load it from the user directory
                 if (!control->ParseConfigFile((config_path + cfg).c_str())) {
