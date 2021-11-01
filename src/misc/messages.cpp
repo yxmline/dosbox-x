@@ -33,11 +33,11 @@
 #include <string>
 using namespace std;
 
-int msgcodepage = 0;
 extern bool dos_kernel_disabled, force_conversion;
+int msgcodepage = 0, FileDirExistUTF8(std::string &localname, const char *name);
 bool morelen = false, loadlang = false, systemmessagebox(char const * aTitle, char const * aMessage, char const * aDialogType, char const * aIconType, int aDefaultButton);
 bool isSupportedCP(int newCP), CodePageHostToGuestUTF8(char *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/), CodePageGuestToHostUTF8(char *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/);
-void ShutFontHandle(void), menu_update_autocycle(void), update_bindbutton_text(void), set_eventbutton_text(const char *eventname, const char *buttonname);
+void InitFontHandle(void), ShutFontHandle(void), menu_update_autocycle(void), update_bindbutton_text(void), set_eventbutton_text(const char *eventname, const char *buttonname);
 std::string langname = "", langnote = "", GetDOSBoxXPath(bool withexe=false);
 
 #define LINE_IN_MAXLEN 2048
@@ -125,6 +125,11 @@ void LoadMessageFile(const char * fname) {
 	if (!mfile && exepath.size()) mfile=fopen((exepath + "languages/" + fname + ".lng").c_str(),"rt");
 	if (!mfile && config_path.size()) mfile=fopen((config_path + "languages/" + fname).c_str(),"rt");
 	if (!mfile && config_path.size()) mfile=fopen((config_path + "languages/" + fname + ".lng").c_str(),"rt");
+#if defined(WIN32) && defined(C_SDL2)
+    std::string localname = fname;
+    if (!mfile && FileDirExistUTF8(localname, fname) == 1) mfile=fopen(localname.c_str(),"rt");
+#endif
+
 	/* This should never happen and since other modules depend on this use a normal printf */
 	if (!mfile) {
 		std::string message="Could not load language message file '"+std::string(fname)+"'. The default language will be used.";
@@ -223,7 +228,15 @@ void LoadMessageFile(const char * fname) {
     menu_update_autocycle();
     update_bindbutton_text();
     dos.loaded_codepage=cp;
-    if (control->opt_langcp && msgcodepage>0 && isSupportedCP(msgcodepage) && msgcodepage != dos.loaded_codepage) ShutFontHandle();
+    if (control->opt_langcp && msgcodepage>0 && isSupportedCP(msgcodepage) && msgcodepage != dos.loaded_codepage) {
+        ShutFontHandle();
+        if (msgcodepage == 932 || msgcodepage == 936 || msgcodepage == 949 || msgcodepage == 950) {
+            dos.loaded_codepage = msgcodepage;
+            InitFontHandle();
+            dos.loaded_codepage = cp;
+        }
+    }
+
     LOG_MSG("Loaded language file: %s",fname);
 	loadlang=true;
 }
