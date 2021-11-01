@@ -822,7 +822,7 @@ void DOS_Shell::Prepare(void) {
         initcodepagefont();
         dos.loaded_codepage=cp;
     }
-#if defined(WIN32) && !defined(HX_DOS) && !defined(C_SDL2) && defined(SDL_DOSBOX_X_SPECIAL)
+#if (defined(WIN32) && !defined(HX_DOS) || defined(LINUX) && C_X11) && (defined(C_SDL2) || defined(SDL_DOSBOX_X_SPECIAL))
     if (enableime) SetIMPosition();
 #endif
 }
@@ -1736,14 +1736,6 @@ void SHELL_Init() {
 		VFILE_RegisterBuiltinFileBlob(bfb_EGA_COM, "/TEXTUTIL/");
 		VFILE_RegisterBuiltinFileBlob(bfb_CLR_COM, "/TEXTUTIL/");
 		VFILE_RegisterBuiltinFileBlob(bfb_CGA_COM, "/TEXTUTIL/");
-		VFILE_RegisterBuiltinFileBlob(bfb_80X60_COM, "/TEXTUTIL/");
-		VFILE_RegisterBuiltinFileBlob(bfb_80X50_COM, "/TEXTUTIL/");
-		VFILE_RegisterBuiltinFileBlob(bfb_80X43_COM, "/TEXTUTIL/");
-		VFILE_RegisterBuiltinFileBlob(bfb_80X25_COM, "/TEXTUTIL/");
-		VFILE_RegisterBuiltinFileBlob(bfb_132X60_COM, "/TEXTUTIL/");
-		VFILE_RegisterBuiltinFileBlob(bfb_132X50_COM, "/TEXTUTIL/");
-		VFILE_RegisterBuiltinFileBlob(bfb_132X43_COM, "/TEXTUTIL/");
-		VFILE_RegisterBuiltinFileBlob(bfb_132X25_COM, "/TEXTUTIL/");
 	}
 
 	/* don't register 50 unless VGA */
