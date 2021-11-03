@@ -75,14 +75,14 @@ Source: ".\dosbox-x.reference.setup.conf"; DestDir: "{app}"; Flags: ignoreversio
 Source: "..\..\..\CHANGELOG"; DestDir: "{app}"; DestName: "changelog.txt"; Flags: ignoreversion; Components: full typical compact
 Source: "..\..\..\COPYING"; DestDir: "{app}"; DestName: "COPYING.txt"; Flags: ignoreversion; Components: full typical compact
 Source: "..\..\fonts\FREECG98.BMP"; DestDir: "{app}"; Flags: ignoreversion; Components: full typical
-Source: "..\..\fonts\SarasaGothicFixed.ttf"; DestDir: "{app}"; Flags: ignoreversion; Components: full typical
-Source: "..\..\translations\en\en_US.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical
-Source: "..\..\translations\es\es_ES.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical
-Source: "..\..\translations\fr\fr_FR.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical
-Source: "..\..\translations\ja\ja_JP.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical
-Source: "..\..\translations\tr\tr_TR.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical
-Source: "..\..\translations\zh\zh_CN.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical
-Source: "..\..\translations\zh\zh_TW.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical
+Source: "..\..\fonts\SarasaGothicFixed.ttf"; DestDir: "{app}"; Flags: ignoreversion; Components: full typical compact
+Source: "..\..\translations\en\en_US.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical compact
+Source: "..\..\translations\es\es_ES.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical compact
+Source: "..\..\translations\fr\fr_FR.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical compact
+Source: "..\..\translations\ja\ja_JP.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical compact
+Source: "..\..\translations\tr\tr_TR.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical compact
+Source: "..\..\translations\zh\zh_CN.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical compact
+Source: "..\..\translations\zh\zh_TW.lng"; DestDir: "{app}\languages"; Flags: ignoreversion; Components: full typical compact
 Source: "..\..\glshaders\*"; DestDir: "{app}\glshaders"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: full typical
 Source: "..\shaders\*"; DestDir: "{app}\shaders"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: full typical
 Source: ".\drivez_readme.txt"; DestDir: "{app}\drivez"; DestName: "README.TXT"; Flags: ignoreversion; Components: full typical
@@ -199,7 +199,7 @@ begin
 end;
 procedure HelpButtonOnClick(Sender: TObject);
 begin
-  MsgBox('The Setup pre-selects a Windows build for you according to your platform automatically, but you can change the default build to run if you encounter specific problem(s) with the pre-selected one.' #13#13 'For example, while the SDL1 version is the default version to run, the SDL2 version may be preferred over the SDL1 version for certain features such as touchscreen input support. Also, MinGW builds may work better with certain features (such as the Slirp backend for the NE2000 networking) than Visual Studio builds even though they do not come with the debugger.' #13#13 'If you are not sure about which build to use, then you can just leave it unmodified and use the pre-selected one as the default build.', mbConfirmation, MB_OK);
+  MsgBox('The Setup pre-selects a Windows build for you according to your platform automatically, but you can change the default build to run if you encounter specific problem(s) with the pre-selected one.' #13#13 'For example, while the SDL1 version (which uses native Windows menus) is the default version to run, the SDL2 version may be preferred over the SDL1 version for certain features such as touchscreen input support. Also, MinGW builds may work better with certain features (such as the Slirp backend for the NE2000 networking) than Visual Studio builds even though they do not come with the debugger.' #13#13 'If you are not sure about which build to use, then you can just leave it unmodified and use the pre-selected one as the default build.', mbConfirmation, MB_OK);
 end;
 procedure CreateHelpButton(X: integer; Y: integer; W: integer; H: integer);
 begin
@@ -239,12 +239,8 @@ begin
       begin
         PageBuild.Values[2] := True;
       end
-    else if IsWindowsVersionOrNewer(6, 0) then
-      begin
-        PageBuild.Values[0] := True;
-      end
     else
-      PageBuild.Values[4] := True;
+      PageBuild.Values[0] := True;
     CreateHelpButton(ScaleX(20), WizardForm.CancelButton.Top, WizardForm.CancelButton.Width, WizardForm.CancelButton.Height);
     msg:='DOSBox-X supports different video output systems for different purposes.' #13#13 'By default it uses the Direct3D output, but you may want to select the OpenGL pixel-perfect scaling output for improved image quality (not available if you had selected an ARM build). Also, if you use text-mode DOS applications and/or the DOS shell frequently you probably want to select the TrueType font (TTF) output to make the text screen look much better by using scalable TrueType fonts.' #13#13 'This setting can be later modified in the DOSBox-X''s configuration file (dosbox-x.conf), or from DOSBox-X''s Video menu.';
     PageOutput:=CreateInputOptionPage(100, 'Video output for DOSBox-X', 'Specify the DOSBox-X video output system', msg, True, False);
@@ -252,7 +248,7 @@ begin
     PageOutput.Add('OpenGL with pixel-perfect scaling');
     PageOutput.Add('TrueType font (TTF) / Direct3D output');
     PageOutput.Values[2] := True;
-    msg:='DOSBox-X supports language files to display messages in different languages. The user interface is English by default, but you may want to select a different language for its user interface.' #13#13 'This setting can be later modified in the DOSBox-X''s configuration file (dosbox-x.conf).';
+    msg:='DOSBox-X supports language files to display messages in different languages. The user interface is English by default, but you may want to select a different language for its user interface. This setting can be later modified in the DOSBox-X''s configuration file (dosbox-x.conf).';
     PageLang:=CreateInputOptionPage(101, 'User interface language', 'Select the language for DOSBox-X''s user interface', msg, True, False);
     PageLang.Add('Default (English)');
     PageLang.Add('French (français)');
@@ -365,7 +361,7 @@ procedure CurStepChanged(CurrentStep: TSetupStep);
 var
   i, j, k, adv, res: Integer;
   tsection, vsection, found1, found2: Boolean;
-  refname, section, line, linetmp, lineold, linenew: String;
+  refname, section, line, linetmp, lineold, linenew, SetupType: String;
   FileLines, FileLinesold, FileLinesnew, FileLinesave: TStringList;
 begin
   if (CurrentStep = ssPostInstall) then
@@ -449,6 +445,35 @@ begin
           end
         end;
         FileLines.SaveToFile(ExpandConstant('{app}\dosbox-x.conf'));
+      end;
+	  SetupType := WizardSetupType(False);
+    if SetupType = 'compact' then
+	  begin
+		if (not PageLang.Values[1]) and FileExists(ExpandConstant('{app}\languages\fr_FR.lng')) then
+		begin
+		  DeleteFile(ExpandConstant('{app}\languages\fr_FR.lng'));
+		end;
+		if (not PageLang.Values[2]) and FileExists(ExpandConstant('{app}\languages\ja_JP.lng')) then
+		begin
+		  DeleteFile(ExpandConstant('{app}\languages\ja_JP.lng'));
+		end;
+		if (not PageLang.Values[3]) and FileExists(ExpandConstant('{app}\languages\zh_CN.lng')) then
+		begin
+		  DeleteFile(ExpandConstant('{app}\languages\zh_CN.lng'));
+		end;
+		if (not PageLang.Values[4]) and FileExists(ExpandConstant('{app}\languages\es_ES.lng')) then
+		begin
+		  DeleteFile(ExpandConstant('{app}\languages\es_ES.lng'));
+		end;
+		if (not PageLang.Values[5]) and FileExists(ExpandConstant('{app}\languages\zh_TW.lng')) then
+		begin
+		  DeleteFile(ExpandConstant('{app}\languages\zh_TW.lng'));
+		end;
+		if (not PageLang.Values[2]) and (not PageLang.Values[3]) and (not PageLang.Values[5]) then
+		begin
+			if FileExists(ExpandConstant('{app}\SarasaGothicFixed.ttf')) then
+				DeleteFile(ExpandConstant('{app}\SarasaGothicFixed.ttf'));
+		end;
       end;
       if FileExists(ExpandConstant('{app}\dosbox-x.conf')) and (PageLang.Values[1] or PageLang.Values[2] or PageLang.Values[3] or PageLang.Values[4] or PageLang.Values[5] or PageLang.Values[6]) then
       begin
