@@ -1,4 +1,8 @@
 0.83.20
+  - Made 8086 treat opcodes 0x60-0x6F as aliases of
+    opcodes 0x70-0x7F. (Allofich)
+  - Fixed 0x0F opcode being valid on 80186 core when
+    it should be invalid. (Allofich)
   - Added stub IBM ROM BASIC points in the BIOS area
     so that when MS-DOS 1.x and 2.x BASIC.COM and BASICA.COM
     are run, a polite message is displayed instead of
@@ -6,6 +10,10 @@
   - Video emulation for PC-98 mode (for 400-line modes)
     is now 16:10 instead of 4:3. 480-line PC-98 modes
     are still 4:3. (joncampbell123)
+  - PC-98 EGC emulation: Add generic ope_xx handler for
+    the remaining block of undefined/undocumented EGC ROPs.
+    This fixes "Atomic Punker" which uses EGC ROP 0xBE
+    for sprite rendering.
 0.83.19
   - Reorganized the "List network interfaces" and "List
     printer devices" dialogs (under the "Help" menu) to
