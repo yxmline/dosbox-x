@@ -684,7 +684,7 @@ Property* Section_prop::Get_prop(int index) {
 
 Property* Section_prop::Get_prop(string const& _propname) {
     for(it tel = properties.begin();tel != properties.end();++tel){
-        if ((*tel)->propname == _propname){
+        if (!strcasecmp((*tel)->propname.c_str(), _propname.c_str())){
             return (*tel);
         }
     }
