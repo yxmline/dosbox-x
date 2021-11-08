@@ -3050,6 +3050,7 @@ Bitu GFX_SetSize(Bitu width, Bitu height, Bitu flags, double scalex, double scal
         E_Exit("GFX_SetSize with width=%d height=%d zero dimensions not allowed",(int)width,(int)height);
         return 0;
     }
+    bool diff = width != sdl.draw.width || height != sdl.draw.height;
 
     if (sdl.updating)
         GFX_EndUpdate( 0 );
@@ -3138,6 +3139,32 @@ Bitu GFX_SetSize(Bitu width, Bitu height, Bitu flags, double scalex, double scal
     if (!sdl.mouse.autoenable && !sdl.mouse.locked)
         SDL_ShowCursor(sdl.mouse.autolock?SDL_DISABLE:SDL_ENABLE);
 
+#if defined(C_SDL2)
+    if (diff && posx < 0 && posy < 0) {
+        if (sdl.displayNumber==0)
+            SDL_SetWindowPosition(sdl.window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        else {
+            int bx = 0, by = 0;
+            int displays = SDL_GetNumVideoDisplays();
+            SDL_Rect bound;
+            for( int i = 1; i <= displays; i++ ) {
+                bound = SDL_Rect();
+                SDL_GetDisplayBounds(i-1, &bound);
+                if (i == sdl.displayNumber) {
+                    bx = bound.x;
+                    by = bound.y;
+                    break;
+                }
+            }
+            SDL_DisplayMode dm;
+            if (SDL_GetDesktopDisplayMode(sdl.displayNumber?sdl.displayNumber-1:0,&dm) == 0) {
+                bx += (dm.w - sdl.draw.width - sdl.clip.x)/2;
+                by += (dm.h - sdl.draw.height - sdl.clip.y)/2;
+            }
+            SDL_SetWindowPosition(sdl.window, bx, by);
+        }
+    }
+#endif
     UpdateWindowDimensions();
 
 #if defined(WIN32) && !defined(HX_DOS)
@@ -3894,7 +3921,9 @@ bool readTTF(const char *fName, bool bold, bool ital) {
     }
     if (!failName.size()||failName.compare(fName)) {
         failName=std::string(fName);
-        std::string message="Could not load font file: "+std::string(fName)+(strlen(fName)<5||strcasecmp(fName+strlen(fName)-4, ".ttf")?".ttf":"");
+        bool alllower=true;
+        for (size_t i=0; i<strlen(fName); i++) {if ((unsigned char)fName[i]>0x7f) alllower=false;break;}
+        std::string message=alllower?("Could not load font file: "+std::string(fName)+(strlen(fName)<5||strcasecmp(fName+strlen(fName)-4, ".ttf")?".ttf":"")):"Could not load the specified font file.";
         systemmessagebox("Warning", message.c_str(), "ok","warning", 1);
     }
 	return false;
@@ -11649,9 +11678,11 @@ bool ttf_blinking_cursor_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * con
     if (blinkCursor>-1) {
         oldblinkc=blinkCursor;
         blinkCursor=-1;
+        SetVal("ttf", "blinkc", "false");
         mainMenu.get_item("ttf_blinkc").check(false).refresh_item(mainMenu);
     } else {
         blinkCursor=oldblinkc>-1?oldblinkc:(IS_PC98_ARCH?6:4);
+        SetVal("ttf", "blinkc", "true");
         mainMenu.get_item("ttf_blinkc").check(true).refresh_item(mainMenu);
     }
     resetFontSize();
@@ -11662,6 +11693,7 @@ bool ttf_right_left_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const me
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
     rtl=!rtl;
+    SetVal("ttf", "righttoleft", rtl?"true":"false");
     mainMenu.get_item("ttf_right_left").check(rtl).refresh_item(mainMenu);
     resetFontSize();
     return true;
@@ -11675,6 +11707,7 @@ bool ttf_dbcs_sbcs_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const men
         return true;
     }
     dbcs_sbcs=!dbcs_sbcs;
+    SetVal("ttf", "autodbcs", dbcs_sbcs?"true":"false");
     mainMenu.get_item("ttf_dbcs_sbcs").check(dbcs_sbcs).refresh_item(mainMenu);
     resetFontSize();
     return true;
@@ -11688,6 +11721,7 @@ bool ttf_auto_boxdraw_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const 
         return true;
     }
     autoboxdraw=!autoboxdraw;
+    SetVal("ttf", "autoboxdraw", autoboxdraw?"true":"false");
     mainMenu.get_item("ttf_autoboxdraw").check(autoboxdraw).refresh_item(mainMenu);
     resetFontSize();
     return true;
@@ -11701,6 +11735,7 @@ bool ttf_halfwidth_katakana_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * 
         return true;
     }
     halfwidthkana=!halfwidthkana;
+    SetVal("ttf", "halfwidthkana", halfwidthkana?"true":"false");
     mainMenu.get_item("ttf_halfwidthkana").check(halfwidthkana).refresh_item(mainMenu);
     setTTFCodePage();
     resetFontSize();
@@ -11712,6 +11747,7 @@ bool ttf_print_font_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const me
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
     printfont=!printfont;
+    SetVal("ttf", "printfont", printfont?"true":"false");
     mainMenu.get_item("ttf_printfont").check(printfont).refresh_item(mainMenu);
     UpdateDefaultPrinterFont();
     return true;
