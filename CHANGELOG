@@ -8,6 +8,9 @@
     for property names. Also, if an option cannot be
     changed at run-time, DOSBox-X will ask whether to
     restart itself to apply the new setting. (Wengier)
+  - The code page setting of "country" option will now
+    be ignored for PC-98, JEGA and DOS/V modes. These
+    modes will enforce the desired code page. (Wengier)
   - Applied UTF-8 conversions to file browse dialog
     boxes for selecting files containing Unicode
     characters (e.g. CJK characters). (Wengier)
@@ -35,6 +38,10 @@
     apply when REP or REPZ is used. (Allofich)
   - Fixed 0x0F opcode being valid on 80186 core when
     it should be invalid. (Allofich)
+  - Fixed CGA modes to always use a character height
+    of 8, rather than reading it from address 485h.
+    Fixes corrupt graphics in the PC Booter version
+    of Apple Panic. (Allofich)
   - Fixed possible crash with printing. (jamesbond3142)
   - Video emulation for PC-98 mode (for 400-line modes)
     is now 16:10 instead of 4:3. 480-line PC-98 modes
