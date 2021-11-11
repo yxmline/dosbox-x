@@ -27,6 +27,8 @@
   - Added a TrueType font selection page into Windows
     installer, which will show when TrueType font (TTF)
     output is selected for new installations. (Wengier)
+  - Added ability to change floppy images with drive
+    number (0 or 1) only. (Wengier)
   - Added code to INT 18h emulation (IBM PC mode) to
     jump to ROM BASIC if the user provided an IBM
     ROM BASIC image to load. (joncampbell123)
@@ -53,6 +55,10 @@
     Fixes corrupt graphics in the PC Booter version
     of Apple Panic. (Allofich)
   - Fixed possible crash with printing. (jamesbond3142)
+  - Fixed possible freeze when shutting down Windows 9x
+    after changing a CD image from the menu. (Wengier)
+  - Fixed some Direct3D pixel shaders not working (such
+    as GS2x and CRT-geom-blend). (Wengier & depaljas)
   - Fixed config option windowposition=x,y not working
     in Linux/macOS SDL1 builds. (Wengier)
   - Make memory B0000-B7FFF unmapped for the CGA

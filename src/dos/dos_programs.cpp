@@ -493,7 +493,7 @@ void MenuBrowseCDImage(char drive, int num) {
 
     if (Drives[drive-'A']&&!strncmp(Drives[drive-'A']->GetInfo(), "isoDrive ", 9)) {
 #if !defined(HX_DOS)
-        std::string drive_warn = "CD drive "+(dos_kernel_disabled?std::to_string(num):std::string(1, drive)+":")+" is currently mounted with the image:\n"+std::string(Drives[drive-'A']->GetInfo()+9)+"\n\nDo you want to change the CD image now?";
+        std::string drive_warn = "CD drive "+(dos_kernel_disabled?std::to_string(num):std::string(1, drive)+":")+" is currently mounted with the image:\n\n"+std::string(Drives[drive-'A']->GetInfo()+9)+"\n\nDo you want to change the CD image now?";
         if (!tinyfd_messageBox("Change CD image",drive_warn.c_str(),"yesno","question", 1)) return;
 #endif
     } else
@@ -509,16 +509,22 @@ void MenuBrowseCDImage(char drive, int num) {
     lTheOpenFileName = tinyfd_openFileDialog("Select a CD image file","",14,lFilterPatterns,lFilterDescription,0);
 
     if (lTheOpenFileName) {
-        uint8_t mediaid = 0xF8;
-        int error = -1;
-        qmount = true;
-        DOS_Drive* newDrive = new isoDrive(drive, lTheOpenFileName, mediaid, error);
-        qmount = false;
-        if (error) {
-            tinyfd_messageBox("Error","Could not mount the selected CD image.","ok","error", 1);
-            return;
+        isoDrive *cdrom = dynamic_cast<isoDrive*>(Drives[drive-'A']);
+        DOS_Drive *newDrive = NULL;
+        if (cdrom && dos_kernel_disabled) {
+            cdrom->setFileName(lTheOpenFileName);
+        } else {
+            uint8_t mediaid = 0xF8;
+            int error = -1;
+            newDrive = new isoDrive(drive, lTheOpenFileName, mediaid, error);
+            if (error) {
+                tinyfd_messageBox("Error","Could not mount the selected CD image.","ok","error", 1);
+                chdir( Temp_CurrentDir );
+                return;
+            }
+            cdrom = dynamic_cast<isoDrive*>(newDrive);
         }
-        DriveManager::ChangeDisk(drive-'A', newDrive);
+        if (cdrom) DriveManager::ChangeDisk(drive-'A', cdrom);
 	}
 	chdir( Temp_CurrentDir );
 #endif
@@ -532,10 +538,10 @@ void MenuBrowseFDImage(char drive, int num, int type) {
 		return;
 	}
 
-    if (Drives[drive-'A']&&!strncmp(Drives[drive-'A']->GetInfo(), "fatDrive ", 9)) {
+    if (type==-1 || (Drives[drive-'A'] && !strncmp(Drives[drive-'A']->GetInfo(), "fatDrive ", 9))) {
 #if !defined(HX_DOS)
-        std::string image = type==1?"El Torito floppy image":(type==2?"RAM floppy image":Drives[drive-'A']->GetInfo()+9);
-        std::string drive_warn = "Floppy drive "+(dos_kernel_disabled?std::to_string(num):std::string(1, drive)+":")+" is currently mounted with the image:\n"+image+"\n\nDo you want to change the floppy disk image now?";
+        std::string image = type==1||type==-1&&dynamic_cast<imageDiskElToritoFloppy *>(imageDiskList[drive-'A'])!=NULL?"El Torito floppy image":(type==2||type==-1&&dynamic_cast<imageDiskMemory *>(imageDiskList[drive-'A'])!=NULL?"RAM floppy image":(type==-1?imageDiskList[drive-'A']->diskname.c_str():Drives[drive-'A']->GetInfo()+9));
+        std::string drive_warn = "Floppy drive "+(type==-1?std::string(1, drive-'A'+'0'):(dos_kernel_disabled?std::to_string(num):std::string(1, drive)+":"))+" is currently mounted with the image:\n\n"+image+"\n\nDo you want to change the floppy disk image now?";
         if (!tinyfd_messageBox("Change floppy disk image",drive_warn.c_str(),"yesno","question", 1)) return;
 #endif
     } else
@@ -557,9 +563,26 @@ void MenuBrowseFDImage(char drive, int num, int type) {
         fatDrive *newDrive = new fatDrive(lTheOpenFileName, 0, 0, 0, 0, options);
         if (!newDrive->created_successfully) {
             tinyfd_messageBox("Error","Could not mount the selected floppy disk image.","ok","error", 1);
+            chdir( Temp_CurrentDir );
             return;
         }
-        DriveManager::ChangeDisk(drive-'A', newDrive);
+        if (newDrive) {
+            if (type>-1)
+                DriveManager::ChangeDisk(drive-'A', newDrive);
+            else if (newDrive->loadedDisk) {
+                if (imageDiskList[drive-'A']) {
+                    imageDiskList[drive-'A']->Release();
+                    imageDiskList[drive-'A'] = newDrive->loadedDisk;
+                    imageDiskList[drive-'A']->Addref();
+                    imageDiskChange[drive-'A'] = true;
+                }
+                if (swapInDisksSpecificDrive == drive-'A' && diskSwap[swapPosition]) {
+                    diskSwap[swapPosition]->Release();
+                    diskSwap[swapPosition] = newDrive->loadedDisk;
+                    diskSwap[swapPosition]->Addref();
+                }
+            }
+        }
 	}
 	chdir( Temp_CurrentDir );
 #endif

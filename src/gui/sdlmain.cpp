@@ -851,9 +851,12 @@ bool change_currentfd_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * c
     GFX_LosingFocus();
     GFX_ReleaseMouse();
     for (unsigned int idrive=0; idrive<2; idrive++) {
-        fatDrive *fdp = dynamic_cast<fatDrive*>(Drives[idrive]);
-        if (fdp == NULL || fdp->opts.bytesector || fdp->opts.cylsector || fdp->opts.headscyl || fdp->opts.cylinders) continue;
-        MenuBrowseFDImage('A'+idrive, ++num, fdp->opts.mounttype);
+        if (Drives[idrive]) {
+            fatDrive *fdp = dynamic_cast<fatDrive*>(Drives[idrive]);
+            if (fdp == NULL || fdp->opts.bytesector || fdp->opts.cylsector || fdp->opts.headscyl || fdp->opts.cylinders) continue;
+            MenuBrowseFDImage('A'+idrive, ++num, fdp->opts.mounttype);
+        } else if (imageDiskList[idrive])
+            MenuBrowseFDImage('A'+idrive, ++num, -1);
     }
 #if !defined(HX_DOS)
     if (!num) tinyfd_messageBox("Error","No floppy drive is currently available.","ok","error", 1);
@@ -11765,11 +11768,15 @@ bool ttf_print_font_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const me
 }
 #endif
 
+void ttf_reset_colors() {
+    SetVal("ttf", "colors", "");
+    setColors("#000000 #0000aa #00aa00 #00aaaa #aa0000 #aa00aa #aa5500 #aaaaaa #555555 #5555ff #55ff55 #55ffff #ff5555 #ff55ff #ffff55 #ffffff",-1);
+}
+
 bool ttf_reset_colors_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
-    SetVal("ttf", "colors", "");
-    setColors("#000000 #0000aa #00aa00 #00aaaa #aa0000 #aa00aa #aa5500 #aaaaaa #555555 #5555ff #55ff55 #55ffff #ff5555 #ff55ff #ffff55 #ffffff",-1);
+    ttf_reset_colors();
     return true;
 }
 
