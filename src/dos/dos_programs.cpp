@@ -382,7 +382,7 @@ void MenuMountDrive(char drive, const char drive2[DOS_PATHLENGTH]) {
 	else if(type==DRIVE_REMOTE)
 		drive_warn += " your real network drive ";
 	else
-		drive_warn += " everything on your real drive ";
+		drive_warn += " your real hard drive ";
 
 	if (mountwarning && MessageBox(GetHWND(),(drive_warn+str+"?").c_str(),"Warning",MB_YESNO)==IDNO) return;
 
@@ -1376,7 +1376,7 @@ public:
                     case 3  :   WriteOut(MSG_Get("MSCDEX_ERROR_PATH"));             break;
                     case 4  :   WriteOut(MSG_Get("MSCDEX_TOO_MANY_DRIVES"));        break;
                     case 5  :   WriteOut(MSG_Get("MSCDEX_LIMITED_SUPPORT"));        break;
-                    case 10 :   WriteOut(MSG_Get("PROGRAM_MOUNT_PHYSFS_ERROR"));    break;
+                    case 10 :   WriteOut(MSG_Get("PROGRAM_MOUNT_PHYSFS_ERROR"));WriteOut(MSG_Get("PROGRAM_MOUNT_IMGMOUNT"));break;
                     default :   WriteOut(MSG_Get("MSCDEX_UNKNOWN_ERROR"));          break;
                 }
                 if (error && error!=5) {
@@ -1398,7 +1398,7 @@ public:
                     int error = 0;
 					newdrive=new physfsDrive(drive,temp_line.c_str(),sizes[0],bit8size,sizes[2],sizes[3],mediaid,error,options);
                     if (error) {
-                        if (!quiet) WriteOut(MSG_Get("PROGRAM_MOUNT_PHYSFS_ERROR"));
+                        if (!quiet) {WriteOut(MSG_Get("PROGRAM_MOUNT_PHYSFS_ERROR"));WriteOut(MSG_Get("PROGRAM_MOUNT_IMGMOUNT"));}
                         delete newdrive;
                         return;
                     }
@@ -7925,7 +7925,7 @@ void DOS_SetupPrograms(void) {
     MSG_Add("PROGRAM_MOUNT_UMOUNT_NO_VIRTUAL","Virtual Drives can not be unMOUNTed.\n");
     MSG_Add("PROGRAM_MOUNT_WARNING_WIN","Warning: Mounting C:\\ is not recommended.\n");
     MSG_Add("PROGRAM_MOUNT_WARNING_OTHER","Warning: Mounting / is not recommended.\n");
-	MSG_Add("PROGRAM_MOUNT_PHYSFS_ERROR","Failed to mount the PhysFS drive.\n");
+	MSG_Add("PROGRAM_MOUNT_PHYSFS_ERROR","Failed to mount the PhysFS drive with the archive file.\n");
 	MSG_Add("PROGRAM_MOUNT_OVERLAY_NO_BASE","Please MOUNT a normal directory first before adding an overlay on top.\n");
 	MSG_Add("PROGRAM_MOUNT_OVERLAY_INCOMPAT_BASE","The overlay is NOT compatible with the drive that is specified.\n");
 	MSG_Add("PROGRAM_MOUNT_OVERLAY_MIXED_BASE","The overlay needs to be specified using the same addressing as the underlying drive. No mixing of relative and absolute paths.");
@@ -7938,13 +7938,13 @@ void DOS_SetupPrograms(void) {
     MSG_Add("PROGRAM_LOADFIX_DEALLOCALL","Used memory freed.\n");
     MSG_Add("PROGRAM_LOADFIX_ERROR","Memory allocation error.\n");
     MSG_Add("PROGRAM_LOADFIX_HELP",
-        "Reduces the amount of available conventional or XMS/EMS memory.\n\n"
+        "Loads a program above the first 64 KB memory by reducing the available memory.\n\n"
         "LOADFIX [-xms] [-ems] [-{ram}] [{program}] [{options}]\n"
         "LOADFIX -f [-xms] [-ems]\n\n"
         "  -xms        Allocates memory from XMS rather than conventional memory\n"
         "  -ems        Allocates memory from EMS rather than conventional memory\n"
         "  -{ram}      Specifies the amount of memory to allocate in KB\n"
-        "                 Defaults to 64kb for conventional memory; 1MB for XMS/EMS memory\n"
+        "              Defaults to 64KB for conventional memory; 1MB for XMS/EMS memory\n"
         "  -a          Auto allocates enough memory to fill the lowest 64KB memory\n"
         "  -f (or -d)  Frees previously allocated memory\n"
         "  {program}   Runs the specified program\n"

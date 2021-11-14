@@ -578,7 +578,7 @@ Warning: Mounting / is not recommended.
 
 .
 :PROGRAM_MOUNT_PHYSFS_ERROR
-Failed to mount the PhysFS drive.
+Failed to mount the PhysFS drive with the archive file.
 
 .
 :PROGRAM_MOUNT_OVERLAY_NO_BASE
@@ -621,7 +621,7 @@ Memory allocation error.
 
 .
 :PROGRAM_LOADFIX_HELP
-Reduces the amount of available conventional or XMS/EMS memory.
+Loads a program above the first 64 KB memory by reducing the available memory.
 
 LOADFIX [-xms] [-ems] [-{ram}] [{program}] [{options}]
 LOADFIX -f [-xms] [-ems]
@@ -629,7 +629,7 @@ LOADFIX -f [-xms] [-ems]
   -xms        Allocates memory from XMS rather than conventional memory
   -ems        Allocates memory from EMS rather than conventional memory
   -{ram}      Specifies the amount of memory to allocate in KB
-                 Defaults to 64kb for conventional memory; 1MB for XMS/EMS memory
+              Defaults to 64KB for conventional memory; 1MB for XMS/EMS memory
   -a          Auto allocates enough memory to fill the lowest 64KB memory
   -f (or -d)  Frees previously allocated memory
   {program}   Runs the specified program
@@ -1492,11 +1492,7 @@ Do you want to give DOSBox-X access to your real removable drive %c [Y/N]?
 Do you want to give DOSBox-X access to your real network drive %c [Y/N]?
 .
 :SHELL_EXECUTE_DRIVE_ACCESS_FIXED
-Do you really want to give DOSBox-X access to everything
-on your real hard drive %c [Y/N]?
-.
-:SHELL_EXECUTE_DRIVE_ACCESS_FIXED_LESS
-Do you want to give DOSBox-X access to your real hard drive %c [Y/N]?
+Do you really want to give DOSBox-X access to your real hard drive %c [Y/N]?
 .
 :SHELL_EXECUTE_ILLEGAL_COMMAND
 Bad command or filename - "%s"
