@@ -210,7 +210,7 @@ static uint32_t           Ticks = 0;
 extern double           rtdelta;
 static LoopHandler*     loop;
 
-void increaseticks();
+void increaseticks(), makestdcp950table();
 
 /* The whole load of startups for all the subfunctions */
 void                MEM_Init(Section *);
@@ -1068,6 +1068,7 @@ void DOSBOX_RealInit() {
     Section_prop *ttf_section = static_cast<Section_prop *>(control->GetSection("ttf"));
     gbk = ttf_section->Get_bool("gbk");
     chinasea = ttf_section->Get_bool("chinasea");
+    if (!chinasea) makestdcp950table();
     dos.loaded_codepage = cp;
 #if (defined(WIN32) && !defined(HX_DOS) || defined(LINUX) && C_X11) && !defined(C_SDL2) && defined(SDL_DOSBOX_X_SPECIAL)
     if (enableime && !control->opt_silent) {
@@ -2790,11 +2791,11 @@ void DOSBOX_SetupConfigSections(void) {
                       "You can also change the blinking rate by setting an integer between 1 (fastest) and 7 (slowest), or 0 for no cursor.");
     Pstring->SetBasic(true);
 
-	Pbool = secprop->Add_bool("gbk",Property::Changeable::OnlyAtStart,false);
+	Pbool = secprop->Add_bool("gbk",Property::Changeable::WhenIdle,false);
 	Pbool->Set_help("Enables the GBK extension (in addition to the standard GB2312 charset) for the Simplified Chinese TTF output or DOS/V emulation.");
     Pbool->SetBasic(true);
 
-	Pbool = secprop->Add_bool("chinasea",Property::Changeable::OnlyAtStart,false);
+	Pbool = secprop->Add_bool("chinasea",Property::Changeable::WhenIdle,false);
 	Pbool->Set_help("Enables the ChinaSea extension (in addition to the standard Big5 charset) for the Traditional Chinese TTF output (use a font containing such characters).");
     Pbool->SetBasic(true);
 
