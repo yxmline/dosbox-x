@@ -919,7 +919,7 @@ leading colon write protect image = true
 找不到 PCjr cartridge commandos
 .
 :PROGRAM_LOADROM_HELP
-載入指定的 ROM 映像檔.
+載入指定的影像 BIOS 或 IBM BASIC ROM 映像檔.
 
 LOADROM 映像檔
 
@@ -2059,7 +2059,7 @@ CHCP [nnn [檔案]]
 
 .
 :SHELL_CMD_CHCP_MISSING
-TTF 字型中未定義的字元數: %d
+TTF 字型中未定義的 ASCII 字元數: %d
 
 .
 :SHELL_CMD_CHCP_INVALID
@@ -3093,6 +3093,9 @@ Turbo (快轉模式)
 .
 :MENU:cputype_ppro_slow
 奔騰 Pro
+.
+:MENU:cputype_experimental
+實驗 CPU
 .
 :MENU:debug_pageflip
 頁面翻轉偵錯行

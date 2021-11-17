@@ -932,7 +932,7 @@ Commandos de cartouches PCjr disponibles:%s
 Aucun commando de cartouches PCjr trouvé
 .
 :PROGRAM_LOADROM_HELP
-Charge le fichier image ROM spécifié.
+Charge le fichier image ROM spécifié pour le BIOS vidéo ou IBM BASIC.
 
 LOADROM ROM_file
 
@@ -2116,7 +2116,7 @@ Page de code active : %d
 
 .
 :SHELL_CMD_CHCP_MISSING
-Caractères non définis dans la police TTF : %d
+Caractères ASCII non définis dans la police TTF : %d
 
 .
 :SHELL_CMD_CHCP_INVALID
@@ -3125,6 +3125,9 @@ Pentium MMX
 .
 :MENU:cputype_ppro_slow
 Pentium Pro
+.
+:MENU:cputype_experimental
+Expérimental
 .
 :MENU:debug_pageflip
 Ligne de débogage du retournement de page

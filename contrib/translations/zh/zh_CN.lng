@@ -919,7 +919,7 @@ Available PCjr cartridge commandos:%s
 No PCjr cartridge commandos found
 .
 :PROGRAM_LOADROM_HELP
-调用指定的 ROM 镜像文件.
+调用指定的视频 BIOS 或 IBM BASIC ROM 镜像文件.
 
 LOADROM 镜像文件
 
@@ -2049,7 +2049,7 @@ TrueType 字体输出方式所支持的代码页包括:
 
 .
 :SHELL_CMD_CHCP_MISSING
-TTF 字体中未定义的字符数: %d
+TTF 字体中未定义的 ASCII 字符数: %d
 
 .
 :SHELL_CMD_CHCP_INVALID
@@ -3083,6 +3083,9 @@ DOS 命令
 .
 :MENU:cputype_ppro_slow
 奔腾 Pro
+.
+:MENU:cputype_experimental
+实验 CPU
 .
 :MENU:debug_pageflip
 页面翻转调试行

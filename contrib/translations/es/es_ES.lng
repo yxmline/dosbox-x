@@ -933,7 +933,7 @@ Comandos de cartucho PCjr disponibles:%s
 No se han encontrado comandos de cartucho PCjr
 .
 :PROGRAM_LOADROM_HELP
-Carga la imagen ROM indicada.
+Carga el archivo de imagen ROM especificado para BIOS de video o IBM BASIC.
 
 LOADROM ROM_file
 
@@ -2188,7 +2188,7 @@ Type ←[33;1mHELP command←[0m or ←[33;1mcommand /?←[0m for help informati
 
 .
 :SHELL_CMD_CHCP_MISSING
-Characters not defined in TTF font: %d
+Caracteres ASCII no definidos en fuente TTF: %d
 
 .
 :MENU:mapper_reset
