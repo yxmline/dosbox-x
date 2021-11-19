@@ -1324,7 +1324,7 @@ void DOSBOX_SetupConfigSections(void) {
     SDLNetInited = false;
 
     secprop=control->AddSection_prop("dosbox",&Null_Init);
-    Pstring = secprop->Add_path("language",Property::Changeable::Always,"");
+    Pstring = secprop->Add_path("language",Property::Changeable::OnlyAtStart,"");
     Pstring->Set_help("Select a language file for DOSBox-X to use. Encoded with either UTF-8 or a DOS code page.\n"
                       "You can set code page either in the language file or with \"country\" setting in [config] section.");
     Pstring->SetBasic(true);
@@ -1463,7 +1463,7 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool->SetBasic(true);
 
     Pbool = secprop->Add_bool("compresssaveparts", Property::Changeable::WhenIdle,true);
-    Pbool->Set_help("If set, DOSBox-X will compress components of saved states.");
+    Pbool->Set_help("If set, DOSBox-X will compress components of saved states to save space.");
 
     /* will change to default true unless this causes compatibility issues with other users or their editing software */
     Pbool = secprop->Add_bool("skip encoding unchanged frames",Property::Changeable::WhenIdle,false);
@@ -2055,7 +2055,7 @@ void DOSBOX_SetupConfigSections(void) {
 
     secprop=control->AddSection_prop("dosv",&Null_Init,true);
 
-    Pstring = secprop->Add_string("dosv",Property::Changeable::WhenIdle,"off");
+    Pstring = secprop->Add_string("dosv",Property::Changeable::OnlyAtStart,"off");
     Pstring->Set_values(dosv_settings);
     Pstring->Set_help("Enable DOS/V emulation and specify which version to emulate. This option is intended for use with games or software\n"
             "originating from East Asia (China, Japan, Korea) that use the double byte character set (DBCS) encodings and DOS/V extensions\n"
@@ -2072,15 +2072,18 @@ void DOSBOX_SetupConfigSections(void) {
 
 	//For loading FONTX CJK fonts
 	Pstring = secprop->Add_path("fontxsbcs",Property::Changeable::OnlyAtStart,"");
-	Pstring->Set_help("FONTX2 file used to rendering SBCS characters (8x19) in DOS/V or JEGA mode. If not specified, the default one will be used.");
+	Pstring->Set_help("FONTX2 file used to rendering SBCS characters (8x19) in DOS/V or JEGA mode. If not specified, the default one will be used.\n"
+                    "Loading the ASC16 and ASCFONT.15 font files (from the UCDOS and ETen Chinese DOS systems) is also supported for the DOS/V mode.");
     Pstring->SetBasic(true);
 
 	Pstring = secprop->Add_path("fontxsbcs16",Property::Changeable::OnlyAtStart,"");
-	Pstring->Set_help("FONTX2 file used to rendering SBCS characters (8x16) in DOS/V or JEGA mode. If not specified, the default one will be used.");
+	Pstring->Set_help("FONTX2 file used to rendering SBCS characters (8x16) in DOS/V or JEGA mode. If not specified, the default one will be used.\n"
+                    "Loading the ASC16 and ASCFONT.15 font files (from the UCDOS and ETen Chinese DOS systems) is also supported for the DOS/V mode.");
     Pstring->SetBasic(true);
 
 	Pstring = secprop->Add_path("fontxsbcs24",Property::Changeable::OnlyAtStart,"");
-	Pstring->Set_help("FONTX2 file used to rendering SBCS characters (12x24) in DOS/V mode (with V-text). If not specified, the default one will be used.");
+	Pstring->Set_help("FONTX2 file used to rendering SBCS characters (12x24) in DOS/V mode (with V-text). If not specified, the default one will be used.\n"
+                    "Loading the ASC24 and ASCFONT.24? font files (the latter from the ETen Chinese DOS system) is also supported for the DOS/V mode.");
     Pstring->SetBasic(true);
 
 	Pstring = secprop->Add_path("fontxdbcs",Property::Changeable::OnlyAtStart,"");
@@ -2116,12 +2119,12 @@ void DOSBOX_SetupConfigSections(void) {
     Pstring->SetBasic(true);
 
 	const char* vtext_settings[] = { "xga", "xga24", "sxga", "sxga24", "svga", 0};
-	Pstring = secprop->Add_path("vtext1",Property::Changeable::OnlyAtStart,"svga");
+	Pstring = secprop->Add_path("vtext1",Property::Changeable::WhenIdle,"svga");
 	Pstring->Set_values(vtext_settings);
 	Pstring->Set_help("V-text screen mode 1 for the DOS/V emulation. Set \"machine=svga_et4000\" for all available options; enter command \"VTEXT 1\" for this mode.");
     Pstring->SetBasic(true);
 
-	Pstring = secprop->Add_path("vtext2",Property::Changeable::OnlyAtStart,"xga");
+	Pstring = secprop->Add_path("vtext2",Property::Changeable::WhenIdle,"xga");
 	Pstring->Set_values(vtext_settings);
 	Pstring->Set_help("V-text screen mode 2 for the DOS/V emulation. Set \"machine=svga_et4000\" for all available options; enter command \"VTEXT 2\" for this mode.");
     Pstring->SetBasic(true);
