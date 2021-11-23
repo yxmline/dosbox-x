@@ -1843,7 +1843,7 @@ void SHELL_Run() {
                 first_shell->WriteOut(MSG_Get("SHELL_MISSING_FILE"), name);
         }
     }
-
+#if C_DEBUG
     if (control->opt_test) {
         RUN_ALL_TESTS();
 #if defined(WIN32)
@@ -1851,6 +1851,7 @@ void SHELL_Run() {
 #endif
         return;
     }
+#endif
 	i4dos=false;
 	if (altshell) {
         if (strstr(name, "4DOS.COM")) i4dos=true;
