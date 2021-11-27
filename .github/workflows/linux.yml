@@ -1,11 +1,15 @@
 name: Linux builds
-on: [push, pull_request]
-#on: workflow_dispatch
-
+on:
+  pull_request:
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          access_token: ${{ github.token }}
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
