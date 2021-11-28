@@ -484,7 +484,7 @@ void PARALLEL::Run()
 {
     if (!testParallelPortsBaseclass) return;
     if (cmd->FindExist("-?", false) || cmd->FindExist("/?", false)) {
-		WriteOut("Views or changes the parallel port options.\n\nPARALLEL [port] [type] [option]\n\n"
+		WriteOut("Views or changes the parallel port settings.\n\nPARALLEL [port] [type] [option]\n\n"
 				" port   Parallel port number (between 1 and 9).\n type   Type of the parallel port, including:\n        ");
 		for (int x=0; x<PARALLEL_TYPE_COUNT; x++) {
 			WriteOut("%s", parallelTypes[x]);
@@ -510,7 +510,7 @@ void PARALLEL::Run()
 			return;
 		}
 	} if (cmd->GetCount() >= 2) {
-		// Which COM did they want to change?
+		// Which LPT did they want to change?
 		int port = -1;
 		cmd->FindCommand(1, temp_line);
 		try {
@@ -560,15 +560,24 @@ void PARALLEL::Run()
 				defaultirq[port-1] = (uint8_t)strtol(str.c_str(), NULL, 10);
 		// Remove existing port.
 		if (parallelPortObjects[port-1]) {
-			if ((port==1&&mode==PARALLEL_TYPE_DISABLED)||(mode==PARALLEL_TYPE_PRINTER&&parallelPortObjects[port-1]->parallelType!=PARALLEL_TYPE_PRINTER&&testParallelPortsBaseclass->printer_used)) {
-				showPort(port-1);
+			if (mode==PARALLEL_TYPE_PRINTER&&parallelPortObjects[port-1]->parallelType!=PARALLEL_TYPE_PRINTER&&testParallelPortsBaseclass->printer_used) {
+				WriteOut("Printer is already assigned to a different port.\n");
 				return;
 			}
 #if C_PRINTER
 			if (parallelPortObjects[port-1]->parallelType == PARALLEL_TYPE_PRINTER) testParallelPortsBaseclass->printer_used = false;
 #endif
+			DOS_PSP curpsp(dos.psp());
+			if (dos.psp()!=curpsp.GetParent()) {
+                char name[5];
+                sprintf(name, "LPT%d", port);
+                curpsp.CloseFile(name);
+            }
 			delete parallelPortObjects[port-1];
 			parallelPortObjects[port-1] = 0;
+		} else if (mode==PARALLEL_TYPE_PRINTER&&testParallelPortsBaseclass->printer_used) {
+			WriteOut("Printer is already assigned to a different port.\n");
+			return;
 		}
 		// Recreate the port with the new mode.
 		switch (mode) {
@@ -612,13 +621,19 @@ void PARALLEL::Run()
 		showPort(port-1);
 		return;
 	}
-	// Show current serial port configurations.
+	// Show current parallel port configurations.
 	for (int x=0; x<9; x++) showPort(x);
 }
 
 void PARALLEL_ProgramStart(Program **make)
 {
 	*make = new PARALLEL;
+}
+
+void runParallel(const char *str) {
+	PARALLEL parallel;
+	parallel.cmd=new CommandLine("PARALLEL", str);
+	parallel.Run();
 }
 
 void PARALLEL_Destroy (Section * sec) {

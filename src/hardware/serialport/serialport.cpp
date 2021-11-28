@@ -1479,7 +1479,7 @@ void SERIAL::Run()
 {
     if (!testSerialPortsBaseclass) return;
     if (cmd->FindExist("-?", false) || cmd->FindExist("/?", false)) {
-		WriteOut("Views or changes the serial port options.\n\nSERIAL [port] [type] [option]\n\n"
+		WriteOut("Views or changes the serial port settings.\n\nSERIAL [port] [type] [option]\n\n"
 				" port   Serial port number (between 1 and 9).\n type   Type of the serial port, including:\n        ");
 		for (int x=0; x<SERIAL_TYPE_COUNT; x++) {
 			WriteOut("%s", serialTypes[x]);
@@ -1550,6 +1550,12 @@ void SERIAL::Run()
             }
 		// Remove existing port.
 		if (serialports[port-1]) {
+			DOS_PSP curpsp(dos.psp());
+			if (dos.psp()!=curpsp.GetParent()) {
+                char name[5];
+                sprintf(name, "COM%d", port);
+                curpsp.CloseFile(name);
+			}
 			delete serialports[port-1];
 			serialports[port-1] = NULL;
 		}
@@ -1612,6 +1618,12 @@ void SERIAL::Run()
 void SERIAL_ProgramStart(Program **make)
 {
 	*make = new SERIAL;
+}
+
+void runSerial(const char *str) {
+	SERIAL serial;
+	serial.cmd=new CommandLine("SERIAL", str);
+	serial.Run();
 }
 
 void SERIAL_Destroy (Section * sec) {
