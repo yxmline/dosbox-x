@@ -908,7 +908,6 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     <ClCompile Include="..\src\builtin\append_exe.cpp" />
     <ClCompile Include="..\src\builtin\buffers_com.cpp" />
     <ClCompile Include="..\src\builtin\chkdsk_exe.cpp" />
-    <ClCompile Include="..\src\builtin\copy_exe.cpp" />
     <ClCompile Include="..\src\builtin\cwsdpmi_exe.cpp" />
     <ClCompile Include="..\src\builtin\debug_exe.cpp" />
     <ClCompile Include="..\src\builtin\defrag_exe.cpp" />
@@ -918,7 +917,9 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     <ClCompile Include="..\src\builtin\dosidle_exe.cpp" />
     <ClCompile Include="..\src\builtin\dsxmenu_exe_pc.cpp" />
     <ClCompile Include="..\src\builtin\dsxmenu_exe_pc98.cpp" />
+    <ClCompile Include="..\src\builtin\diskcopy_exe.cpp" />
     <ClCompile Include="..\src\builtin\edit_com.cpp" />
+    <ClCompile Include="..\src\builtin\fc_exe.cpp" />
     <ClCompile Include="..\src\builtin\fcbs_com.cpp" />
     <ClCompile Include="..\src\builtin\fdisk_exe.cpp" />
     <ClCompile Include="..\src\builtin\find_exe.cpp" />
@@ -928,6 +929,7 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     <ClCompile Include="..\src\builtin\lastdriv_com.cpp" />
     <ClCompile Include="..\src\builtin\mem_com.cpp" />
     <ClCompile Include="..\src\builtin\move_exe.cpp" />
+    <ClCompile Include="..\src\builtin\print_com.cpp" />
     <ClCompile Include="..\src\builtin\replace_exe.cpp" />
     <ClCompile Include="..\src\builtin\sort_exe.cpp" />
     <ClCompile Include="..\src\builtin\sys_com.cpp" />
