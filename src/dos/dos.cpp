@@ -29,6 +29,7 @@
 #include "control.h"
 #include "dosbox.h"
 #include "dos_inc.h"
+#include "bios_disk.h"
 #include "bios.h"
 #include "logging.h"
 #include "mem.h"
@@ -4348,8 +4349,24 @@ void DOS_ShutdownFiles() {
 
 void DOS_ShutdownDrives() {
 	for (uint16_t i=0;i<DOS_DRIVES;i++) {
-		delete Drives[i];
-		Drives[i] = NULL;
+		if (Drives[i] != NULL) {
+			if (DriveManager::UnmountDrive(i) == 0)
+				Drives[i] = NULL; /* deletes drive but does not set to NULL because surrounding code does that */
+			else
+				LOG(LOG_DOSMISC,LOG_DEBUG)("Failed to unmount drive %c",i+'A'); /* probably drive Z: , UnMount() always returns nonzero */
+		}
+
+		if (Drives[i] != NULL) { /* just in case */
+			delete Drives[i];
+			Drives[i] = NULL;
+		}
+	}
+
+	if (imgDTA != NULL) { /* NTS: Allocated by FAT driver */
+		delete imgDTA;
+		imgDTA = NULL;
+		imgDTASeg = 0;
+		imgDTAPtr = 0;
 	}
 }
 

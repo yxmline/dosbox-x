@@ -34,6 +34,7 @@
 #endif
 
 extern int bootdrive;
+extern bool int13_disk_change_detect_enable;
 extern bool int13_extensions_enable, bootguest, bootvm, use_quick_reboot;
 
 diskGeo DiskGeometryList[] = {
@@ -200,7 +201,7 @@ bool getSwapRequest(void) {
 }
 
 void swapInDrive(int drive, int position=0) {
-    DriveManager::CycleDisks(drive, true, position);
+    if (!dos_kernel_disabled) DriveManager::CycleDisks(drive, true, position);
     /* Hack/feature: rescan all disks as well */
     LOG_MSG("Diskcaching reset for drive %c.", drive+'A');
     if (Drives[drive] != NULL) {
@@ -218,7 +219,7 @@ void swapInDrive(int drive, int position=0) {
 void swapInNextDisk(bool pressed) {
     if (!pressed)
         return;
-    DriveManager::CycleAllDisks();
+    if (!dos_kernel_disabled) DriveManager::CycleAllDisks();
     /* Hack/feature: rescan all disks as well */
     LOG_MSG("Diskcaching reset for floppy drives.");
     for(Bitu i=0;i<2;i++) { /* Swap A: and B: where DOSBox mainline would run through ALL drive letters */
@@ -237,7 +238,7 @@ void swapInNextDisk(bool pressed) {
 void swapInNextCD(bool pressed) {
     if (!pressed)
         return;
-    DriveManager::CycleAllCDs();
+    if (!dos_kernel_disabled) DriveManager::CycleAllCDs();
     /* Hack/feature: rescan all disks as well */
     LOG_MSG("Diskcaching reset for normal mounted drives.");
     for(Bitu i=2;i<DOS_DRIVES;i++) { /* Swap C: D: .... Z: if it is a CD/DVD drive */
@@ -1050,7 +1051,7 @@ static Bitu INT13_DiskHandler(void) {
             uint64_t largesize = tmpheads*tmpcyl*tmpsect*tmpsize;
             largesize/=512;
             uint32_t ts = static_cast<uint32_t>(largesize);
-            reg_ah = (drivenum <2)?1:3; //With 2 for floppy MSDOS starts calling int 13 ah 16
+            reg_ah = (drivenum < 2)?(int13_disk_change_detect_enable?2:1):3; //With 2 for floppy MSDOS starts calling int 13 ah 16
             if(reg_ah == 3) {
                 reg_cx = static_cast<uint16_t>(ts >>16);
                 reg_dx = static_cast<uint16_t>(ts & 0xffff);
@@ -1060,7 +1061,7 @@ static Bitu INT13_DiskHandler(void) {
             if (drivenum <DOS_DRIVES && (Drives[drivenum] != 0 || drivenum <2)) {
                 if (drivenum <2) {
                     //TODO use actual size (using 1.44 for now).
-                    reg_ah = 0x1; // type
+                    reg_ah = (int13_disk_change_detect_enable?2:1); // type
 //                  reg_cx = 0;
 //                  reg_dx = 2880; //Only set size for harddrives.
                 } else {
@@ -1077,6 +1078,38 @@ static Bitu INT13_DiskHandler(void) {
             }
         }
         break;
+    case 0x16: /* Detect disk change (apparently added to XT BIOSes in 1986 according to RBIL) */
+	if (int13_disk_change_detect_enable) {
+		LOG(LOG_BIOS,LOG_WARN)("INT 13: Detect disk change");
+		if(driveInactive(drivenum)) {
+			last_status = 0x80;
+			reg_ah = last_status;
+			CALLBACK_SCF(true);
+		}
+		else if (drivenum < 2) {
+			if (imageDiskChange[drivenum]) {
+				imageDiskChange[drivenum] = false;
+				last_status = 0x06; // change line active
+				reg_ah = last_status;
+				CALLBACK_SCF(true);
+			}
+			else {
+				last_status = 0x00; // no change
+				reg_ah = last_status;
+				CALLBACK_SCF(false);
+			}
+		}
+		else {
+			last_status = 0x06; // not supported (because it's a hard drive)
+			reg_ah = last_status;
+			CALLBACK_SCF(true);
+		}
+	}
+	else {
+		reg_ah=0xff; // not supported
+		CALLBACK_SCF(true);
+	}
+	break;
     case 0x17: /* Set disk type for format */
         /* Pirates! needs this to load */
         killRead = true;
