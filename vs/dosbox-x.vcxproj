@@ -373,11 +373,23 @@
     </CustomBuildStep>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\inpout32.dll" "$(OutputPath)\inpout32.dll"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\glshaders\" mkdir "$(OutputPath)\glshaders"
+copy "$(SolutionDir)\..\contrib\glshaders\*.*" "$(OutputPath)\glshaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>
@@ -408,11 +420,23 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </CustomBuildStep>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\inpout32.dll" "$(OutputPath)\inpout32.dll"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\glshaders\" mkdir "$(OutputPath)\glshaders"
+copy "$(SolutionDir)\..\contrib\glshaders\*.*" "$(OutputPath)\glshaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>
@@ -440,11 +464,23 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\inpoutx64.dll" "$(OutputPath)\inpoutx64.dll"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\glshaders\" mkdir "$(OutputPath)\glshaders"
+copy "$(SolutionDir)\..\contrib\glshaders\*.*" "$(OutputPath)\glshaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
@@ -473,11 +509,20 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
@@ -506,11 +551,20 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
@@ -541,11 +595,23 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\inpoutx64.dll" "$(OutputPath)\inpoutx64.dll"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\glshaders\" mkdir "$(OutputPath)\glshaders"
+copy "$(SolutionDir)\..\contrib\glshaders\*.*" "$(OutputPath)\glshaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
@@ -574,11 +640,20 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
@@ -607,11 +682,20 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
@@ -646,11 +730,23 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </CustomBuildStep>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\inpout32.dll" "$(OutputPath)\inpout32.dll"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\glshaders\" mkdir "$(OutputPath)\glshaders"
+copy "$(SolutionDir)\..\contrib\glshaders\*.*" "$(OutputPath)\glshaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>
@@ -682,11 +778,23 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </CustomBuildStep>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\inpout32.dll" "$(OutputPath)\inpout32.dll"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\glshaders\" mkdir "$(OutputPath)\glshaders"
+copy "$(SolutionDir)\..\contrib\glshaders\*.*" "$(OutputPath)\glshaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>
@@ -715,11 +823,23 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\inpoutx64.dll" "$(OutputPath)\inpoutx64.dll"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\glshaders\" mkdir "$(OutputPath)\glshaders"
+copy "$(SolutionDir)\..\contrib\glshaders\*.*" "$(OutputPath)\glshaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
@@ -749,11 +869,20 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
@@ -783,11 +912,20 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
@@ -819,11 +957,23 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\inpoutx64.dll" "$(OutputPath)\inpoutx64.dll"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\glshaders\" mkdir "$(OutputPath)\glshaders"
+copy "$(SolutionDir)\..\contrib\glshaders\*.*" "$(OutputPath)\glshaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %%i in ($(SolutionDir)\..\contrib\translations\*) do copy %%i\*.lng "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
@@ -853,11 +1003,20 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %i in ($(SolutionDir)\..\contrib\translations\*) do copy %i "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
@@ -887,11 +1046,20 @@ copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</C
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)\..\contrib\fonts\FREECG98.BMP" "$(OutputPath)\FREECG98.BMP"
+copy "$(SolutionDir)\..\contrib\fonts\Nouveau_IBM.ttf" "$(OutputPath)\Nouveau_IBM.ttf"
+copy "$(SolutionDir)\..\contrib\fonts\SarasaGothicFixed.ttf" "$(OutputPath)\SarasaGothicFixed.ttf"
 copy "$(SolutionDir)\..\dosbox-x.reference.conf" "$(OutputPath)\dosbox-x.reference.conf"
 copy "$(SolutionDir)\..\dosbox-x.reference.full.conf" "$(OutputPath)\dosbox-x.reference.full.conf"
-copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\changelog.txt"
+copy "$(SolutionDir)\..\CHANGELOG" "$(OutputPath)\CHANGELOG.txt"
+copy "$(SolutionDir)\..\contrib\windows\installer\readme.txt" "$(OutputPath)\README.txt"
+if not exist "$(OutputPath)\drivez\" mkdir "$(OutputPath)\drivez"
+copy "$(SolutionDir)\..\contrib\windows\installer\drivez_readme.txt" "$(OutputPath)\drivez\readme.txt"
+if not exist "$(OutputPath)\scripts\" mkdir "$(OutputPath)\scripts"
+copy "$(SolutionDir)\..\contrib\windows\installer\windows_explorer_context_menu*.bat" "$(OutputPath)\scripts\"
 if not exist "$(OutputPath)\shaders\" mkdir "$(OutputPath)\shaders"
-copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"</Command>
+copy "$(SolutionDir)\..\contrib\windows\shaders\*.*" "$(OutputPath)\shaders\"
+if not exist "$(OutputPath)\languages\" mkdir "$(OutputPath)\languages"
+for /d %i in ($(SolutionDir)\..\contrib\translations\*) do copy %i "$(OutputPath)\languages\"</Command>
       <Message>
       </Message>
     </PostBuildEvent>
