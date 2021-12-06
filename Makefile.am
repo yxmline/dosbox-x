@@ -5,7 +5,7 @@ SUBDIRS = src include
 
 .PHONY: dosbox-x.app
 
-dosbox-x.app: src/dosbox-x contrib/macos/dosbox.icns
+dosbox-x.app: src/dosbox-x contrib/macos/dosbox.icns src/tool/mach-o-matic
 	rm -Rfv dosbox-x.app
 	mkdir dosbox-x.app
 	mkdir dosbox-x.app/Contents
@@ -23,7 +23,6 @@ dosbox-x.app: src/dosbox-x contrib/macos/dosbox.icns
 		cp -v $$Y dosbox-x.app/Contents/MacOS/; \
 		codesign --remove-signature "dosbox-x.app/Contents/MacOS/$$dylib" || exit 1; \
 		chmod 0755 "dosbox-x.app/Contents/MacOS/$$dylib" || exit 1; \
-		install_name_tool -change $$Y @executable_path/$$dylib dosbox-x.app/Contents/MacOS/DosBox; \
 	done
 # and the libs too. NTS: Cannot use install_name_tool anymore to change anything about dylib files because that invalidates code signing of those files
 	for pass in 1 2 3 4 5; do \
@@ -36,12 +35,27 @@ dosbox-x.app: src/dosbox-x contrib/macos/dosbox.icns
 					codesign --remove-signature "dosbox-x.app/Contents/MacOS/$$dylib" || exit 1; \
 					chmod 0755 "dosbox-x.app/Contents/MacOS/$$dylib" || exit 1; \
 				fi; \
-				install_name_tool -change $$Y @executable_path/$$dylib "$$dolib" || exit 1; \
-				install_name_tool -id @executable_path/$$dylib "$$dolib" || exit 1; \
 			done; \
 		done; \
 	done; \
+	for dylib in dosbox-x.app/Contents/MacOS/*.dylib; do \
+		if [ -f "$$dylib" ]; then \
+	        src/tool/mach-o-matic "$$dylib" || exit 1; \
+		fi; \
+	done; \
+	src/tool/mach-o-matic dosbox-x.app/Contents/MacOS/DosBox || exit 1; \
 	codesign --deep -s - dosbox-x.app/Contents/MacOS/DosBox || exit 1
+
+debug-dosbox-x-app:
+	(cd dosbox-x.app/Contents/MacOS && (DYLD_PRINT_LIBRARIES=1 ./DosBox -defaultconf -defaultdir . -silent -c 'echo hello' -c 'exit')) 2>mac-os-x-dylib-report.txt
+	@echo 'Please review mac-os-x-dylib-report.txt to make sure the .app bundle loaded only from the executable path and not any external Brew libraries.'
+	@echo 'This is crucial to maintain the ability to distribute this application in the Mac OS X world.'
+
+src/tool/mach-o-matic: src/tool/mach-o-matic.cpp
+	g++ -o $@ $<
+
+clean-local:
+	rm -f src/tool/mach-o-matic
 
 contrib/macos/dosbox.icns: contrib/macos/dosbox-x.png
 	rm -Rfv src/dosbox.iconset
