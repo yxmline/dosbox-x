@@ -294,7 +294,7 @@ void d3d_init(void);
 #endif
 void ShutDownMemHandles(Section * sec);
 void resetFontSize(), decreaseFontSize();
-void GFX_ReleaseMouse(), makestdcp950table();
+void GFX_ReleaseMouse(), makestdcp950table(), makeseacp951table();
 void GetMaxWidthHeight(unsigned int *pmaxWidth, unsigned int *pmaxHeight);
 void MAPPER_CheckEvent(SDL_Event * event), MAPPER_CheckKeyboardLayout(), MAPPER_ReleaseAllKeys();
 bool isDBCSCP(), InitCodePage();
@@ -1875,7 +1875,7 @@ void PauseDOSBoxLoop(Bitu /*unused*/) {
     mainMenu.get_item("mapper_pause").check(true).refresh_item(mainMenu);
 
     MAPPER_ReleaseAllKeys();
-
+    GFX_ReleaseMouse();
     GFX_SetTitle(-1,-1,-1,true);
 //  KEYBOARD_ClrBuffer();
     GFX_LosingFocus();
@@ -3613,7 +3613,7 @@ void CaptureMouseNotify(bool capture)
 }
 
 static void CaptureMouse(bool pressed) {
-    if (!pressed)
+    if (!pressed || is_paused)
         return;
 
     CaptureMouseNotify();
@@ -4233,6 +4233,24 @@ void OUTPUT_TTF_Select(int fsize=-1) {
     GFX_SelectFontByPoints(curSize);
     if (fontSize>=MIN_PTSIZE && 100*ttf.cols*ttf.width/maxWidth*ttf.lins*ttf.height/maxHeight > 100)
         E_Exit("Cannot accommodate a window for %dx%d", ttf.lins, ttf.cols);
+    if (ttf.SDL_font && ttf.width) {
+        int widthb, widthm, widthx, width1, width9;
+        widthb = widthm = widthx = width1 = width9 = 0;
+        TTF_GlyphMetrics(ttf.SDL_font, 'B', NULL, NULL, NULL, NULL, &widthb);
+        TTF_GlyphMetrics(ttf.SDL_font, 'M', NULL, NULL, NULL, NULL, &widthm);
+        TTF_GlyphMetrics(ttf.SDL_font, 'X', NULL, NULL, NULL, NULL, &widthx);
+        if (ttf.width != widthb || ttf.width != widthm || ttf.width != widthx) LOG_MSG("TTF: The loaded font is not monospaced.");
+        int cp=dos.loaded_codepage;
+        if (!cp) InitCodePage();
+        if ((IS_PC98_ARCH || isDBCSCP()) && dbcs_sbcs) {
+            int width = 0, height = 0;
+            TTF_GlyphMetrics(ttf.SDL_font, 0x4E00, NULL, NULL, NULL, NULL, &width1);
+            TTF_GlyphMetrics(ttf.SDL_font, 0x4E5D, NULL, NULL, NULL, NULL, &width9);
+            if (width1 <= ttf.width || width9 <= ttf.width) LOG_MSG("TTF: The loaded font may not support DBCS characters.");
+            else if ((ttf.width*2 != width1 || ttf.width*2 != width9) && ttf.width == widthb && ttf.width == widthm && ttf.width == widthx) LOG_MSG("TTF: The loaded font is not monospaced.");
+        }
+        dos.loaded_codepage = cp;
+    }
     resetreq=false;
     sdl.desktop.want_type = SCREEN_TTF;
 }
@@ -4381,7 +4399,7 @@ void change_output(int output) {
     mainMenu.get_item("ttf_dbcs_sbcs").enable(TTF_using()&&!IS_PC98_ARCH&&!IS_JEGA_ARCH&&enable_dbcs_tables).check(dbcs_sbcs||IS_PC98_ARCH||IS_JEGA_ARCH).refresh_item(mainMenu);
     mainMenu.get_item("ttf_autoboxdraw").enable(TTF_using()&&!IS_PC98_ARCH&&!IS_JEGA_ARCH&&enable_dbcs_tables).check(autoboxdraw||IS_PC98_ARCH||IS_JEGA_ARCH).refresh_item(mainMenu);
     mainMenu.get_item("ttf_halfwidthkana").enable(TTF_using()&&!IS_PC98_ARCH&&!IS_JEGA_ARCH&&enable_dbcs_tables).check(halfwidthkana||IS_PC98_ARCH||IS_JEGA_ARCH).refresh_item(mainMenu);
-    mainMenu.get_item("ttf_extcharset").enable(TTF_using()&&!IS_PC98_ARCH&&!IS_JEGA_ARCH&&enable_dbcs_tables).check(dos.loaded_codepage==936?gbk:(dos.loaded_codepage==950?chinasea:(gbk&&chinasea))).refresh_item(mainMenu);
+    mainMenu.get_item("ttf_extcharset").enable(TTF_using()&&!IS_PC98_ARCH&&!IS_JEGA_ARCH&&enable_dbcs_tables).check(dos.loaded_codepage==936?gbk:(dos.loaded_codepage==950||dos.loaded_codepage==951?chinasea:gbk&&chinasea)).refresh_item(mainMenu);
 #endif
 
     if (output != 7) GFX_SetTitle((int32_t)(CPU_CycleAutoAdjust?CPU_CyclePercUsed:CPU_CycleMax),-1,-1,false);
@@ -5379,14 +5397,14 @@ int setTTFCodePage() {
             uname[0]=0;
             uname[1]=0;
             if (cp == 932 && (halfwidthkana || IS_JEGA_ARCH)) forceswk=true;
-            if (cp == 932 || cp == 936 || cp == 949 || cp == 950) dos.loaded_codepage = 437;
+            if (cp == 932 || cp == 936 || cp == 949 || cp == 950 || cp == 951) dos.loaded_codepage = 437;
             if (CodePageGuestToHostUTF16(uname,text)) {
                 wcTest[i] = uname[1]==0?uname[0]:i;
                 if (cp == 932 && lowboxdrawmap.find(i)!=lowboxdrawmap.end() && TTF_GlyphIsProvided(ttf.SDL_font, wcTest[i]))
                     cpMap[i] = wcTest[i];
             }
             forceswk=false;
-            if (cp == 932 || cp == 936 || cp == 949 || cp == 950) dos.loaded_codepage = cp;
+            if (cp == 932 || cp == 936 || cp == 949 || cp == 950 || cp == 951) dos.loaded_codepage = cp;
         }
         uint16_t unimap;
         int notMapped = 0;
@@ -5409,7 +5427,7 @@ int setTTFCodePage() {
         if(IS_JEGA_ARCH) memcpy(cpMap,cpMap_AX,sizeof(cpMap[0])*32);
         if (cp == 932 && halfwidthkana) resetFontSize();
         if (cp == 936) mainMenu.get_item("ttf_extcharset").check(gbk).refresh_item(mainMenu);
-        else if (cp == 950) mainMenu.get_item("ttf_extcharset").check(chinasea).refresh_item(mainMenu);
+        else if (cp == 950 || cp == 951) mainMenu.get_item("ttf_extcharset").check(chinasea).refresh_item(mainMenu);
         else mainMenu.get_item("ttf_extcharset").check(gbk&&chinasea).refresh_item(mainMenu);
         return notMapped;
     } else
@@ -7470,7 +7488,11 @@ static bool CheckEnableImmOnKey(SDL_KeyboardEvent key)
 #elif defined(WIN32) && !defined(HX_DOS) && defined(C_SDL2)
 static bool CheckEnableImmOnKey(SDL_KeyboardEvent key)
 {
-	if(key.keysym.scancode == 0x29 || (key.keysym.scancode >= 0x49 && key.keysym.scancode <= 0x52) || (key.keysym.scancode >= 0xe0 && key.keysym.scancode <= 0xe6) || (strPasteBuffer.length() && key.keysym.sym >= 0x20)) {
+	if(key.keysym.scancode == 0x29 ||
+#if defined(SDL_DOSBOX_X_IME)
+	(!SDL_IM_Composition() && (key.keysym.sym == 0x08 || key.keysym.sym == 0x09 || key.keysym.sym >= 0x20 && key.keysym.sym <= 0x7F || key.keysym.sym >= 0x111 && key.keysym.sym <= 0x119)) ||
+#endif
+	(key.keysym.scancode >= 0x49 && key.keysym.scancode <= 0x52) || (key.keysym.scancode >= 0xe0 && key.keysym.scancode <= 0xe6) || (strPasteBuffer.length() && key.keysym.sym >= 0x20)) {
 		// ESC, shift, control, alt, PgUp, PgDn, etc.
 		return true;
 	} else if((key.keysym.mod & 0x03) != 0 && key.keysym.scancode == 0x2c) {
@@ -9363,8 +9385,8 @@ void CopyClipboardW(int all) {
 		HGLOBAL clipbuffer = GlobalAlloc(GMEM_DDESHARE, (len+1)*2);
 		LPWSTR buffer = static_cast<LPWSTR>(GlobalLock(clipbuffer));
 		if (buffer!=NULL) {
-			int reqsize = MultiByteToWideChar(dos.loaded_codepage==808?866:(dos.loaded_codepage==872?855:dos.loaded_codepage), 0, text, len+1, NULL, 0);
-			if (reqsize>0 && MultiByteToWideChar(dos.loaded_codepage==808?866:(dos.loaded_codepage==872?855:dos.loaded_codepage), 0, text, len+1, buffer, reqsize)==reqsize) {
+			int reqsize = MultiByteToWideChar(dos.loaded_codepage==808?866:(dos.loaded_codepage==872?855:(dos.loaded_codepage==951?950:dos.loaded_codepage)), 0, text, len+1, NULL, 0);
+			if (reqsize>0 && MultiByteToWideChar(dos.loaded_codepage==808?866:(dos.loaded_codepage==872?855:(dos.loaded_codepage==951?950:dos.loaded_codepage)), 0, text, len+1, buffer, reqsize)==reqsize) {
 				GlobalUnlock(clipbuffer);
 				SetClipboardData(CF_UNICODETEXT,clipbuffer);
 			}
@@ -11865,7 +11887,7 @@ bool ttf_halfwidth_katakana_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * 
 bool ttf_extend_charset_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
-    if (!isDBCSCP()||(dos.loaded_codepage!=936&&dos.loaded_codepage!=950)) {
+    if (!isDBCSCP()||(dos.loaded_codepage!=936&&dos.loaded_codepage!=950&&dos.loaded_codepage!=951)) {
         systemmessagebox("Warning", "This function is only available for the Chinese code pages (936 or 950).", "ok","warning", 1);
         return true;
     }
@@ -11876,6 +11898,11 @@ bool ttf_extend_charset_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * cons
     } else if (dos.loaded_codepage==950) {
         chinasea=!chinasea;
         if (!chinasea) makestdcp950table();
+        SetVal("ttf", "chinasea", chinasea?"true":"false");
+        mainMenu.get_item("ttf_extcharset").check(chinasea).refresh_item(mainMenu);
+    } else if (dos.loaded_codepage==951) {
+        chinasea=!chinasea;
+        if (chinasea) makeseacp951table();
         SetVal("ttf", "chinasea", chinasea?"true":"false");
         mainMenu.get_item("ttf_extcharset").check(chinasea).refresh_item(mainMenu);
     }
@@ -15014,7 +15041,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.get_item("ttf_dbcs_sbcs").enable(TTF_using()&&!IS_PC98_ARCH&&!IS_JEGA_ARCH&&enable_dbcs_tables).check(dbcs_sbcs||IS_PC98_ARCH||IS_JEGA_ARCH);
         mainMenu.get_item("ttf_autoboxdraw").enable(TTF_using()&&!IS_PC98_ARCH&&!IS_JEGA_ARCH&&enable_dbcs_tables).check(autoboxdraw||IS_PC98_ARCH||IS_JEGA_ARCH);
         mainMenu.get_item("ttf_halfwidthkana").enable(TTF_using()&&!IS_PC98_ARCH&&!IS_JEGA_ARCH&&enable_dbcs_tables).check(halfwidthkana||IS_PC98_ARCH||IS_JEGA_ARCH);
-        mainMenu.get_item("ttf_extcharset").enable(TTF_using()&&!IS_PC98_ARCH&&!IS_JEGA_ARCH&&enable_dbcs_tables).check(dos.loaded_codepage==936?gbk:(dos.loaded_codepage==950?chinasea:(gbk&&chinasea)));
+        mainMenu.get_item("ttf_extcharset").enable(TTF_using()&&!IS_PC98_ARCH&&!IS_JEGA_ARCH&&enable_dbcs_tables).check(dos.loaded_codepage==936?gbk:(dos.loaded_codepage==950||dos.loaded_codepage==951?chinasea:gbk&&chinasea));
 #endif
 #if C_PRINTER
         mainMenu.get_item("print_textscreen").enable(!IS_PC98_ARCH);

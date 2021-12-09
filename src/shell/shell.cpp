@@ -683,7 +683,7 @@ void DOS_Shell::Prepare(void) {
             if (IS_PC98_ARCH || IS_JEGA_ARCH)
                 countryNo = 81;
             else if (IS_DOSV)
-                countryNo = IS_PDOSV?86:(IS_CDOSV?886:(IS_KDOSV?82:81));
+                countryNo = IS_PDOSV?86:(IS_TDOSV?886:(IS_KDOSV?82:81));
 #if defined(WIN32)
 			else if (GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_ICOUNTRY, buffer, 128)) {
 				countryNo = uint16_t(atoi(buffer));
@@ -719,10 +719,10 @@ void DOS_Shell::Prepare(void) {
                     if (!newCP && IS_DOSV) {
                         if (IS_JDOSV) newCP=932;
                         else if (IS_PDOSV) newCP=936;
-                        else if (IS_CDOSV) newCP=949;
-                        else if (IS_KDOSV) newCP=950;
+                        else if (IS_KDOSV) newCP=949;
+                        else if (IS_TDOSV) newCP=950;
                     }
-                    if (newCP==932||newCP==936||newCP==949||newCP==950) {
+                    if (newCP==932||newCP==936||newCP==949||newCP==950||newCP==951) {
                         dos.loaded_codepage=newCP;
                         SetupDBCSTable();
                         runRescan("-A -Q");
@@ -1735,7 +1735,13 @@ void SHELL_Init() {
 		VFILE_RegisterBuiltinFileBlob(bfb_EMSMAGIC_COM, "/BIN/");
 		VFILE_RegisterBuiltinFileBlob(bfb_DISKCOPY_EXE, "/DOS/");
 		VFILE_RegisterBuiltinFileBlob(bfb_PRINT_COM, "/DOS/");
-		VFILE_RegisterBuiltinFileBlob(bfb_EDIT_COM, "/DOS/");
+
+		/* It appears the latest EDIT.COM requires a 386, and it does not bother
+		 * to detect if the CPU is a 386. If you run this program for 286 and lower
+		 * you get a crash. */
+		if (CPU_ArchitectureType >= CPU_ARCHTYPE_386)
+			VFILE_RegisterBuiltinFileBlob(bfb_EDIT_COM, "/DOS/");
+
 		VFILE_RegisterBuiltinFileBlob(bfb_LICENSE_TXT, "/4DOS/");
 		VFILE_RegisterBuiltinFileBlob(bfb_EXAMPLES_BTM, "/4DOS/");
 		VFILE_RegisterBuiltinFileBlob(bfb_BATCOMP_EXE, "/4DOS/");
