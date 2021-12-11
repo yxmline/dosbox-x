@@ -11,10 +11,14 @@
   - Added config options (in "ethernet, slirp" section)
     "tcp_port_forwards" and "tcp_port_forwards" for port
     forwarding when using the Slirp backend. (kcgen)
-  - Added UTF8 command to convert UTF-8 text to view in
-    the current code page. For example, the command
-    "UTF8 < UTF8TEXT.TXT" will output converted text
-    UTF8TEXT.TXT in the current code page. (Wengier)
+  - Added code pages 737 (Greek) and 775 (Baltic) for
+    the guest-to-host code page conversions. (Wengier)
+  - Added UTF8 and UTF16 commands to convert UTF-8 and
+    UTF-16 text to view in the current code page. For
+    example, the command "UTF8 < UTF8TEXT.TXT" will
+    output converted text UTF8TEXT.TXT in the current
+    code page, and for UTF16 command there are optional
+    /BE & /LE options to specify endianness. (Wengier)
   - Added hidden code page 951 for Big5-HKSCS encoding
     or Big5 Unicode-At-On (Big5-UAO) encoding. Config
     option "uao" is added in [ttf] section so that if
@@ -32,6 +36,8 @@
     segment. It is once again possible to make Mac OS X
     ARM releases and to use dylib files from Brew doing
     so. (joncampbell123)
+  - Fixed Disney sound source connecting to parallel
+    port not working in the previous version. (Wengier)
   - Fixed command-line parameters (when launching
     DOSBox-X) containing Chinese characters in code page
     950 not working in Windows SDL2 builds. (Wengier)
