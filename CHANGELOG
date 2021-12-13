@@ -8,6 +8,18 @@
   - Config option "pixelshader" now allows a shader file
     name without the .fx extension, or a shader file in
     the current directory. (Wengier)
+  - Added debugger commands DATE & TIME to view/change
+    the internal date and time, using the same date and
+    time formats as shell DATE/TIME commands. (Wengier)
+  - Added config option "badcommandhandler" (in [dos]
+    section) which allows to specify a custom error
+    handler program before error message "Bad command
+    or file name" shows up in the DOS shell. (Wengier)
+  - Added config option "j3100colorscroll" (in [dosv]
+    section) which defaults to "false" and allows the
+    J-3100 version of SimCity and VGA version of the
+    Toshiba Windows 3.1 to run, whereas CGA/EGA version
+    of the latter requires a "true" setting. (nanshiki)
   - Added config options (in "ethernet, slirp" section)
     "tcp_port_forwards" and "tcp_port_forwards" for port
     forwarding when using the Slirp backend. (kcgen)
@@ -19,6 +31,9 @@
     output converted text UTF8TEXT.TXT in the current
     code page, and for UTF16 command there are optional
     /BE & /LE options to specify endianness. (Wengier)
+  - Added support for DBCS characters located in UNC
+    network paths of the form \\COMPUTER\FOLDER\FILE
+    on the Windows platform. (Wengier)
   - Added hidden code page 951 for Big5-HKSCS encoding
     or Big5 Unicode-At-On (Big5-UAO) encoding. Config
     option "uao" is added in [ttf] section so that if
@@ -27,6 +42,17 @@
     latter being the default for CP951. If ChinaSea is
     enabled, ChinaSea characters will be used instead
     of original characters in these encodings. (Wengier)
+  - Added ASSOC command to view/change file extension
+    associations. You can define a command or program
+    to open a file with a specific file extension, e.g.
+    "assoc .txt=edit" to open .TXT files with the EDIT
+    command when entering the .TXT file name from the
+    DOS command line. Wildcards are allowed (Wengier)
+  - COUNTRY command is now an external command that
+    appears on Z drive (Z:/SYSTEM/COUNTRY.COM) rather
+    than an internal shell command. (Wengier)
+  - Improved DBCS support for DOS commands including
+    ATTRIB, ECHO, TYPE, MORE, and TRUENAME. (Wengier)
   - Improved checking of segment limits. (joncampbell123)
   - Mac OS X builds from now on will use an in-tree tool
     to replace dylib references in all executable files.

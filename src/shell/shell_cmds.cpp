@@ -59,6 +59,7 @@ SHELL_Cmd cmd_list[]={
 {	"DIR",			0,		&DOS_Shell::CMD_DIR,		"SHELL_CMD_DIR_HELP"},
 {	"CD",			0,		&DOS_Shell::CMD_CHDIR,		"SHELL_CMD_CHDIR_HELP"},
 {	"ALIAS",		1,		&DOS_Shell::CMD_ALIAS,		"SHELL_CMD_ALIAS_HELP"},
+{	"ASSOC",		1,		&DOS_Shell::CMD_ASSOC,		"SHELL_CMD_ASSOC_HELP"},
 {	"ATTRIB",		1,		&DOS_Shell::CMD_ATTRIB,		"SHELL_CMD_ATTRIB_HELP"},
 {	"BREAK",		1,		&DOS_Shell::CMD_BREAK,		"SHELL_CMD_BREAK_HELP"},
 {	"CALL",			1,		&DOS_Shell::CMD_CALL,		"SHELL_CMD_CALL_HELP"},
@@ -67,7 +68,7 @@ SHELL_Cmd cmd_list[]={
 {	"CLS",			0,		&DOS_Shell::CMD_CLS,		"SHELL_CMD_CLS_HELP"},
 {	"COPY",			0,		&DOS_Shell::CMD_COPY,		"SHELL_CMD_COPY_HELP"},
 {	"CHCP",			1,		&DOS_Shell::CMD_CHCP,		"SHELL_CMD_CHCP_HELP"},
-{	"COUNTRY",		1,		&DOS_Shell::CMD_COUNTRY,	"SHELL_CMD_COUNTRY_HELP"},
+//{	"COUNTRY",		1,		&DOS_Shell::CMD_COUNTRY,	"SHELL_CMD_COUNTRY_HELP"}, // COUNTRY as a program (Z:\SYSTEM\COUNTRY.COM) instead of shell command
 {	"CTTY",			1,		&DOS_Shell::CMD_CTTY,		"SHELL_CMD_CTTY_HELP"},
 {	"DATE",			0,		&DOS_Shell::CMD_DATE,		"SHELL_CMD_DATE_HELP"},
 {	"DEL",			0,		&DOS_Shell::CMD_DELETE,		"SHELL_CMD_DELETE_HELP"},
@@ -122,7 +123,7 @@ const char *GetCmdName(int i) {
 }
 
 extern int enablelfn, lfn_filefind_handle, file_access_tries;
-extern bool date_host_forced, usecon, rsize, dbcs_sbcs, sync_time, manualtime, inshell;
+extern bool date_host_forced, usecon, outcon, rsize, dbcs_sbcs, sync_time, manualtime, inshell, noassoc;
 extern unsigned long freec;
 extern uint16_t countryNo, altcp_to_unicode[256];
 void GetExpandedPath(std::string &path);
@@ -215,13 +216,13 @@ bool DOS_Shell::execute_shell_cmd(char *name, char *arguments) {
 
 void DOS_Shell::DoCommand(char * line) {
 /* First split the line into command and arguments */
-    char* orign_cmd_line = line;
+    std::string origin_cmd_line = line;
     std::string last_alias_cmd;
     std::string altered_cmd_line;
     int alias_counter = 0;
 __do_command_begin:
     if (alias_counter > 64) {
-        WriteOut(MSG_Get("SHELL_EXECUTE_ALIAS_EXPAND_OVERFLOW"), orign_cmd_line);
+        WriteOut(MSG_Get("SHELL_EXECUTE_ALIAS_EXPAND_OVERFLOW"), origin_cmd_line.c_str());
     }
 	line=trim(line);
 	char cmd_buffer[CMD_MAXLINE];
@@ -271,7 +272,14 @@ __do_command_begin:
 	} else
 		if(Execute(cmd_buffer,line)) return;
 	if(enable_config_as_shell_commands && CheckConfig(cmd_buffer,line)) return;
-	WriteOut(MSG_Get("SHELL_EXECUTE_ILLEGAL_COMMAND"),cmd_buffer);
+    std::string errhandler = static_cast<Section_prop *>(control->GetSection("dos"))->Get_string("badcommandhandler");
+    if (errhandler.size()&&!noassoc) {
+        noassoc=true;
+        LOG_MSG("errhandler %s line %s\n", errhandler.c_str(), origin_cmd_line.c_str());
+        DoCommand((char *)(errhandler+" "+origin_cmd_line).c_str());
+        noassoc=false;
+    } else
+        WriteOut(MSG_Get("SHELL_EXECUTE_ILLEGAL_COMMAND"),cmd_buffer);
 }
 
 #define HELP(command) \
@@ -1256,8 +1264,12 @@ void DOS_Shell::CMD_ECHO(char * args){
 	size_t len = strlen(args); //TODO check input of else ook nodig is.
 	if(len && args[len - 1] == '\r') {
 		LOG(LOG_MISC,LOG_WARN)("Hu ? carriage return already present. Is this possible?");
-		WriteOut("%s\n",args);
-	} else WriteOut("%s\r\n",args);
+		WriteOut_NoParsing(args, true);
+		WriteOut("\n");
+	} else {
+		WriteOut_NoParsing(args, true);
+		WriteOut("\r\n");
+	}
 }
 
 
@@ -1328,7 +1340,7 @@ void DOS_Shell::CMD_CHDIR(char * args) {
 	char dir[DOS_PATHLENGTH];
 	if (!*args) {
 		DOS_GetCurrentDir(0,dir,true);
-		WriteOut("%c:\\\n",drive);
+		WriteOut("%c:\\",drive);
 		WriteOut_NoParsing(dir, true);
 		WriteOut("\n");
 	} else if(strlen(args) == 2 && args[1]==':') {
@@ -2749,6 +2761,11 @@ void DOS_Shell::CMD_TYPE(char * args) {
 	}
 	uint16_t handle;
 	char * word;
+	bool lead = false;
+	int COLS = 80;
+	if (!IS_PC98_ARCH && outcon) COLS=real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
+	BIOS_NCOLS;
+	uint8_t page=outcon?real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE):0;
 nextfile:
 	word=StripArg(args);
 	if (!DOS_OpenFile(word,0,&handle)) {
@@ -2756,16 +2773,26 @@ nextfile:
 		return;
 	}
 	ctrlbrk=false;
-	uint8_t c;uint16_t n=1;
+	uint8_t c,last,last2,last3;uint16_t n=1;
+	last3=last2=last=0;
 	bool iscon=DOS_FindDevice(word)==DOS_FindDevice("con");
 	while (n) {
 		DOS_ReadFile(handle,&c,&n);
+		if (outcon && !CURSOR_POS_COL(page)) last3=last2=last=0;
+		if (lead) lead=false;
+		else if ((IS_PC98_ARCH || isDBCSCP())
+#if defined(USE_TTF)
+            && dbcs_sbcs
+#endif
+        ) lead = isKanji1(c) && !CheckBoxDrawing(last3, last2, last, c);
 		if (n==0 || c==0x1a) break; // stop at EOF
 		if (iscon) {
 			if (c==3) break;
 			else if (c==13) WriteOut("\r\n");
 		} else if (CheckBreak(this)) break;
+		else if (outcon && lead && CURSOR_POS_COL(page) == COLS-1) WriteOut(" ");
 		DOS_WriteFile(STDOUT,&c,&n);
+		if (outcon) {last3=last2;last2=last;last=c;}
 	}
 	DOS_CloseFile(handle);
 	if (*args) goto nextfile;
@@ -2807,7 +2834,11 @@ void DOS_Shell::CMD_MORE(char * args) {
 		while (true) {
 			DOS_ReadFile (STDIN,&c,&n);
 			if (lead) lead=false;
-			else if ((IS_PC98_ARCH || isDBCSCP()) && dbcs_sbcs) lead = isKanji1(c) && !CheckBoxDrawing(last3, last2, last, c);
+			else if ((IS_PC98_ARCH || isDBCSCP())
+#if defined(USE_TTF)
+                && dbcs_sbcs
+#endif
+            ) lead = isKanji1(c) && !CheckBoxDrawing(last3, last2, last, c);
 			if (c==3) {dos.echo=echo;return;}
 			else if (n==0) {if (last!=10) WriteOut("\r\n");dos.echo=echo;return;}
 			else if (c==13&&last==26) {dos.echo=echo;return;}
@@ -2872,7 +2903,11 @@ nextfile:
 		n=1;
 		DOS_ReadFile(handle,&c,&n);
 		if (lead) lead=false;
-		else if ((IS_PC98_ARCH || isDBCSCP()) && dbcs_sbcs) lead = isKanji1(c) && !CheckBoxDrawing(last3, last2, last, c);
+		else if ((IS_PC98_ARCH || isDBCSCP())
+#if defined(USE_TTF)
+            && dbcs_sbcs
+#endif
+        ) lead = isKanji1(c) && !CheckBoxDrawing(last3, last2, last, c);
 		if (lead && nchars == COLS-1) {
 			last3=last2=last=0;
 			nlines++;
@@ -3060,7 +3095,7 @@ void DOS_Shell::CMD_TIME(char * args) {
 		else {
 			uint32_t ticks=(uint32_t)(((double)(newhour*3600+
 											newminute*60+
-											newsecond))*18.206481481);
+											newsecond+0.2))*18.206481481);
 			mem_writed(BIOS_TIMER,ticks);
 		}
 		if (sync_time) {manualtime=true;mainMenu.get_item("sync_host_datetime").check(false).refresh_item(mainMenu);}
@@ -3315,12 +3350,18 @@ static bool doAttrib(DOS_Shell * shell, char * args, DOS_DTA dta, bool optS, boo
 					if (subh) fattr&=~DOS_ATTR_HIDDEN;
 					if (subr) fattr&=~DOS_ATTR_READ_ONLY;
 					if (DOS_SetFileAttr(((uselfn||strchr(full, ' ')?(full[0]!='"'?"\"":""):"")+std::string(full)+(uselfn||strchr(full, ' ')?(full[strlen(full)-1]!='"'?"\"":""):"")).c_str(), fattr)) {
-						if (DOS_GetFileAttr(((uselfn||strchr(full, ' ')?(full[0]!='"'?"\"":""):"")+std::string(full)+(uselfn||strchr(full, ' ')?(full[strlen(full)-1]!='"'?"\"":""):"")).c_str(), &fattr))
-							shell->WriteOut("  %c  %c%c%c	%s\n", fattr&DOS_ATTR_ARCHIVE?'A':' ', fattr&DOS_ATTR_SYSTEM?'S':' ', fattr&DOS_ATTR_HIDDEN?'H':' ', fattr&DOS_ATTR_READ_ONLY?'R':' ', uselfn?sfull:full);
+						if (DOS_GetFileAttr(((uselfn||strchr(full, ' ')?(full[0]!='"'?"\"":""):"")+std::string(full)+(uselfn||strchr(full, ' ')?(full[strlen(full)-1]!='"'?"\"":""):"")).c_str(), &fattr)) {
+							shell->WriteOut("  %c  %c%c%c	", fattr&DOS_ATTR_ARCHIVE?'A':' ', fattr&DOS_ATTR_SYSTEM?'S':' ', fattr&DOS_ATTR_HIDDEN?'H':' ', fattr&DOS_ATTR_READ_ONLY?'R':' ');
+							shell->WriteOut_NoParsing(uselfn?sfull:full, true);
+							shell->WriteOut("\n");
+						}
 					} else
 						shell->WriteOut(MSG_Get("SHELL_CMD_ATTRIB_SET_ERROR"),uselfn?sfull:full);
-				} else
-					shell->WriteOut("  %c  %c%c%c	%s\n", attra?'A':' ', attrs?'S':' ', attrh?'H':' ', attrr?'R':' ', uselfn?sfull:full);
+				} else {
+					shell->WriteOut("  %c  %c%c%c	", attra?'A':' ', attrs?'S':' ', attrh?'H':' ', attrr?'R':' ');
+					shell->WriteOut_NoParsing(uselfn?sfull:full, true);
+					shell->WriteOut("\n");
+				}
 			} else
 				shell->WriteOut(MSG_Get("SHELL_CMD_ATTRIB_GET_ERROR"),uselfn?sfull:full);
 		}
@@ -3586,15 +3627,23 @@ void DOS_Shell::CMD_TRUENAME(char * args) {
                std::string hostname = "";
                if (odp) hostname = odp->GetHostName(fullname);
                else if (ldp) hostname = ldp->GetHostName(fullname);
-               if (hostname.size()) WriteOut("%s\n", hostname.c_str());
+               if (hostname.size()) {
+                   WriteOut_NoParsing(hostname.c_str(), true);
+                   WriteOut("\n");
+               }
            }
         } else
 #if defined(WIN32) && !(defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR))
-            if (Network_IsNetworkResource(fullname))
-                WriteOut("%s\r\n", name);
-            else
+            if (Network_IsNetworkResource(fullname)) {
+                WriteOut_NoParsing(name, true);
+                WriteOut("\r\n");
+            } else
 #endif
-            WriteOut("%c:\\%s\r\n", drive+'A', fullname);
+            {
+                WriteOut("%c:\\", drive+'A');
+                WriteOut_NoParsing(fullname, true);
+                WriteOut("\r\n");
+            }
     }
 	else
 		WriteOut(dos.errorcode==DOSERR_PATH_NOT_FOUND?"Path not found\n":"File not found\n");
@@ -3969,8 +4018,7 @@ void DOS_Shell::CMD_ALIAS(char* args) {
     HELP("ALIAS");
 	args = trim(args);
     if (!*args || strchr(args, '=') == NULL) {
-        for (cmd_alias_map_t::iterator iter = cmd_alias.begin(), end = cmd_alias.end();
-            iter != end; ++iter) {
+        for (cmd_alias_map_t::iterator iter = cmd_alias.begin(), end = cmd_alias.end(); iter != end; ++iter) {
 			if (!*args || !strcasecmp(args, iter->first.c_str()))
 				WriteOut("ALIAS %s='%s'\n", iter->first.c_str(), iter->second.c_str());
         }
@@ -3991,10 +4039,52 @@ void DOS_Shell::CMD_ALIAS(char* args) {
                     cmd_alias.erase(cmd);
                 } else {
                     cmd_alias[cmd] = args;
+                    cmd_alias_map_t::iterator iter = cmd_alias.find(cmd);
+                    if (iter != cmd_alias.end()) WriteOut("ALIAS %s='%s'\n", iter->first.c_str(), iter->second.c_str());
                 }
                 break;
             } else {
                 alias_name[offset] = *args;
+            }
+        }
+    }
+}
+
+void DOS_Shell::CMD_ASSOC(char* args) {
+    HELP("ASSOC");
+	args = trim(args);
+    if (!*args || strchr(args, '=') == NULL) {
+        for (cmd_assoc_map_t::iterator iter = cmd_assoc.begin(), end = cmd_assoc.end(); iter != end; ++iter) {
+			if (!*args || !strcasecmp(args, iter->first.c_str()))
+				WriteOut("%s=%s\n", iter->first.c_str(), iter->second.c_str());
+        }
+    } else {
+        char assoc_name[256] = { 0 };
+        char* cmd = 0;
+        for (unsigned int offset = 0; *args && offset < sizeof(assoc_name)-1; ++offset, ++args) {
+            if (*args == '=') {
+                cmd = trim(assoc_name);
+                if (!*cmd || cmd[0] != '.') {
+                    WriteOut(MSG_Get("SHELL_INVALID_PARAMETER"), cmd);
+                    break;
+                }
+                ++args;
+                args = trim(args);
+                size_t args_len = strlen(args);
+                if ((*args == '"' && args[args_len - 1] == '"') || (*args == '\'' && args[args_len - 1] == '\'')) {
+                    args[args_len - 1] = 0;
+                    ++args;
+                }
+                if (!*args) {
+                    cmd_assoc.erase(cmd);
+                } else {
+                    cmd_assoc[cmd] = args;
+                    cmd_assoc_map_t::iterator iter = cmd_assoc.find(cmd);
+                    if (iter != cmd_assoc.end()) WriteOut("%s=%s\n", iter->first.c_str(), iter->second.c_str());
+                }
+                break;
+            } else {
+                assoc_name[offset] = *args;
             }
         }
     }
@@ -4136,32 +4226,29 @@ void DOS_Shell::CMD_CTTY(char * args) {
 
 void DOS_Shell::CMD_COUNTRY(char * args) {
 	HELP("COUNTRY");
-	if (char* rem = ScanCMDRemain(args))
-		{
+	if (char* rem = ScanCMDRemain(args)) {
 		WriteOut(MSG_Get("SHELL_ILLEGAL_SWITCH"), rem);
 		return;
-		}
+	}
 	args = trim(args);
-	if (!*args)
-		{
+	if (!*args) {
 		WriteOut("Current country code: %d\n", countryNo);
 		return;
-		}
+	}
 	int newCC;
 	char buffer[256];
-	if (sscanf(args, "%d%s", &newCC, buffer) == 1 && newCC>0)
-		{
+	if (sscanf(args, "%d%s", &newCC, buffer) == 1 && newCC>0) {
 		countryNo = newCC;
 		DOS_SetCountry(countryNo);
 		return;
-		}
+	}
 	WriteOut("Invalid country code - %s\n", StripArg(args));
 	return;
 }
 
 #if defined(USE_TTF)
 extern bool jfont_init, isDBCSCP();
-void runRescan(const char *str), MSG_Init(), JFONT_Init(), DOSBox_SetSysMenu();
+void runRescan(const char *str), MSG_Init(), JFONT_Init(), InitFontHandle(), ShutFontHandle(), DOSBox_SetSysMenu();
 void toSetCodePage(DOS_Shell *shell, int newCP, int opt) {
     if (isSupportedCP(newCP)) {
 		dos.loaded_codepage = newCP;
@@ -4174,7 +4261,11 @@ void toSetCodePage(DOS_Shell *shell, int newCP, int opt) {
             shell->WriteOut(MSG_Get("SHELL_CMD_CHCP_ACTIVE"), dos.loaded_codepage);
             if (missing > 0) shell->WriteOut(MSG_Get("SHELL_CMD_CHCP_MISSING"), missing);
         }
-        if (!jfont_init && isDBCSCP()) JFONT_Init();
+        if (isDBCSCP()) {
+            ShutFontHandle();
+            InitFontHandle();
+            JFONT_Init();
+        }
         SetupDBCSTable();
         runRescan("-A -Q");
     } else if (opt<1)

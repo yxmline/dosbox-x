@@ -1088,7 +1088,7 @@ void DOSBOX_RealInit() {
     gbk = ttf_section->Get_bool("gbk");
     chinasea = ttf_section->Get_bool("chinasea");
     uao = ttf_section->Get_bool("uao");
-    if (IS_PDOSV || IS_TDOSV || dos.loaded_codepage == 936 || dos.loaded_codepage == 950 || dos.loaded_codepage == 951) {
+    if (IS_PDOSV || IS_TDOSV || dos.loaded_codepage == 936 || dos.loaded_codepage == 950 || dos.loaded_codepage == 951 || control->opt_langcp) {
         makestdcp950table();
         makeseacp951table();
     }
@@ -2171,6 +2171,11 @@ void DOSBOX_SetupConfigSections(void) {
 	Pstring->Set_values(j3100_types);
 	Pstring->Set_help("Specifies the Toshiba J-3100 machine type if J-3100 mode is enabled. The color palette will be changed with different machine types.");
     Pstring->SetBasic(true);
+
+	Pbool = secprop->Add_bool("j3100colorscroll",Property::Changeable::WhenIdle,false);
+	Pbool->Set_help("Specifies that the color display can be used for scrolling, which is currently incompatible with for example the J-3100 version of the SimCity game.\n"
+                    "The VGA version of the Toshiba Windows 3.1 works fine with the \"false\" value of this setting, whereas its CGA/EGA version requires a \"true\" value for this.");
+    Pbool->SetBasic(true);
 
     secprop=control->AddSection_prop("video",&Null_Init);
     Pint = secprop->Add_int("vmemdelay", Property::Changeable::WhenIdle,0);
@@ -3944,6 +3949,9 @@ void DOSBOX_SetupConfigSections(void) {
                     "Compatibility with DOSBox SVN can be improved by enabling this option.");
     Pbool->SetBasic(true);
 
+    Pstring = secprop->Add_string("badcommandhandler",Property::Changeable::WhenIdle,"");
+    Pstring->Set_help("Allow to specify a custom error handler command for the internal DOS shell before the \"Bad command or file name\" message shows up.");
+
     Pbool = secprop->Add_bool("hma",Property::Changeable::WhenIdle,true);
     Pbool->Set_help("Report through XMS that HMA exists (not necessarily available)");
     Pbool->SetBasic(true);
@@ -4220,7 +4228,7 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool->Set_help("Enable START command to start programs to run on the host system. On Windows host programs or commands may also be launched directly.");
     Pbool->SetBasic(true);
 
-    Pbool = secprop->Add_bool("starttranspath",Property::Changeable::WhenIdle,false);
+    Pbool = secprop->Add_bool("starttranspath",Property::Changeable::WhenIdle,true);
     Pbool->Set_help("Specify whether DOSBox-X should automatically translate all paths in the command-line to host system paths when starting programs to run on the host system.");
     Pbool->SetBasic(true);
 

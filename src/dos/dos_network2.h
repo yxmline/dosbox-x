@@ -35,6 +35,8 @@ August 8 2005		cyberwalker
 extern unsigned int lfn_id[256];
 extern bool enable_network_redirector;
 extern uint16_t	NetworkHandleList[127];	/*in dos_files.cpp*/
+extern bool CodePageHostToGuestUTF16(char *d/*CROSS_LEN*/,const uint16_t *s/*CROSS_LEN*/);
+extern bool CodePageGuestToHostUTF16(uint16_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/);
 
  bool Network_IsNetworkResource(const char * filename)
 {
@@ -53,29 +55,35 @@ extern uint16_t	NetworkHandleList[127];	/*in dos_files.cpp*/
 	return	(NetworkHandleList[entry]==handle);
 }//bool	Network_IsNetworkFile(uint16_t entry)
 
-WIN32_FIND_DATA fdw;
+WIN32_FIND_DATA fda;
+WIN32_FIND_DATAW fdw;
+uint16_t namehost[CROSS_LEN];
+bool usefdw = false;
 HANDLE hFind = INVALID_HANDLE_VALUE;
  bool Network_FindNext(DOS_DTA & dta)
  {
 	uint8_t fattr;char pattern[CROSS_LEN];
 	uint16_t date, time, attr;
-	std::string name;
-	SYSTEMTIME lt;
+	std::string name,lname;
+	SYSTEMTIME lt, local;
 	dta.GetSearchParams(fattr,pattern,true);
     if (hFind != INVALID_HANDLE_VALUE) {
-        while (FindNextFile(hFind, &fdw)) {
+        while (usefdw?FindNextFileW(hFind, &fdw):FindNextFile(hFind, &fda)) {
             if ((fattr & DOS_ATTR_DIRECTORY)||!(fdw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-                FileTimeToSystemTime(&fdw.ftLastWriteTime, &lt);
-                if (*fdw.cAlternateFileName)
-                    name = fdw.cAlternateFileName;
+                FileTimeToSystemTime(usefdw?&fdw.ftLastWriteTime:&fda.ftLastWriteTime, &lt);
+                if (SystemTimeToTzSpecificLocalTime(NULL, &lt, &local)) lt = local;
+                if (usefdw && wcslen(fdw.cAlternateFileName) && CodePageHostToGuestUTF16(pattern,(uint16_t *)fdw.cAlternateFileName))
+                    name = pattern;
+                else if (!usefdw && *fda.cAlternateFileName)
+                    name = fda.cAlternateFileName;
                 else {
-                    name = fdw.cFileName;
+                    name = !usefdw ? fda.cFileName : (CodePageHostToGuestUTF16(pattern,(uint16_t *)fdw.cFileName) ? pattern : "");
                     std::transform(name.begin(), name.end(), name.begin(), ::toupper);
                 }
                 date = DOS_PackDate(lt.wYear,lt.wMonth,lt.wDay);
                 time = DOS_PackTime(lt.wHour,lt.wMinute,lt.wSecond);
-                attr = (fdw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? DOS_ATTR_DIRECTORY : 0) | (fdw.dwFileAttributes & 0x3f);
-                dta.SetResult(name.c_str(),fdw.cFileName,fdw.nFileSizeLow,date,time,attr);
+                attr = ((usefdw?fdw.dwFileAttributes:fda.dwFileAttributes) & FILE_ATTRIBUTE_DIRECTORY ? DOS_ATTR_DIRECTORY : 0) | ((usefdw?fdw.dwFileAttributes:fda.dwFileAttributes) & 0x3f);
+                dta.SetResult(name.c_str(),!usefdw ? fda.cFileName : (CodePageHostToGuestUTF16(pattern,(uint16_t *)fdw.cFileName) ? pattern : name.c_str()),usefdw?fdw.nFileSizeLow:fda.nFileSizeLow,date,time,attr);
                 return true;
             }
         }
@@ -93,7 +101,7 @@ HANDLE hFind = INVALID_HANDLE_VALUE;
 	uint8_t fattr;char pattern[CROSS_LEN];
 	uint16_t date, time, attr;
 	std::string name;
-	SYSTEMTIME lt;
+	SYSTEMTIME lt, local;
 	dta.GetSearchParams(fattr,pattern,true);
 	if (lfn_filefind_handle>=LFN_FILEFIND_MAX)
 		dta.SetDirID(65534);
@@ -102,24 +110,28 @@ HANDLE hFind = INVALID_HANDLE_VALUE;
 	if (fattr == DOS_ATTR_VOLUME) return false;
     std::string search = std::string(_dir)+"\\"+std::string(pattern);
     if (search.size() > 4 && search[0]=='\\' && search[1]=='\\' && search[2]!='\\' && std::count(search.begin()+3, search.end(), '\\')==1) search += "\\";
-    hFind = FindFirstFile(search.c_str(), &fdw);
+    usefdw = CodePageGuestToHostUTF16(namehost,search.c_str());
+    hFind = usefdw ? FindFirstFileW((LPCWSTR)namehost, &fdw) : FindFirstFile(search.c_str(), &fda);
     if (hFind != INVALID_HANDLE_VALUE) {
         do {
-            if ((fattr & DOS_ATTR_DIRECTORY)||!(fdw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-                FileTimeToSystemTime(&fdw.ftLastWriteTime, &lt);
-                if (*fdw.cAlternateFileName)
-                    name = fdw.cAlternateFileName;
+            if ((fattr & DOS_ATTR_DIRECTORY)||!((usefdw?fdw.dwFileAttributes:fda.dwFileAttributes) & FILE_ATTRIBUTE_DIRECTORY)) {
+                FileTimeToSystemTime(usefdw?&fdw.ftLastWriteTime:&fda.ftLastWriteTime, &lt);
+                if (SystemTimeToTzSpecificLocalTime(NULL, &lt, &local)) lt = local;
+                if (usefdw && wcslen(fdw.cAlternateFileName) && CodePageHostToGuestUTF16(pattern,(uint16_t *)fdw.cAlternateFileName))
+                    name = pattern;
+                else if (!usefdw && *fda.cAlternateFileName)
+                    name = fda.cAlternateFileName;
                 else {
-                    name = fdw.cFileName;
+                    name = !usefdw ? fda.cFileName : (CodePageHostToGuestUTF16(pattern,(uint16_t *)fdw.cFileName) ? pattern : "");
                     std::transform(name.begin(), name.end(), name.begin(), ::toupper);
                 }
                 date = DOS_PackDate(lt.wYear,lt.wMonth,lt.wDay);
                 time = DOS_PackTime(lt.wHour,lt.wMinute,lt.wSecond);
-                attr = (fdw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? DOS_ATTR_DIRECTORY : 0) | (fdw.dwFileAttributes & 0x3f);
-                dta.SetResult(name.c_str(),fdw.cFileName,fdw.nFileSizeLow,date,time,attr);
+                attr = ((usefdw?fdw.dwFileAttributes:fda.dwFileAttributes) & FILE_ATTRIBUTE_DIRECTORY ? DOS_ATTR_DIRECTORY : 0) | ((usefdw?fdw.dwFileAttributes:fda.dwFileAttributes) & 0x3f);
+                dta.SetResult(name.c_str(),!usefdw ? fda.cFileName : (CodePageHostToGuestUTF16(pattern,(uint16_t *)fdw.cFileName) ? pattern : name.c_str()),usefdw?fdw.nFileSizeLow:fda.nFileSizeLow,date,time,attr);
                 return true;
             }
-        } while (FindNextFile(hFind, &fdw));
+        } while (usefdw?FindNextFileW(hFind, &fdw):FindNextFile(hFind, &fda));
         FindClose(hFind);
         hFind = INVALID_HANDLE_VALUE;
     }
@@ -136,7 +148,8 @@ HANDLE hFind = INVALID_HANDLE_VALUE;
         name=dir+1;
         if (name.back()=='"') name.pop_back();
     }
-	if (CreateDirectory(name.c_str(), NULL))
+    bool wc = CodePageGuestToHostUTF16(namehost, name.c_str());
+	if (wc?CreateDirectoryW((LPCWSTR)namehost, NULL):CreateDirectory(name.c_str(), NULL))
 		return true;
 	uint16_t error=(uint16_t)GetLastError();
 	DOS_SetError(error==ERROR_ALREADY_EXISTS?DOSERR_ACCESS_DENIED:error);
@@ -150,7 +163,8 @@ HANDLE hFind = INVALID_HANDLE_VALUE;
         name=dir+1;
         if (name.back()=='"') name.pop_back();
     }
-	if (RemoveDirectory(name.c_str()))
+    bool wc = CodePageGuestToHostUTF16(namehost, name.c_str());
+	if (wc?RemoveDirectoryW((LPCWSTR)namehost):RemoveDirectory(name.c_str()))
 		return true;
 	uint16_t error=(uint16_t)GetLastError();
 	DOS_SetError((error==ERROR_DIRECTORY||error==ERROR_DIR_NOT_EMPTY)?DOSERR_ACCESS_DENIED:error);
@@ -168,7 +182,9 @@ HANDLE hFind = INVALID_HANDLE_VALUE;
         name2=newname+1;
         if (name2.back()=='"') name2.pop_back();
     }
-	if (MoveFile(name1.c_str(), name2.c_str()))
+    uint16_t namehost1[CROSS_LEN];
+    bool wc = CodePageGuestToHostUTF16(namehost, name1.c_str()) && CodePageGuestToHostUTF16(namehost1, name2.c_str());
+	if (wc?MoveFileW((LPCWSTR)namehost, (LPCWSTR)namehost1):MoveFile(name1.c_str(), name2.c_str()))
 		return true;
 	uint16_t error=(uint16_t)GetLastError();
 	if (error == ERROR_ALREADY_EXISTS)												// Not kwnown by DOS
@@ -183,7 +199,8 @@ bool Network_UnlinkFile(char const * const filename) {
         name=filename+1;
         if (name.back()=='"') name.pop_back();
     }
-	if (DeleteFile(name.c_str()))
+    bool wc = CodePageGuestToHostUTF16(namehost, name.c_str());
+	if (wc?DeleteFileW((LPCWSTR)namehost):DeleteFile(name.c_str()))
 		return true;
 	DOS_SetError((uint16_t)GetLastError());
 	if (dos.errorcode == 0x20)														// Sharing violation
@@ -197,7 +214,8 @@ bool Network_SetFileAttr(char const * const filename, uint16_t attr) {
         name=filename+1;
         if (name.back()=='"') name.pop_back();
     }
-	if (!SetFileAttributes(name.c_str(), attr)) {
+    bool wc = CodePageGuestToHostUTF16(namehost, name.c_str());
+	if (wc?!SetFileAttributesW((LPCWSTR)namehost, attr):!SetFileAttributes(name.c_str(), attr)) {
 		DOS_SetError((uint16_t)GetLastError());
 		return false;
 	}
@@ -211,12 +229,56 @@ bool Network_SetFileAttr(char const * const filename, uint16_t attr) {
         name=filename+1;
         if (name.back()=='"') name.pop_back();
     }
-	Bitu attribs = GetFileAttributes(name.c_str());
+    bool wc = CodePageGuestToHostUTF16(namehost, name.c_str());
+	Bitu attribs = wc?GetFileAttributesW((LPCWSTR)namehost):GetFileAttributes(name.c_str());
 	if (attribs == INVALID_FILE_ATTRIBUTES) {
 		DOS_SetError((uint16_t)GetLastError());
 		return false;
 	}
 	*attr = attribs&0x3f;
+	return true;
+}
+
+ bool Network_GetFileDate(uint16_t entry, uint16_t*& otime, uint16_t*& odate)
+{
+	struct stat temp_stat;
+	if (fstat(RealHandle(entry),&temp_stat)) return false;
+    const struct tm* ltime;
+	if((ltime=localtime(&temp_stat.st_mtime))!=0) {
+		*otime=DOS_PackTime((uint16_t)ltime->tm_hour,(uint16_t)ltime->tm_min,(uint16_t)ltime->tm_sec);
+		*odate=DOS_PackDate((uint16_t)(ltime->tm_year+1900),(uint16_t)(ltime->tm_mon+1),(uint16_t)ltime->tm_mday);
+	} else {
+		*otime=1;*odate=1;
+	}
+	return true;
+}
+
+ bool Network_SetFileDate(uint16_t entry, uint16_t otime, uint16_t odate)
+{
+	uint32_t handle=RealHandle(entry);
+	HANDLE hand = (HANDLE)_get_osfhandle(handle);
+	if (hand == INVALID_HANDLE_VALUE) {
+		dos.errorcode = DOSERR_INVALID_HANDLE;
+		return false;
+	}
+    time_t clock = time(NULL), ttime;
+    struct tm *t = localtime(&clock);
+    FILETIME time;
+    t->tm_isdst = -1;
+    t->tm_sec  = (((int)otime) << 1) & 0x3e;
+    t->tm_min  = (((int)otime) >> 5) & 0x3f;
+    t->tm_hour = (((int)otime) >> 11) & 0x1f;
+    t->tm_mday = (int)(odate) & 0x1f;
+    t->tm_mon  = ((int)(odate >> 5) & 0x0f) - 1;
+    t->tm_year = ((int)(odate >> 9) & 0x7f) + 80;
+    ttime=mktime(t);
+    LONGLONG ll = Int32x32To64(ttime, 10000000) + 116444736000000000;
+    time.dwLowDateTime = (DWORD) ll;
+    time.dwHighDateTime = (DWORD) (ll >> 32);
+	if (!SetFileTime(hand, NULL, NULL, &time)) {
+		dos.errorcode=(uint16_t)GetLastError();
+		return false;
+	}
 	return true;
 }
 
@@ -227,7 +289,8 @@ bool Network_SetFileAttr(char const * const filename, uint16_t attr) {
         name=filename+1;
         if (name.back()=='"') name.pop_back();
     }
-    DWORD dwAttrib = GetFileAttributes(name.c_str());
+    bool wc = CodePageGuestToHostUTF16(namehost, name.c_str());
+    DWORD dwAttrib = wc?GetFileAttributesW((LPCWSTR)namehost):GetFileAttributes(name.c_str());
     return (dwAttrib != INVALID_FILE_ATTRIBUTES && !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
 }
 
@@ -242,7 +305,8 @@ bool Network_SetFileAttr(char const * const filename, uint16_t attr) {
         name=filename+1;
         if (name.back()=='"') name.pop_back();
     }
-	int	handle=_sopen(name.c_str(),_O_CREAT|_O_TRUNC|O_RDWR|O_BINARY,_SH_DENYNO,_S_IREAD|_S_IWRITE);
+    bool wc = CodePageGuestToHostUTF16(namehost, name.c_str());
+	int	handle=wc?_wsopen((LPCWSTR)namehost,_O_CREAT|_O_TRUNC|O_RDWR|O_BINARY,_SH_DENYNO,_S_IREAD|_S_IWRITE):_sopen(name.c_str(),_O_CREAT|_O_TRUNC|O_RDWR|O_BINARY,_SH_DENYNO,_S_IREAD|_S_IWRITE);
 
 	if(handle!=-1)
 	{
@@ -305,7 +369,8 @@ bool Network_SetFileAttr(char const * const filename, uint16_t attr) {
         name=filename+1;
         if (name.back()=='"') name.pop_back();
     }
-	int	handle=_sopen(name.c_str(),oflag,shflag,_S_IREAD|_S_IWRITE);
+    bool wc = CodePageGuestToHostUTF16(namehost, name.c_str());
+	int	handle=wc?_wsopen((LPCWSTR)namehost,oflag,shflag,_S_IREAD|_S_IWRITE):_sopen(name.c_str(),oflag,shflag,_S_IREAD|_S_IWRITE);
 
 	if(handle!=-1)
 	{
