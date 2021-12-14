@@ -6182,6 +6182,8 @@ void runImgmount(const char *str) {
 
 Bitu DOS_SwitchKeyboardLayout(const char* new_layout, int32_t& tried_cp);
 Bitu DOS_LoadKeyboardLayout(const char * layoutname, int32_t codepage, const char * codepagefile);
+void MSG_Init(), JFONT_Init(), InitFontHandle(), ShutFontHandle(), DOSBox_SetSysMenu();
+bool isDBCSCP();
 const char* DOS_GetLoadedLayout(void);
 
 class KEYB : public Program {
@@ -6199,7 +6201,7 @@ void KEYB::Run(void) {
             std::string cp_string="";
             int32_t tried_cp = -1;
             cmd->FindCommand(2,cp_string);
-            int tocp=!strcmp(temp_line.c_str(), "jp")?932:(!strcmp(temp_line.c_str(), "ko")?949:(!strcmp(temp_line.c_str(), "tw")||!strcmp(temp_line.c_str(), "hk")||!strcmp(temp_line.c_str(), "zht")||(!strcmp(temp_line.c_str(), "zh")&&(cp_string.size()&&atoi(cp_string.c_str())==950))?950:(!strcmp(temp_line.c_str(), "cn")||!strcmp(temp_line.c_str(), "zhs")||!strcmp(temp_line.c_str(), "zh")?936:0)));
+            int tocp=!strcmp(temp_line.c_str(), "jp")?932:(!strcmp(temp_line.c_str(), "ko")?949:(!strcmp(temp_line.c_str(), "tw")||!strcmp(temp_line.c_str(), "hk")||!strcmp(temp_line.c_str(), "zht")||(!strcmp(temp_line.c_str(), "zh")&&((cp_string.size()&&(atoi(cp_string.c_str())==950||atoi(cp_string.c_str())==951))||(!cp_string.size()&&(dos.loaded_codepage==950||dos.loaded_codepage==951))))?((cp_string.size()&&atoi(cp_string.c_str())==951)||(!cp_string.size()&&dos.loaded_codepage==951)?951:950):(!strcmp(temp_line.c_str(), "cn")||!strcmp(temp_line.c_str(), "zhs")||!strcmp(temp_line.c_str(), "zh")?936:0)));
             if (tocp && !IS_PC98_ARCH) {
                 dos.loaded_codepage=tocp;
                 const char* layout_name = DOS_GetLoadedLayout();
@@ -6207,6 +6209,13 @@ void KEYB::Run(void) {
                     WriteOut(MSG_Get("PROGRAM_KEYB_INFO"),dos.loaded_codepage);
                 else
                     WriteOut(MSG_Get("PROGRAM_KEYB_INFO_LAYOUT"),dos.loaded_codepage,layout_name);
+                MSG_Init();
+                DOSBox_SetSysMenu();
+                if (isDBCSCP()) {
+                    ShutFontHandle();
+                    InitFontHandle();
+                    JFONT_Init();
+                }
                 SetupDBCSTable();
                 runRescan("-A -Q");
 #if C_OPENGL && DOSBOXMENU_TYPE == DOSBOXMENU_SDLDRAW
@@ -6889,7 +6898,8 @@ void UTF8::Run()
         if (m && first && text.size() == 3 && (uint8_t)text[0] == 0xEF && (uint8_t)text[1] == 0xBB && (uint8_t)text[2] == 0xBF) {
             first=false;
             text="";
-        } else if (!m || c==0xA || c==0x1A) {
+        } else if (!m || c==0x1A || c==0xA || (text.size()>1 && (uint8_t)text[text.size()-2] == 0xD)) {
+            if (c!=0xA && text.size()>1 && (uint8_t)text[text.size()-2] == 0xD) text[text.size()-1] = 0xA;
             if (CodePageHostToGuestUTF8(temp,text.c_str())) {
                 WriteOut_NoParsing(temp, true);
             } else {
@@ -6904,6 +6914,7 @@ void UTF8::Run()
             first=false;
             text="";
             if (!m||c==0x1A) break;
+            else if (c!=0xA) text+=std::string(1, c);
         }
     }
     x->finish();
@@ -6985,7 +6996,8 @@ void UTF16::Run()
             text+=ch;
             c++;
         }
-        if (!m || ch==0xA || ch==0x1A) {
+        if (!m || ch==0x1A || ch==0xA || (c>1 && text[c-2] == 0xD)) {
+            if (ch!=0xA && c>1 && text[c-2] == 0xD) {text[c-1] = 0xA;}
             wch=new test_char_t[c+1];
             for (unsigned int i=0; i<c; i++) wch[i]=(test_char_t)text[i];
             wch[c]=0;
@@ -7005,6 +7017,7 @@ void UTF16::Run()
             text=L"";
             c=0;
             if (!m||ch==0x1A) break;
+            else if (ch!=0xA) {text+=ch;c++;}
         }
     }
     x->finish();
