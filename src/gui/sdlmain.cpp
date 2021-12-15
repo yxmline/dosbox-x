@@ -9246,6 +9246,7 @@ void PasteClipboard(bool bPressed) {
 #endif
     if (text==NULL) return;
     std::string result="", pre="";
+    morelen=true;
     for (unsigned int i=0; i<strlen(text); i++) {
         if (swapad&&text[i]==0x0A&&(i==0||text[i-1]!=0x0D)) text[i]=0x0D;
         if (text[i]==9) result+="    ";
@@ -9273,6 +9274,7 @@ void PasteClipboard(bool bPressed) {
             result+=asc != NULL?std::string(asc):std::string(1, text[i]);
         }
     }
+    morelen=false;
     delete text;
     strPasteBuffer.append(result.c_str());
 }
@@ -9378,6 +9380,8 @@ void PasteClipboard(bool bPressed) {
 #endif
 #endif
 
+extern uint16_t baselen;
+extern std::list<uint16_t> bdlist;
 #ifdef WIN32
 void CopyClipboard(int all) {
 	uint16_t len=0;
@@ -9387,6 +9391,7 @@ void CopyClipboard(int all) {
         std::istringstream iss(text);
         uint16_t* wch, temp[4096];
         morelen=true;
+        baselen=0;
         for (std::string token; std::getline(iss, token); ) {
             if (CodePageGuestToHostUTF16(temp,token.c_str())) {
                 result+=(wchar_t *)temp;
@@ -9406,8 +9411,12 @@ void CopyClipboard(int all) {
                 result+=(wchar_t *)wch;
                 delete[] wch;
             }
+            result+=std::wstring(1, '\n');
+            baselen+=token.size()+1;
         }
         morelen=false;
+        baselen=0;
+        bdlist={};
         HGLOBAL clipbuffer = GlobalAlloc(GMEM_DDESHARE, (result.size()+1)*sizeof(wchar_t));
         LPWSTR buffer = static_cast<LPWSTR>(GlobalLock(clipbuffer));
         if (buffer!=NULL) {
@@ -9436,23 +9445,22 @@ bool CodePageGuestToHostUTF8(char *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/);
 void CopyClipboard(int all) {
 	uint16_t len=0;
 	char* text = (char *)(all==2?Mouse_GetSelected(0,0,currentWindowWidth-1-sdl.clip.x,currentWindowHeight-1-sdl.clip.y,(int)(currentWindowWidth-sdl.clip.x),(int)(currentWindowHeight-sdl.clip.y), &len):(all==1?Mouse_GetSelected(selscol, selsrow, selecol, selerow, -1, -1, &len):Mouse_GetSelected(mouse_start_x-sdl.clip.x,mouse_start_y-sdl.clip.y,mouse_end_x-sdl.clip.x,mouse_end_y-sdl.clip.y,sdl.clip.w,sdl.clip.h, &len)));
-    unsigned int k=0;
-    for (unsigned int i=0; i<len; i++)
-        if (text[i]&&text[i]!=13)
-            text[k++]=text[i];
-    text[k]=0;
     std::string result="";
     std::istringstream iss(text);
     char temp[4096];
     morelen=true;
+    baselen=0;
     for (std::string token; std::getline(iss, token); ) {
         if (CodePageGuestToHostUTF8(temp,token.c_str()))
             result+=temp;
         else
             result+=token;
         result+=std::string(1, 10);
+        baselen+=token.size()+1;
     }
     morelen=false;
+    baselen=0;
+    bdlist={};
     if (result.size()&&result.back()==10) result.pop_back();
 #if defined(C_SDL2)
     SDL_SetClipboardText(result.c_str());

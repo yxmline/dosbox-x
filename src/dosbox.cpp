@@ -4025,7 +4025,7 @@ void DOSBOX_SetupConfigSections(void) {
             "   direct    Non-standard behavior, encode the CALL FAR directly to the entry point rather than indirectly");
 
     Pbool = secprop->Add_bool("share",Property::Changeable::WhenIdle,true);
-    Pbool->Set_help("Report SHARE.EXE as resident. This will allow file locking to be performed, although not all SHARE functions are emulated.");
+    Pbool->Set_help("Reports SHARE.EXE as resident and provides functions such as file-locking and record-locking, although not all SHARE functions are emulated.");
     Pbool->SetBasic(true);
 
     Pint = secprop->Add_int("file access tries",Property::Changeable::WhenIdle,0);
@@ -4366,7 +4366,7 @@ void DOSBOX_SetupConfigSections(void) {
     Pstring = secprop->Add_string("backend", Property::Changeable::WhenIdle, "auto");
     Pstring->Set_help("The backend (either pcap or slirp is supported) used for the NE2000 Ethernet emulation.\n"
         "If set to \"auto\", then \"slirp\" is selected when available, otherwise \"pcap\" is selected when available.\n"
-        "NE2000 Ethernet emulation will be disabled if no backend is available (or the specified backend if unavailble).");
+        "NE2000 Ethernet emulation will be disabled if no backend is available (or the specified backend if unavailable).");
     Pstring->Set_values(backendopts);
     Pstring->SetBasic(true);
 
@@ -4398,7 +4398,7 @@ void DOSBOX_SetupConfigSections(void) {
         "Specifying 0 will use libslirp's default MTU.");
 
     Pint = secprop->Add_int("mru", Property::Changeable::WhenIdle, 0);
-    Pint->Set_help("The maximum recieve unit for Ethernet packets transmitted to the guest.\n"
+    Pint->Set_help("The maximum receive unit for Ethernet packets transmitted to the guest.\n"
         "Specifying 0 will use libslirp's default MRU.");
 
     Pstring = secprop->Add_string("ipv4_network", Property::Changeable::WhenIdle, "10.0.2.0");
