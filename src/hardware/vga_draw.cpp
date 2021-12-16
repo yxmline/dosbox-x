@@ -3407,8 +3407,7 @@ bool isDBCSLB(uint8_t chr) {
 }
 
 uint8_t ccount = 0;
-extern std::map<int, int> lowboxdrawmap;
-extern std::map<uint16_t, uint8_t> pc98boxmap;
+extern std::map<int, int> lowboxdrawmap, pc98boxdrawmap;
 static void VGA_VerticalTimer(Bitu /*val*/) {
     double current_time = PIC_GetCurrentEventTime();
 
@@ -3932,24 +3931,29 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
                  *      for two cells and ignore the second cell. There are some exceptions though, including the custom
                  *      modificable cells in RAM (responsible for such bugs as the Touhou Project ~idnight level name display bug). */
                 if (*charram & 0xFF00u) {
-                    if ((*charram & 0x7Cu) == 0x08u) {
+                    if ((*charram & 0x7Cu) == 0x08u && (*charram%0xff) - (*charram/0x100) == 0xB) {
                         /* Single wide, yet DBCS encoding.
                          * This includes proprietary box characters specific to PC-98 */
-                        // Manually convert box characters to Unicode for now
-                        std::map<uint16_t, uint8_t>::iterator it = pc98boxmap.find(*charram);
-                        if (it!=pc98boxmap.end()) {
-                            dos.loaded_codepage = 437;
-                            char text[3];
-                            text[0]=it->second;
-                            text[1]=0;
-                            uname[0]=0;
-                            uname[1]=0;
-                            CodePageGuestToHostUTF16(uname,text);
-                            (*draw).chr=uname[0]!=0&&uname[1]==0?uname[0]:' ';
-                            dos.loaded_codepage = 932;
-                        } else
-                            (*draw).chr=' ';
-                        (*draw).unicode=1;
+                        // Convert box characters to Unicode (incomplete for now)
+                        (*draw).chr = ' ';
+                        uint8_t val = *charram/0x100+31;
+                        for (auto it = pc98boxdrawmap.begin(); it != pc98boxdrawmap.end(); ++it) {
+                            if (it->second == val) {
+                                dos.loaded_codepage = 437;
+                                char text[3];
+                                text[0]=it->first;
+                                text[1]=0;
+                                uname[0]=0;
+                                uname[1]=0;
+                                CodePageGuestToHostUTF16(uname,text);
+                                dos.loaded_codepage = 932;
+                                if (uname[0]!=0&&uname[1]==0) {
+                                    (*draw).chr=uname[0];
+                                    (*draw).unicode=1;
+                                }
+                                break;
+                            }
+                        }
                     }
                     else {
                         uint16_t ch = *charram&0x7F7Fu;
@@ -4102,13 +4106,8 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
                                     }
                                 }
                             }
-                        } else if (dos.loaded_codepage == 932 && !IS_JEGA_ARCH && !halfwidthkana) {
-                            for (auto it = lowboxdrawmap.begin(); it != lowboxdrawmap.end(); ++it)
-                                if (it->second == (int)(*draw).chr) {
-                                    (*draw).boxdraw = 1;
-                                    break;
-                                }
-                        }
+                        } else if (isDBCSCP() && (!dbcs_sbcs||dos.loaded_codepage!=932||(dos.loaded_codepage==932&&!halfwidthkana)) && (*draw).chr>=0x80 && (*draw).chr<=0xFF)
+                            (*draw).boxdraw = 1;
                         Bitu attr = (*vidmem >> 8u) & 0xFFu;
                         vidmem+=2; // because planar EGA/VGA, and odd/even mode as real hardware arranges alphanumeric mode in VRAM
                         Bitu background = attr >> 4;
@@ -4198,13 +4197,8 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
                                     }
                                 }
                             }
-                        } else if (dos.loaded_codepage == 932 && !IS_JEGA_ARCH && !halfwidthkana) {
-                            for (auto it = lowboxdrawmap.begin(); it != lowboxdrawmap.end(); ++it)
-                                if (it->second == (int)(*draw).chr) {
-                                    (*draw).boxdraw = 1;
-                                    break;
-                                }
-                        }
+                        } else if (isDBCSCP() && (!dbcs_sbcs||dos.loaded_codepage!=932||(dos.loaded_codepage==932&&!halfwidthkana)) && (*draw).chr>=0x80 && (*draw).chr<=0xFF)
+                            (*draw).boxdraw = 1;
                         Bitu attr = (*vidmem >> 8u) & 0xFFu;
                         vidmem++;
                         Bitu background = attr >> 4;
