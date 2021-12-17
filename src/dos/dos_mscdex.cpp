@@ -45,7 +45,7 @@
 int useCdromInterface	= CDROM_USE_SDL;
 int forceCD				= -1;
 extern int bootdrive;
-extern bool dos_kernel_disabled, bootguest, bootvm, use_quick_reboot;
+extern bool dos_kernel_disabled, bootguest, bootvm, use_quick_reboot, enable_network_redirector;
 
 static Bitu MSCDEX_Strategy_Handler(void); 
 static Bitu MSCDEX_Interrupt_Handler(void);
@@ -1243,21 +1243,20 @@ static Bitu MSCDEX_Interrupt_Handler(void) {
 
 static bool MSCDEX_Handler(void) {
 	if(reg_ah == 0x11) {
-		if(reg_al == 0x00) { 
-			if (mscdex->rootDriverHeaderSeg==0) return false;
+		if(reg_al == 0x00) {
 			PhysPt check = PhysMake(SegValue(ss),reg_sp);
 			if(mem_readw(check+6) == 0xDADA) {
+				if (mscdex->rootDriverHeaderSeg==0) return false;
 				//MSCDEX sets word on stack to ADAD if it DADA on entry.
 				mem_writew(check+6,0xADAD);
+				reg_al = 0xff;
+			} else {
+				if (!enable_network_redirector) return false;
+				reg_al = 0xff;
 			}
-			reg_al = 0xff;
 			return true;
-		} else {
-			LOG(LOG_MISC,LOG_ERROR)("NETWORK REDIRECTOR USED!!!");
-			reg_ax = 0x49;//NETWERK SOFTWARE NOT INSTALLED
-			CALLBACK_SCF(true);
-			return true;
-		}
+		} else
+			return false;
 	}
 
 	if (reg_ah!=0x15) return false;		// not handled here, continue chain
