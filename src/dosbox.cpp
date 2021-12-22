@@ -1076,6 +1076,7 @@ void DOSBOX_RealInit() {
     }
     int cp = dos.loaded_codepage;
     if (!cp) InitCodePage();
+    if (IS_PC98_ARCH) ttf_dosv = false;
     if (IS_JEGA_ARCH || IS_DOSV || isDBCSCP()) {
         JFONT_Init();  // Load DBCS fonts for JEGA etc
 #if defined(USE_TTF)
@@ -1252,6 +1253,7 @@ void DOSBOX_SetupConfigSections(void) {
         0 };
     const char* ems_settings[] = { "true", "emsboard", "emm386", "false", "1", "0", 0};
     const char* lfn_settings[] = { "true", "false", "1", "0", "auto", "autostart", 0};
+    const char* fat32setver_settings[] = { "ask", "auto", "manual", 0};
     const char* quit_settings[] = { "true", "false", "1", "0", "auto", "autofile", 0};
     const char* autofix_settings[] = { "true", "false", "1", "0", "both", "a20fix", "loadfix", "none", 0};
     const char* color_themes[] = { "default", "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", 0};
@@ -1515,8 +1517,9 @@ void DOSBOX_SetupConfigSections(void) {
 
     Pint = secprop->Add_int("shell environment size",Property::Changeable::OnlyAtStart,0);
     Pint->SetMinMax(0,65280);
-    Pint->Set_help("Size of the initial DOSBox-X shell environment block, in bytes. This does not affect the environment block of sub-processes spawned from the shell.\n"
-            "This option has no effect unless dynamic kernel allocation is enabled.");
+    Pint->Set_help("Size of the initial DOSBox-X shell environment block, in bytes. Setting to 0 implies a default size of 720 bytes as in DOSBox.\n"
+                   "You can increase this size to store more environment variables in DOS, although this does not affect the environment block\n"
+                   "of sub-processes spawned from the DOS shell. This option has no effect unless the dynamic kernel allocation is enabled.");
 
     Pint = secprop->Add_int("private area size",Property::Changeable::OnlyAtStart,32768); // DOSBox mainline compatible 32KB region
     Pint->SetMinMax(16,128*1024);
@@ -4184,6 +4187,12 @@ void DOSBOX_SetupConfigSections(void) {
     Pstring->Set_values(lfn_settings);
     Pstring->Set_help("Enable long filename support. If set to auto (default), LFN support is enabled if the reported DOS version is at least 7.0.\n"
                       "If set to autostart, the built-in VER command won't activate/deactivate LFN support according to the reported DOS version.");
+    Pstring->SetBasic(true);
+
+    Pstring = secprop->Add_string("fat32setversion",Property::Changeable::WhenIdle,"ask");
+    Pstring->Set_values(fat32setver_settings);
+    Pstring->Set_help("Whether DOSBox-X should automatically set the reported DOS version to 7.0/7.10 when it is less than 7.0/7.10 and mounting LBA/FAT32 disk images is requested.\n"
+                      "If set to \"ask\", a popup message will show up to ask whether DOSBox-X should automatically change the reported DOS version in order to mount the disk image.");
     Pstring->SetBasic(true);
 
     Pstring = secprop->Add_string("shellhigh",Property::Changeable::OnlyAtStart,"auto");

@@ -140,6 +140,7 @@ const char dos_clipboard_device_default[]="CLIP$";
 int maxfcb=100;
 int maxdrive=1;
 int enablelfn=-1;
+int fat32setver=-1;
 bool uselfn, winautorun=false;
 extern int infix, log_dev_con;
 extern bool int15_wait_force_unmask_irq, shellrun, logging_con, ctrlbrk;
@@ -369,7 +370,7 @@ void DOS_SetCountry(uint16_t countryNo) {
 			break;
 	}
 
-    // Time seperation character
+    // Time separation character
 	switch (countryNo) {
 		case 41:  // Switzerland
 			*(dos.tables.country+13)=0x2c; // Comma (,)
@@ -886,7 +887,7 @@ static Bitu DOS_21Handler(void) {
     char name2[DOSNAMEBUF+2+DOS_NAMELENGTH_ASCII];
     
     static Bitu time_start = 0; //For emulating temporary time changes.
-    if (reg_ah!=0x4c) {packerr=false;reqwin=false;}
+    if (reg_ah!=0x4c&&reg_ah!=0x51) {packerr=false;reqwin=false;}
     switch (reg_ah) {
         case 0x00:      /* Terminate Program */
             /* HACK for demoscene prod parties/1995/wired95/surprisecode/w95spcod.zip/WINNERS/SURP-KLF
@@ -4201,6 +4202,11 @@ public:
 		dos.version.minor=0;
 		dos.direct_output=false;
 		dos.internal_output=false;
+
+        std::string fat32setverstr = section->Get_string("fat32setversion");
+        if (fat32setverstr=="auto") fat32setver=1;
+        else if (fat32setverstr=="manual") fat32setver=0;
+        else fat32setver=-1;
 
 		std::string lfn = section->Get_string("lfn");
 		if (lfn=="true"||lfn=="1") enablelfn=1;

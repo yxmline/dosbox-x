@@ -102,6 +102,7 @@ bool starttranspath = false;
 bool mountwarning = true;
 bool qmount = false;
 bool nowarn = false;
+char lastmount = 0;
 bool CodePageHostToGuestUTF8(char *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/), CodePageHostToGuestUTF16(char *d/*CROSS_LEN*/,const uint16_t *s/*CROSS_LEN*/);
 extern bool inshell, usecon, uao, morelen, mountfro[26], mountiro[26], clear_screen(), OpenGL_using(void);
 extern int lastcp, FileDirExistCP(const char *name), FileDirExistUTF8(std::string &localname, const char *name);
@@ -666,7 +667,11 @@ void MenuBrowseImageFile(char drive, bool arc, bool boot, bool multiple) {
                 strcpy(type,"");
         } else
             *type=0;
-		char mountstring[DOS_PATHLENGTH+CROSS_LEN+20];
+		char mountstring[CROSS_LEN*4+20];
+        if (files.size()>CROSS_LEN*4) {
+            tinyfd_messageBox("Error","The path for the file(s) to mount is too long.","ok","error", 1);
+            return;
+        }
 		strcpy(mountstring,type);
 		char temp_str[3] = { 0,0,0 };
 		temp_str[0]=drive;
@@ -1095,13 +1100,16 @@ public:
             return;
         }
 
-        bool nocachedir = false;
+        bool nocachedir = false, nextdrive = false;
 
         if (force_nocachedir)
             nocachedir = true;
 
         if (cmd->FindExist("-nocachedir",true))
             nocachedir = true;
+
+        if (cmd->FindExist("-nl",true))
+            nextdrive = true;
 
         bool readonly = false;
         if (cmd->FindExist("-ro",true))
@@ -1208,8 +1216,17 @@ public:
                     return;
                 }
             } else if (Drives[drive-'A']) {
+                bool found = false;
                 if (!quiet) WriteOut(MSG_Get("PROGRAM_MOUNT_ALREADY_MOUNTED"),drive,Drives[drive-'A']->GetInfo());
-                return;
+                if (nextdrive)
+                    for (int i=drive-'A'+1; i<DOS_DRIVES-1; i++) {
+                        if (!Drives[i]) {
+                            drive=i+'A';
+                            found = true;
+                            break;
+                        }
+                    }
+                if (!found) return;
             }
 
             temp_line.erase(std::find_if(temp_line.rbegin(), temp_line.rend(), [](unsigned char ch) {return !std::isspace(ch);}).base(), temp_line.end());
@@ -1276,6 +1293,7 @@ public:
 #if defined (WIN32) || defined(OS2)
             /* Removing trailing backslash if not root dir so stat will succeed */
             if(temp_line.size() > 3 && temp_line[temp_line.size()-1]=='\\') temp_line.erase(temp_line.size()-1,1);
+            if(temp_line.size() == 2 && toupper(temp_line[0])>='A' && toupper(temp_line[0])<='Z' && temp_line[1]==':') temp_line.append("\\");
 			if(temp_line.size() > 4 && temp_line[0]=='\\' && temp_line[1]=='\\' && temp_line[2]!='\\' && std::count(temp_line.begin()+3, temp_line.end(), '\\')==1) temp_line.append("\\");
             if (!is_physfs && stat(temp_line.c_str(),&test)) {
 #endif
@@ -1477,6 +1495,7 @@ public:
         DOS_EnableDriveMenu(drive);
         /* Set the correct media byte in the table */
         mem_writeb(Real2Phys(dos.tables.mediaid)+((unsigned int)drive-'A')*dos.tables.dpb_size,newdrive->GetMediaByte());
+        lastmount = drive;
         if (!quiet) {
 			if (type != "overlay") WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"),drive,newdrive->GetInfo());
 			else WriteOut(MSG_Get("PROGRAM_MOUNT_OVERLAY_STATUS"),temp_line.c_str(),drive);
@@ -5469,6 +5488,7 @@ private:
         AddToDriveManager(drive, newDrive, 0xF0);
         DOS_EnableDriveMenu(drive);
 
+        lastmount = drive;
         return true;
     }
 
@@ -5501,7 +5521,8 @@ private:
         AttachToBiosByLetter(newImage, drive);
         DOS_EnableDriveMenu(drive);
 
-        WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_ELTORITO"), drive);
+        lastmount = drive;
+        if (!qmount) WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_ELTORITO"), drive);
 
         return true;
     }
@@ -5631,6 +5652,7 @@ private:
         for (i = 1; i < paths.size(); i++) {
             tmp += "; " + (wpcolon&&paths[i].length()>1&&paths[i].c_str()[0]==':'?paths[i].substr(1):paths[i]);
         }
+        lastmount = drive;
         if (!qmount) WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"), drive, tmp.c_str());
 
         unsigned char driveIndex = drive-'A';
@@ -5702,7 +5724,8 @@ private:
         AddToDriveManager(drive, newDrive, dsk->hardDrive ? 0xF8 : 0xF0);
         DOS_EnableDriveMenu(drive);
 
-        WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_RAMDRIVE"), drive);
+        lastmount = drive;
+        if (!qmount) WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_RAMDRIVE"), drive);
 
         AttachToBiosAndIdeByLetter(dsk, drive, (unsigned char)ide_index, ide_slave);
 
@@ -6009,6 +6032,7 @@ private:
         for (i = 1; i < paths.size(); i++) {
             tmp += "; " + (wpcolon&&paths[i].length()>1&&paths[i].c_str()[0]==':'?paths[i].substr(1):paths[i]);
         }
+        lastmount = drive;
         if (!qmount) WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"), drive, tmp.c_str());
         return true;
     }
@@ -8121,7 +8145,8 @@ void DOS_SetupPrograms(void) {
         " -t               Specify the drive type the mounted drive to behave as.\n"
         "                  Supported drive type: dir, floppy, cdrom, overlay\n"
         " (Note that 'overlay' redirects writes for mounted drive to another directory)\n"
-        " -label [name]    Set the volume label name of the drive (all upper case)\n"
+        " -label [name]    Set the volume label name of the drive (all upper case).\n"
+        " -nl              Use next available drive letter if the drive is mounted.\n"
         " -ro              Mount the drive in read-only mode.\n"
         " -pr              Specify the path is relative to the config file location.\n"
         " -cd              Generate a list of local CD drive's \"drive #\" values.\n"
@@ -8135,7 +8160,7 @@ void DOS_SetupPrograms(void) {
         " -q               Quiet mode (no message output).\n"
         " -u               Unmount the drive.\n"
         " \033[32;1m-examples        Show some usage examples.\033[0m\n"
-        "Type MOUNT with no parameters to display a list of mounted drives.\n");
+        "Type MOUNT with no parameters to display a list of mounted drives.");
     MSG_Add("PROGRAM_MOUNT_EXAMPLE",
         "A basic example of MOUNT command:\n\n"
         "\033[32;1mMOUNT c %s\033[0m\n\n"
@@ -8238,7 +8263,7 @@ void DOS_SetupPrograms(void) {
         "dosbox-x [name] [-exit] [-version] [-fastlaunch] [-fullscreen]\n"
         "         [-conf congfigfile] [-lang languagefile] [-machine machinetype]\n"
         "         [-startmapper] [-noautoexec] [-scaler scaler | -forcescaler scaler]\n"
-        "         [-noconsole] [-c command] [-set <section property=value>]\n\n"
+        "         [-o options] [-c command] [-set <section property=value>]\n\n"
         );
     MSG_Add("PROGRAM_INTRO_USAGE_1",
         "\033[33;1m  name\033[0m\n"
@@ -8260,9 +8285,9 @@ void DOS_SetupPrograms(void) {
         "\tSee the documentation for more details.\n\n"
         "\033[33;1m  -lang\033[0m languagefile\n"
         "\tStart DOSBox-X using the language specified in languagefile.\n\n"
-        "\033[33;1m  -noconsole\033[0m (Windows Only)\n"
-        "\tStart DOSBox-X without showing the console window. Output will\n"
-        "\tbe redirected to stdout.txt and stderr.txt\n\n"
+        "\033[33;1m  -startmapper\033[0m\n"
+        "\tEnter the keymapper directly on startup. Useful for people with\n"
+        "\tkeyboard problems.\n\n"
         "\033[33;1m  -machine\033[0m machinetype\n"
         "\tSetup DOSBox-X to emulate a specific type of machine. Valid choices:\n"
         "\thercules, cga, cga_mono, mcga, mda, pcjr, tandy, ega, vga, vgaonly,\n"
@@ -8270,11 +8295,11 @@ void DOS_SetupPrograms(void) {
         "\tThe machinetype affects both the video card and available sound cards.\n"
         );
     MSG_Add("PROGRAM_INTRO_USAGE_3",
-        "\033[33;1m  -startmapper\033[0m\n"
-        "\tEnter the keymapper directly on startup. Useful for people with\n"
-        "\tkeyboard problems.\n\n"
         "\033[33;1m  -noautoexec\033[0m\n"
         "\tSkips the [autoexec] section of the loaded configuration file.\n\n"
+        "\033[33;1m  -o\033[0m options\n"
+        "\tProvides command-line option(s) for \"name\" if an executable name is\n"
+        "\tspecified. Multiple -o can be used for multiple executable names.\n\n"
         "\033[33;1m  -c\033[0m command\n"
         "\tRuns the specified command before running name. Multiple commands\n"
         "\tcan be specified. Each command should start with -c, though.\n"

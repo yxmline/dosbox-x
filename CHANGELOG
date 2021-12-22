@@ -10,9 +10,15 @@
     text will now be highlighted when you try to select
     text for copying. (Wengier)
   - Improved IME support for Chinese/Japanese/Korean
-    languages on Windows SDL2 builds. (Wengier)
+    languages on Windows builds. (Wengier)
   - Pausing the emulation will automatically release
     the mouse and prevent mouse capture. (Wengier)
+  - For Configuration Tool, a "?" button is added to
+    properties which have limited numbers of values so
+    that their possible values will be shown. (Wengier)
+  - If a scaler as specified in the config may not work
+    as expected and if not forced, DOSBox-X will show a
+    a message box asking whether to load it. (Wengier)
   - Config option "pixelshader" now allows a shader file
     name without the .fx extension, or a shader file in
     the current directory. (Wengier)
@@ -29,22 +35,29 @@
     to start when you launch DOSBox-X. An example:
     dosbox-x program.exe -o "opt1 opt2". (Wengier)
   - Added special properties to CONFIG command including
-    "cd", "date", "errorlevel", "random", "time" so that
-    commands like "CONFIG -GET cd" and "CONFIG -GET
-    errorlevel" will get the current DOS directory and
-    the current ERRORLEVEL value. The returned value
+    "cd", "date", "errorlevel", "random", "time", and
+    "lastmount" so that commands like "CONFIG -GET cd"
+    and "CONFIG -GET errorlevel" will get current DOS
+    directory and ERRORLEVEL value. The returned value
     will also be saved to %CONFIG% variable. (Wengier)
   - Added "Enter Debugger Command" button to "DOSBox-X
     logging output" and "Code overview" windows (from
     "Debug" menu") for users to enter some debugger
     command(s) and see the result. (Wengier)
-  - Added debugger commands DATE & TIME to view/change
-    the internal date and time, using the same date and
-    time formats as shell DATE/TIME commands. (Wengier)
+  - Added debugger commands DATE and TIME to view or
+    change DOSBox-X's internal date and time, using the
+    same date and time formats as the shell DATE and
+    TIME commands, e.g. "TIME 10:11:12". (Wengier)
   - Added config option "badcommandhandler" (in [dos]
     section) which allows to specify a custom error
     handler program before error message "Bad command
     or file name" shows up in the DOS shell. (Wengier)
+  - Added config option "fat32setversion" (in [dos]
+    section) which controls whether DOSBox-X should
+    automatically set reported DOS version to 7.0/7.10
+    when it's less than 7.0/7.10 and mounting LBA/FAT32
+    disk images is requested. It defaults to "ask" so
+    that DOSBox-X will ask in this case. (Wengier)
   - Added config option "j3100colorscroll" (in [dosv]
     section) which defaults to "false" and allows the
     J-3100 version of SimCity and VGA version of the
@@ -72,6 +85,11 @@
     latter being the default for CP951. If ChinaSea is
     enabled, ChinaSea characters will be used instead
     of original characters in these encodings. (Wengier)
+  - Added -nl option for MOUNT command to automatically
+    find the next available drive letter to mount if
+    the specified drive is already mounted. This allows
+    multiple directories to be mounted when DOSBox-X
+    starts with multiple [name] arguments. (Wengier)
   - Added ASSOC command to view/change file extension
     associations. You can define a command or program
     to open a file with a specific file extension, e.g.
@@ -84,6 +102,9 @@
   - COUNTRY command is now an external command that
     appears on Z drive (Z:/SYSTEM/COUNTRY.COM) rather
     than an internal shell command. (Wengier)
+  - You can now change most config options in [printer]
+    section of the configuration for the virtual printer
+    with CONFIG -set commands. (Wengier)
   - Improved DBCS support for DOS commands including
     ATTRIB, ECHO, TYPE, MORE, and TRUENAME. (Wengier)
   - Improved checking of segment limits. (joncampbell123)
@@ -95,9 +116,15 @@
     segment. It is once again possible to make Mac OS X
     ARM releases and to use dylib files from Brew doing
     so. (joncampbell123)
+  - Fixed an issue with RENDER_Reset function while
+    loading previously saved states. (yetmorecode)
   - Fixed E_Exit "RET from illegal descriptor type 0"
     when running DirectX diagnostic program (dxdiag)
-    from a guest Windows 9x system. (Wengier)
+    from a guest Windows 98 system. (Wengier)
+  - Fixed "parallel?=file openwith:xxx" not working if
+    a file name is not specified. (Wengier)
+  - Fixed crash in the following config combination:
+    output=ttf, machine=pc98, dosvfunc=true. (Wengier)
   - Fixed Disney sound source connecting to parallel
     port not working in the previous version. (Wengier)
   - Fixed NET command from Windows for Workgroups 3.11

@@ -54,9 +54,10 @@ typedef struct {
 #endif
 
 Bitu call_program;
+extern char lastmount;
 extern const char *modifier;
 extern std::string langname, configfile;
-extern int enablelfn, paste_speed, wheel_key, freesizecap, wpType, wpVersion, wpBG, wpFG, lastset, blinkCursor;
+extern int enablelfn, fat32setver, paste_speed, wheel_key, freesizecap, wpType, wpVersion, wpBG, wpFG, lastset, blinkCursor;
 extern bool dos_kernel_disabled, force_nocachedir, wpcolon, lockmount, enable_config_as_shell_commands, load, winrun, winautorun, startcmd, startwait, startquiet, starttranspath, mountwarning, wheel_guest, clipboard_dosapi, noremark_save_state, force_load_state, sync_time, manualtime, showbold, showital, showline, showsout, char512, printfont, rtl, gbk, chinasea, uao, dbcs_sbcs, autoboxdraw, halfwidthkana, ticksLocked, outcon, enable_dbcs_tables;
 
 /* This registers a file on the virtual drive and creates the correct structure for it*/
@@ -98,8 +99,8 @@ public:
 static std::vector<InternalProgramEntry*> internal_progs;
 bool isDBCSCP(void), CheckBoxDrawing(uint8_t c1, uint8_t c2, uint8_t c3, uint8_t c4);
 char *FormatDate(uint16_t year, uint8_t month, uint8_t day);
-void EMS_DoShutDown(void), UpdateDefaultPrinterFont(void), GFX_ForceRedrawScreen(void), resetFontSize(void), ttf_reset_colors(void), makestdcp950table(void), makeseacp951table(void), DOSBox_SetSysMenu(void), MSG_Init(void), initRand(void);
-void EMS_Startup(Section* sec), DOSV_SetConfig(Section_prop *section), DOSBOX_UnlockSpeed2(bool pressed), RebootLanguage(std::string filename, bool confirm=false), SetWindowTransparency(int trans), SetOutputSwitch(const char *outputstr), runSerial(const char *str), runParallel(const char *str), DOS_AddDays(uint8_t days);
+void EMS_DoShutDown(void), UpdateDefaultPrinterFont(void), GFX_ForceRedrawScreen(void), resetFontSize(void), ttf_reset_colors(void), makestdcp950table(void), makeseacp951table(void), DOSBox_SetSysMenu(void), MSG_Init(void), initRand(void), PRINTER_Init(void);
+void EMS_Startup(Section* sec), DOSV_SetConfig(Section_prop *section), DOSBOX_UnlockSpeed2(bool pressed), RebootLanguage(std::string filename, bool confirm=false), SetWindowTransparency(int trans), SetOutputSwitch(const char *outputstr), runSerial(const char *str), runParallel(const char *str), DOS_AddDays(uint8_t days), PRINTER_Shutdown(Section* sec);
 
 void PROGRAMS_Shutdown(void) {
 	LOG(LOG_MISC,LOG_DEBUG)("Shutting down internal programs list");
@@ -1168,6 +1169,9 @@ void CONFIG::Run(void) {
                             sprintf(format,"%u%c%02u%c%02u",hour,c,min,c,sec);
                             WriteOut("%s\n",format);
                             first_shell->SetEnv("CONFIG",format);
+                        } else if (!strcasecmp(pvars[0].c_str(), "lastmount")) {
+                            if (lastmount) WriteOut("%c:\n",lastmount);
+                            first_shell->SetEnv("CONFIG",lastmount?(std::string(1, lastmount) + ":").c_str():"");
                         } else
                             WriteOut(MSG_Get("PROGRAM_CONFIG_PROPERTY_ERROR"));
 						return;
@@ -1391,7 +1395,7 @@ next:
 			bool change_success = tsec->HandleInputline(inputline.c_str());
 			if (change_success) {
                 if (applynew) RebootLanguage("");
-				if (!strcasecmp(pvars[0].c_str(), "dosbox")||!strcasecmp(pvars[0].c_str(), "dos")||!strcasecmp(pvars[0].c_str(), "dosv")||!strcasecmp(pvars[0].c_str(), "cpu")||!strcasecmp(pvars[0].c_str(), "sdl")||!strcasecmp(pvars[0].c_str(), "ttf")||!strcasecmp(pvars[0].c_str(), "render")||!strcasecmp(pvars[0].c_str(), "serial")||!strcasecmp(pvars[0].c_str(), "parallel")) {
+				if (!strcasecmp(pvars[0].c_str(), "dosbox")||!strcasecmp(pvars[0].c_str(), "dos")||!strcasecmp(pvars[0].c_str(), "dosv")||!strcasecmp(pvars[0].c_str(), "cpu")||!strcasecmp(pvars[0].c_str(), "sdl")||!strcasecmp(pvars[0].c_str(), "ttf")||!strcasecmp(pvars[0].c_str(), "render")||!strcasecmp(pvars[0].c_str(), "serial")||!strcasecmp(pvars[0].c_str(), "parallel")||!strcasecmp(pvars[0].c_str(), "printer")) {
 					Section_prop *section = static_cast<Section_prop *>(control->GetSection(pvars[0].c_str()));
 					if (section != NULL) {
 						if (!strcasecmp(pvars[0].c_str(), "dosbox")) {
@@ -1589,6 +1593,11 @@ next:
 								mainMenu.get_item("dos_lfn_enable").check(enablelfn==1).refresh_item(mainMenu);
 								mainMenu.get_item("dos_lfn_disable").check(enablelfn==0).refresh_item(mainMenu);
 								uselfn = enablelfn==1 || ((enablelfn == -1 || enablelfn == -2) && (dos.version.major>6 || winrun));
+							} else if (!strcasecmp(inputline.substr(0, 16).c_str(), "fat32setversion=")) {
+								std::string fat32setverstr = section->Get_string("fat32setversion");
+								if (fat32setverstr=="auto") fat32setver=1;
+								else if (fat32setverstr=="manual") fat32setver=0;
+								else fat32setver=-1;
 							} else if (!strcasecmp(inputline.substr(0, 4).c_str(), "ver=")) {
 								const char *ver = section->Get_string("ver");
 								if (!*ver) {
@@ -1830,6 +1839,11 @@ next:
                                 std::string val = section->Get_string("parallel" + std::string(1, inputline[8])), cmd = std::string(1, inputline[8]) + " " + (val.size()?val:"disabled");
                                 runParallel(cmd.c_str());
                             }
+#if C_PRINTER
+						} else if (!strcasecmp(pvars[0].c_str(), "printer")) {
+                            PRINTER_Shutdown(NULL);
+                            PRINTER_Init();
+#endif
                         }
 					}
 				}
