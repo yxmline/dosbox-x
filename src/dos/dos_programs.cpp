@@ -90,6 +90,7 @@ typedef std::basic_string<test_char_t> test_string;
 typedef std::basic_string<char> test_char;
 #endif
 int freesizecap = 1;
+int result_errorcode = 0;
 bool Mouse_Drv=true;
 bool Mouse_Vertical = false;
 bool force_nocachedir = false;
@@ -6554,11 +6555,11 @@ class LABEL : public Program
 
 			/* if the label is longer than 11 chars or contains a dot, MS-DOS will reject it and then prompt for another label */
 			if (label.length() > 11) {
-				WriteOut("Label is too long (more than 11 chars)\n");
+				WriteOut("Label is too long (more than 11 characters).\n");
 				label.clear();
 			}
 			else if (label.find_first_of(".:/\\") != std::string::npos) {
-				WriteOut("Label has invalid chars.\n");
+				WriteOut("Label has invalid characters.\n");
 				label.clear();
 			}
 
@@ -6851,6 +6852,27 @@ void LS::Run()
 
 static void LS_ProgramStart(Program * * make) {
     *make=new LS;
+}
+
+class CHOICE : public Program {
+public:
+    void Run(void);
+};
+
+void CHOICE::Run()
+{
+	std::string tmp = "";
+	cmd->GetStringRemain(tmp);
+	char args[CMD_MAXLINE];
+	strcpy(args, tmp.c_str());
+	DOS_Shell temp;
+	temp.CMD_CHOICE(args);
+	result_errorcode = dos.return_code;
+}
+
+void CHOICE_ProgramStart(Program **make)
+{
+	*make = new CHOICE;
 }
 
 class COUNTRY : public Program {
@@ -7556,6 +7578,7 @@ void SETCOLOR::Run()
 		} else if (!strcmp(args,"0")||!strcmp(args,"00")||!strcmp(args,"+0")||!strcmp(args,"-0")||(i>0&&i<16)) {
 			if (p==NULL) {
 #if defined(USE_TTF)
+                bool colornul = IS_VGA_ARCH && (altBGR1[i].red > 4 || altBGR1[i].green > 4 || altBGR1[i].blue > 4) && rgbcolors[i].red < 5 && rgbcolors[i].green < 5 && rgbcolors[i].blue < 5;
                 altBGR[i].red = colorChanged&&!IS_VGA_ARCH?altBGR1[i].red:rgbcolors[i].red;
                 altBGR[i].green = colorChanged&&!IS_VGA_ARCH?altBGR1[i].green:rgbcolors[i].green;
                 altBGR[i].blue = colorChanged&&!IS_VGA_ARCH?altBGR1[i].blue:rgbcolors[i].blue;
@@ -7586,6 +7609,7 @@ void SETCOLOR::Run()
                     WriteOut("Invalid color value - %s\n",value);
 #if defined(USE_TTF)
 			} else if (setColors(value,i)) {
+                bool colornul = IS_VGA_ARCH && (altBGR1[i].red > 4 || altBGR1[i].green > 4 || altBGR1[i].blue > 4) && rgbcolors[i].red < 5 && rgbcolors[i].green < 5 && rgbcolors[i].blue < 5;
                 altBGR[i].red = colorChanged&&!IS_VGA_ARCH?altBGR1[i].red:rgbcolors[i].red;
                 altBGR[i].green = colorChanged&&!IS_VGA_ARCH?altBGR1[i].green:rgbcolors[i].green;
                 altBGR[i].blue = colorChanged&&!IS_VGA_ARCH?altBGR1[i].blue:rgbcolors[i].blue;
@@ -7599,6 +7623,7 @@ void SETCOLOR::Run()
 		WriteOut("MONO mode status: %s (video mode %d)\n",CurMode->mode==7?"active":CurMode->mode==3?"inactive":"unavailable",CurMode->mode);
 		for (int i = 0; i < 16; i++) {
 #if defined(USE_TTF)
+            bool colornul = IS_VGA_ARCH && (altBGR1[i].red > 4 || altBGR1[i].green > 4 || altBGR1[i].blue > 4) && rgbcolors[i].red < 5 && rgbcolors[i].green < 5 && rgbcolors[i].blue < 5;
             altBGR[i].red = colorChanged&&!IS_VGA_ARCH?altBGR1[i].red:rgbcolors[i].red;
             altBGR[i].green = colorChanged&&!IS_VGA_ARCH?altBGR1[i].green:rgbcolors[i].green;
             altBGR[i].blue = colorChanged&&!IS_VGA_ARCH?altBGR1[i].blue:rgbcolors[i].blue;
@@ -8647,6 +8672,7 @@ void DOS_SetupPrograms(void) {
     PROGRAMS_MakeFile("LABEL.COM", LABEL_ProgramStart,"/DOS/");
     PROGRAMS_MakeFile("TREE.COM", TREE_ProgramStart,"/DOS/");
     PROGRAMS_MakeFile("DELTREE.EXE",DELTREE_ProgramStart,"/DOS/");
+    PROGRAMS_MakeFile("CHOICE.COM", CHOICE_ProgramStart,"/DOS/");
     PROGRAMS_MakeFile("AUTOTYPE.COM", AUTOTYPE_ProgramStart,"/BIN/");
 #ifdef C_ICONV
     PROGRAMS_MakeFile("UTF8.COM", UTF8_ProgramStart,"/BIN/");

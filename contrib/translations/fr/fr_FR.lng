@@ -101,6 +101,12 @@ Modifier %s
 :HELP_FOR
 Aide pour %s
 .
+:HELP_INFO
+Cliquez sur le bouton "Aide" ci-dessous pour une aide détaillée.
+.
+:SELECT_VALUE
+Sélectionnez une valeur
+.
 :CONFIGURATION_FOR
 Configuration pour %s
 .
@@ -527,7 +533,6 @@ Utilisation : ←[34;1m←[32;1mMOUNT←[0m ←[37;1mdrive←[0m ←[36;1mlocal_
  -u Démonter le lecteur.
  ←[32;1m-examples Montrer quelques exemples d'utilisation.←[0m
 Tapez MOUNT sans paramètres pour afficher une liste des lecteurs montés.
-
 .
 :PROGRAM_MOUNT_EXAMPLE
 Un exemple de base de la commande MOUNT :
@@ -1819,6 +1824,16 @@ GOTO étiquette
    par lots comme étiquette.
    
 Vous tapez une étiquette sur une ligne à part, en commençant par un deux-points.
+
+.
+:SHELL_CMD_HISTORY_HELP
+Affiche ou efface la liste de l'historique des commandes.
+
+.
+:SHELL_CMD_HISTORY_HELP_LONG
+HISTORY [/C]
+
+  /C  Efface la liste de l'historique des commandes.
 
 .
 :SHELL_CMD_SHIFT_HELP

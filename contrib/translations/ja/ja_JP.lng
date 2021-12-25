@@ -100,6 +100,12 @@ OK
 :HELP_FOR
 %s のヘルプ
 .
+:SELECT_VALUE
+プロパティ値を選択
+.
+:HELP_INFO
+詳細なヘルプについては、[ヘルプ]ボタンをクリックしてください。
+.
 :CONFIGURATION_FOR
 %s の設定
 .
@@ -518,7 +524,6 @@ MOUSE [/?] [/U] [/V]
  -u               ドライブのマウントを解除。
  [32;1m-examples        使用例を表示[0m
 マウントされたドライブの一覧を表示するには、オプションなしで MOUNT と入力する
-
 .
 :PROGRAM_MOUNT_EXAMPLE
 MOUNT コマンドの基本的な使用例:
@@ -1811,6 +1816,16 @@ GOTO label
    label   バッチプログラムで、ラベルとする文字列を指定します。
 
 ラベルは行の先頭に、コロン(:)に続けて指定します。
+
+.
+:SHELL_CMD_HISTORY_HELP
+コマンド履歴リストを表示またはクリアします.
+
+.
+:SHELL_CMD_HISTORY_HELP_LONG
+HISTORY [/C]
+
+  /C  コマンド履歴リストをクリアします.
 
 .
 :SHELL_CMD_SHIFT_HELP

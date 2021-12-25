@@ -64,7 +64,7 @@ SHELL_Cmd cmd_list[]={
 {	"BREAK",		1,		&DOS_Shell::CMD_BREAK,		"SHELL_CMD_BREAK_HELP"},
 {	"CALL",			1,		&DOS_Shell::CMD_CALL,		"SHELL_CMD_CALL_HELP"},
 {	"CHDIR",		1,		&DOS_Shell::CMD_CHDIR,		"SHELL_CMD_CHDIR_HELP"},
-{	"CHOICE",		1,		&DOS_Shell::CMD_CHOICE,		"SHELL_CMD_CHOICE_HELP"},
+//{	"CHOICE",		1,		&DOS_Shell::CMD_CHOICE,		"SHELL_CMD_CHOICE_HELP"}, // CHOICE as a program (Z:\DOS\CHOICE.COM) instead of shell command
 {	"CLS",			0,		&DOS_Shell::CMD_CLS,		"SHELL_CMD_CLS_HELP"},
 {	"COPY",			0,		&DOS_Shell::CMD_COPY,		"SHELL_CMD_COPY_HELP"},
 {	"CHCP",			1,		&DOS_Shell::CMD_CHCP,		"SHELL_CMD_CHCP_HELP"},
@@ -79,6 +79,7 @@ SHELL_Cmd cmd_list[]={
 {	"FOR",			1,		&DOS_Shell::CMD_FOR,		"SHELL_CMD_FOR_HELP"},
 {	"GOTO",			1,		&DOS_Shell::CMD_GOTO,		"SHELL_CMD_GOTO_HELP"},
 //{	"HELP",			1,		&DOS_Shell::CMD_HELP,		"SHELL_CMD_HELP_HELP"}, // HELP as a program (Z:\SYSTEM\HELP.COM) instead of shell command
+{	"HISTORY",		1,		&DOS_Shell::CMD_HISTORY,	"SHELL_CMD_HISTORY_HELP"},
 {	"IF",			1,		&DOS_Shell::CMD_IF,			"SHELL_CMD_IF_HELP"},
 {	"LFNFOR",		1,		&DOS_Shell::CMD_LFNFOR,		"SHELL_CMD_LFNFOR_HELP"},
 {	"LH",			1,		&DOS_Shell::CMD_LOADHIGH,	"SHELL_CMD_LOADHIGH_HELP"},
@@ -123,11 +124,11 @@ const char *GetCmdName(int i) {
 }
 
 extern int enablelfn, lfn_filefind_handle, file_access_tries;
-extern bool date_host_forced, usecon, outcon, rsize, dbcs_sbcs, sync_time, manualtime, inshell, noassoc;
+extern bool date_host_forced, usecon, outcon, rsize, autoboxdraw, dbcs_sbcs, sync_time, manualtime, inshell, noassoc;
 extern unsigned long freec;
 extern uint16_t countryNo, altcp_to_unicode[256];
 void GetExpandedPath(std::string &path);
-bool Network_IsNetworkResource(const char * filename);
+bool Network_IsNetworkResource(const char * filename), TTF_using();
 void DOS_SetCountry(uint16_t countryNo), DOSV_FillScreen();
 extern bool isDBCSCP(), isKanji1(uint8_t chr), shiftjis_lead_byte(int c);
 extern bool CheckBoxDrawing(uint8_t c1, uint8_t c2, uint8_t c3, uint8_t c4);
@@ -2784,7 +2785,11 @@ nextfile:
 #if defined(USE_TTF)
             && dbcs_sbcs
 #endif
-        ) lead = isKanji1(c) && !CheckBoxDrawing(last3, last2, last, c);
+        ) lead = isKanji1(c) && !(TTF_using()
+#if defined(USE_TTF)
+        && autoboxdraw
+#endif
+        && CheckBoxDrawing(last3, last2, last, c));
 		if (n==0 || c==0x1a) break; // stop at EOF
 		if (iscon) {
 			if (c==3) break;
@@ -2838,7 +2843,11 @@ void DOS_Shell::CMD_MORE(char * args) {
 #if defined(USE_TTF)
                 && dbcs_sbcs
 #endif
-            ) lead = isKanji1(c) && !CheckBoxDrawing(last3, last2, last, c);
+            ) lead = isKanji1(c) && !(TTF_using()
+#if defined(USE_TTF)
+            && autoboxdraw
+#endif
+            && CheckBoxDrawing(last3, last2, last, c));
 			if (c==3) {dos.echo=echo;return;}
 			else if (n==0) {if (last!=10) WriteOut("\r\n");dos.echo=echo;return;}
 			else if (c==13&&last==26) {dos.echo=echo;return;}
@@ -2907,7 +2916,11 @@ nextfile:
 #if defined(USE_TTF)
             && dbcs_sbcs
 #endif
-        ) lead = isKanji1(c) && !CheckBoxDrawing(last3, last2, last, c);
+        ) lead = isKanji1(c) && !(TTF_using()
+#if defined(USE_TTF)
+        && autoboxdraw
+#endif
+        && CheckBoxDrawing(last3, last2, last, c));
 		if (lead && nchars == COLS-1) {
 			last3=last2=last=0;
 			nlines++;
@@ -4087,6 +4100,16 @@ void DOS_Shell::CMD_ASSOC(char* args) {
                 assoc_name[offset] = *args;
             }
         }
+    }
+}
+
+void DOS_Shell::CMD_HISTORY(char* args) {
+    HELP("HISTORY");
+    if (ScanCMDBool(args,"C"))
+        l_history.clear();
+    for (auto it = l_history.rbegin(); it != l_history.rend(); ++it) {
+        WriteOut_NoParsing(it->c_str(), true);
+        WriteOut("\n");
     }
 }
 

@@ -99,6 +99,12 @@ DOSBox-X 配置工具
 :HELP_FOR
 %s 的帮助
 .
+:HELP_INFO
+点击下方“帮助”按钮查看详细帮助信息.
+.
+:SELECT_VALUE
+选择属性值
+.
 :CONFIGURATION_FOR
 %s 的配置
 .
@@ -524,7 +530,6 @@ MOUSE [/?] [/U] [/V]
  -u                卸载驱动器.
  [32;1m-examples         显示用法举例.[0m
 输入不带参数的 MOUNT 命令将显示已挂载的驱动器列表.
-
 .
 :PROGRAM_MOUNT_EXAMPLE
 一个 MOUNT 命令的基本例子:
@@ -1769,6 +1774,16 @@ GOTO 标签
    标签   在处理文件中指定一个文本字符串作为标签.
 
 标签将作为单独一行, 前面加上冒号.
+
+.
+:SHELL_CMD_HISTORY_HELP
+显示或清除命令历史列表.
+
+.
+:SHELL_CMD_HISTORY_HELP_LONG
+HISTORY [/C]
+
+  /C  清除命令历史列表.
 
 .
 :SHELL_CMD_SHIFT_HELP

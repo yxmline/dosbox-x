@@ -1210,8 +1210,7 @@ void DOSBOX_SetupConfigSections(void) {
     const char* controllertypes[] = { "auto", "at", "xt", "pcjr", "pc98", 0}; // Future work: Tandy(?) and USB
     const char* auxdevices[] = {"none","2button","3button","intellimouse","intellimouse45",0};
     const char* cputype_values[] = {"auto", "8086", "8086_prefetch", "80186", "80186_prefetch", "286", "286_prefetch", "386", "386_prefetch", "486old", "486old_prefetch", "486", "486_prefetch", "pentium", "pentium_mmx", "ppro_slow", "pentium_ii", "experimental", 0};
-    const char* rates[] = {  "44100", "48000", "32000","22050", "16000", "11025", "8000", "49716", 0 };
-    const char* oplrates[] = {   "44100", "49716", "48000", "32000","22050", "16000", "11025", "8000", 0 };
+    const char* rates[] = {  "49716", "48000", "44100", "32000","22050", "16000", "11025", "8000", 0 };
 #if C_FLUIDSYNTH || defined(WIN32) && !defined(HX_DOS)
     const char* devices[] = { "default", "win32", "alsa", "oss", "coreaudio", "coremidi", "mt32", "synth", "fluidsynth", "timidity", "none", 0};
 #else
@@ -1670,9 +1669,9 @@ void DOSBOX_SetupConfigSections(void) {
     Pint->Set_help("Amount of memory at top to reserve for ACPI structures and tables. Set to 0 for automatic assignment.");
 
 #if defined(C_EMSCRIPTEN)
-    Pint = secprop->Add_int("memsize", Property::Changeable::WhenIdle,4);
+    Pint = secprop->Add_int("memsize", Property::Changeable::OnlyAtStart,4);
 #else
-    Pint = secprop->Add_int("memsize", Property::Changeable::WhenIdle,16);
+    Pint = secprop->Add_int("memsize", Property::Changeable::OnlyAtStart,16);
 #endif
     Pint->SetMinMax(0,3584); // 3.5GB
     Pint->Set_help(
@@ -1682,7 +1681,7 @@ void DOSBOX_SetupConfigSections(void) {
         "Programs that use 286 protected mode like Windows 3.0 in Standard Mode may crash with more than 15MB.");
     Pint->SetBasic(true);
 
-    Pint = secprop->Add_int("memsizekb", Property::Changeable::WhenIdle,0);
+    Pint = secprop->Add_int("memsizekb", Property::Changeable::OnlyAtStart,0);
     Pint->SetMinMax(0,524288);
     Pint->Set_help(
         "Amount of memory DOSBox-X has in kilobytes.\n"
@@ -2644,6 +2643,9 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool->Set_help("Enables Turbo (Fast Forward) mode to speed up operations.");
     Pbool->SetBasic(true);
 
+    Pbool = secprop->Add_bool("stop turbo on key",Property::Changeable::Always,true);
+    Pbool->Set_help("If set, the Turbo mode will be automatically stopped if a keyboard input is detected.");
+
     Pstring = secprop->Add_string("use dynamic core with paging on",Property::Changeable::Always,"auto");
     Pstring->Set_values(truefalseautoopt);
     Pstring->Set_help("Allow dynamic cores (dynamic_x86 and dynamic_rec) to be used with 386 paging enabled.\n"
@@ -3288,7 +3290,7 @@ void DOSBOX_SetupConfigSections(void) {
     Pstring->SetBasic(true);
 
     Pint = secprop->Add_int("oplrate",Property::Changeable::WhenIdle,44100);
-    Pint->Set_values(oplrates);
+    Pint->Set_values(rates);
     Pint->Set_help("Sample rate of OPL music emulation. Use 49716 for highest quality (set the mixer rate accordingly).");
     Pint->SetBasic(true);
 
@@ -3827,7 +3829,7 @@ void DOSBOX_SetupConfigSections(void) {
             "    openwith:<program>: start a program to open the file in all other conditions.\n"
             "    openerror:<program>: start a program to open the file if an error had occurred.\n"
             "  for printer:\n"
-            "    printer still has it's own configuration section above.\n"
+            "    printer still has its own configuration section above.\n"
             "Note: LPT1-3 are standard LPT ports in DOS, whereas LPT4-9 are extended LPT ports.\n"
             "      You can optionally specify base addresses and IRQs for them with base: and irq: options.\n"
             "      Parallel port settings can also be changed via the built-in PARALLEL command."
@@ -4691,6 +4693,8 @@ void DOSBOX_SetupConfigSections(void) {
     MSG_Add("CONTENT","Content:");
     MSG_Add("EDIT_FOR","Edit %s");
     MSG_Add("HELP_FOR","Help for %s");
+    MSG_Add("HELP_INFO", "Click the \"Help\" button below to see detailed help information.");
+    MSG_Add("SELECT_VALUE", "Select property value");
     MSG_Add("CONFIGURATION_FOR","Configuration for %s");
     MSG_Add("CONFIGURATION","Configuration");
     MSG_Add("SETTINGS","Settings");

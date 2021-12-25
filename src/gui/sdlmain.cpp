@@ -309,6 +309,7 @@ unsigned int sendkeymap=0;
 std::string configfile = "";
 std::string strPasteBuffer = "";
 ScreenSizeInfo screen_size_info;
+void DOSBOX_UnlockSpeed2(bool pressed);
 void RebootLanguage(std::string filename, bool confirm=false);
 bool CodePageHostToGuestUTF16(char *d/*CROSS_LEN*/,const uint16_t *s/*CROSS_LEN*/);
 bool CodePageGuestToHostUTF16(uint16_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/);
@@ -4944,13 +4945,14 @@ void GFX_EndTextLines(bool force=false) {
                     colorBG = colorFG;
                     colorFG = color;
                 }
+                bool colornul = IS_VGA_ARCH && (altBGR1[colorBG&15].red > 4 || altBGR1[colorBG&15].green > 4 || altBGR1[colorBG&15].blue > 4 || altBGR1[colorFG&15].red > 4 || altBGR1[colorFG&15].green > 4 || altBGR1[colorFG&15].blue > 4) && rgbColors[colorBG].red < 5 && rgbColors[colorBG].green < 5 && rgbColors[colorBG].blue < 5 && rgbColors[colorFG].red < 5 && rgbColors[colorFG].green <5 && rgbColors[colorFG].blue < 5;
 				ttf_textRect.x = ttf.offX+(rtl?(ttf.cols-x-1):x)*ttf.width;
-				ttf_bgColor.r = colorChanged&&!IS_VGA_ARCH?altBGR1[colorBG&15].red:rgbColors[colorBG].red;
-				ttf_bgColor.g = colorChanged&&!IS_VGA_ARCH?altBGR1[colorBG&15].green:rgbColors[colorBG].green;
-				ttf_bgColor.b = colorChanged&&!IS_VGA_ARCH?altBGR1[colorBG&15].blue:rgbColors[colorBG].blue;
-				ttf_fgColor.r = colorChanged&&!IS_VGA_ARCH?altBGR1[colorFG&15].red:rgbColors[colorFG].red;
-				ttf_fgColor.g = colorChanged&&!IS_VGA_ARCH?altBGR1[colorFG&15].green:rgbColors[colorFG].green;
-				ttf_fgColor.b = colorChanged&&!IS_VGA_ARCH?altBGR1[colorFG&15].blue:rgbColors[colorFG].blue;
+				ttf_bgColor.r = colornul||(colorChanged&&!IS_VGA_ARCH)?altBGR1[colorBG&15].red:rgbColors[colorBG].red;
+				ttf_bgColor.g = colornul||(colorChanged&&!IS_VGA_ARCH)?altBGR1[colorBG&15].green:rgbColors[colorBG].green;
+				ttf_bgColor.b = colornul||(colorChanged&&!IS_VGA_ARCH)?altBGR1[colorBG&15].blue:rgbColors[colorBG].blue;
+				ttf_fgColor.r = colornul||(colorChanged&&!IS_VGA_ARCH)?altBGR1[colorFG&15].red:rgbColors[colorFG].red;
+				ttf_fgColor.g = colornul||(colorChanged&&!IS_VGA_ARCH)?altBGR1[colorFG&15].green:rgbColors[colorFG].green;
+				ttf_fgColor.b = colornul||(colorChanged&&!IS_VGA_ARCH)?altBGR1[colorFG&15].blue:rgbColors[colorFG].blue;
 
                 if (newAC[x].unicode) {
                     dw = newAC[x].doublewide;
@@ -8210,6 +8212,7 @@ void GFX_Events() {
 #endif
         default:
             gfx_in_mapper = true;
+            if (ticksLocked && event.type == SDL_KEYDOWN && static_cast<Section_prop *>(control->GetSection("cpu"))->Get_bool("stop turbo on key")) DOSBOX_UnlockSpeed2(true);
             MAPPER_CheckEvent(&event);
             gfx_in_mapper = false;
         }
@@ -8578,6 +8581,7 @@ void GFX_Events() {
                 }
             }
 #endif
+            if (ticksLocked && event.type == SDL_KEYDOWN && static_cast<Section_prop *>(control->GetSection("cpu"))->Get_bool("stop turbo on key")) DOSBOX_UnlockSpeed2(true);
             MAPPER_CheckEvent(&event);
         }
     }
@@ -8647,7 +8651,7 @@ void SDL_SetupConfigSection() {
     Pstring->Set_values(outputs);
     Pstring->SetBasic(true);
 
-    Pstring = sdl_sec->Add_string("videodriver",Property::Changeable::WhenIdle, "");
+    Pstring = sdl_sec->Add_string("videodriver",Property::Changeable::OnlyAtStart, "");
     Pstring->Set_help("Forces a video driver (e.g. windib/windows, directx, x11, fbcon, dummy, etc) for the SDL library to use.");
     Pstring->SetBasic(true);
 
@@ -8661,7 +8665,7 @@ void SDL_SetupConfigSection() {
     Pbool->Set_help("If set, the DOSBox-X window will be maximized at start (SDL2 and Windows SDL1 builds only; use fullscreen for TTF output).");
     Pbool->SetBasic(true);
 
-    Pbool = sdl_sec->Add_bool("autolock",Property::Changeable::Always, false);
+    Pbool = sdl_sec->Add_bool("autolock",Property::Changeable::WhenIdle, false);
     Pbool->Set_help("Mouse will automatically lock, if you click on the screen. (Press CTRL-F10 to unlock)");
     Pbool->SetBasic(true);
 
@@ -9567,6 +9571,8 @@ static void show_warning(char const * const message) {
 }
    
 static void launcheditor(std::string edit) {
+    if (control->configfiles.size() && control->configfiles.front().size())
+        execlp(edit.c_str(),edit.c_str(),control->configfiles.front().c_str(),(char*) 0);
     std::string path,file;
     Cross::CreatePlatformConfigDir(path);
     Cross::GetPlatformConfigName(file);
@@ -14796,8 +14802,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             }
         }
 
-        if (control->opt_startui)
-            GUI_Run(false);
         if (control->opt_editconf.length() != 0)
             launcheditor(control->opt_editconf);
         if (control->opt_opencaptures.length() != 0)
@@ -14941,12 +14945,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         MAPPER_Init();
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"hostkey_mapper").set_text("Mapper-defined").set_callback_function(hostkey_preset_menu_callback);
 
-        /* stop at this point, and show the mapper, if instructed */
-        if (control->opt_startmapper) {
-            LOG(LOG_MISC,LOG_DEBUG)("Running mapper interface, during startup, as instructed");
-            MAPPER_RunInternal();
-        }
-
         /* more */
         std::string doubleBufString = std::string("desktop.doublebuf");
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"showdetails").set_text("Show FPS and RT speed in title bar").set_callback_function(showdetails_menu_callback).check(!menu.hidecycles && menu.showrt);
@@ -15003,6 +15001,22 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 #endif
         mainMenu.alloc_item(DOSBoxMenu::item_type_id,"pc98_use_uskb").set_text("Use US keyboard layout").set_callback_function(pc98_force_uskb_menu_callback).check(pc98_force_ibm_layout);
         MSG_Init();
+
+        /* stop at this point, and show the configuration tool/mapper editor, if instructed */
+        if (control->opt_startui) {
+            LOG(LOG_MISC,LOG_DEBUG)("Running Configuration Tool, during startup, as instructed");
+            int cp=dos.loaded_codepage;
+            if (!cp) InitCodePage();
+            GUI_Run(false);
+            dos.loaded_codepage=cp;
+        }
+        if (control->opt_startmapper) {
+            LOG(LOG_MISC,LOG_DEBUG)("Running Mapper Editor, during startup, as instructed");
+            int cp=dos.loaded_codepage;
+            if (!cp) InitCodePage();
+            MAPPER_RunInternal();
+            dos.loaded_codepage=cp;
+        }
 
         char name[6]="slot0";
         if (!control->opt_silent)

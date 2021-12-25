@@ -101,6 +101,12 @@ Editar %s
 :HELP_FOR
 Ayuda de %s
 .
+:HELP_INFO
+Haga clic en el botón "Ayuda" para obtener ayuda detallada.
+.
+:SELECT_VALUE
+Seleccionar valor de propiedad
+.
 :CONFIGURATION_FOR
 Configuración de %s
 .
@@ -1821,6 +1827,16 @@ GOTO label
    label   Indica cadena de texto que usa un programa de lotes como etiqueta.
 
 Escribe una etiqueta en una línea, precedida de dos puntos.
+
+.
+:SHELL_CMD_HISTORY_HELP
+Muestra o borra la lista del historial de comandos.
+
+.
+:SHELL_CMD_HISTORY_HELP_LONG
+HISTORY [/C]
+
+  /C  Borra la lista del historial de comandos.
 
 .
 :SHELL_CMD_SHIFT_HELP

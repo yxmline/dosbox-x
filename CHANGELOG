@@ -13,9 +13,12 @@
     languages on Windows builds. (Wengier)
   - Pausing the emulation will automatically release
     the mouse and prevent mouse capture. (Wengier)
-  - For Configuration Tool, a "?" button is added to
+  - For Configuration Tool, a "..." button is added to
     properties which have limited numbers of values so
-    that their possible values will be shown. (Wengier)
+    that when clicking their possible values will be
+    shown in a new dialog and can be selected directly.
+    Also, more settings will be applied immediately when
+    modified from the Configuration Tool. (Wengier)
   - If a scaler as specified in the config may not work
     as expected and if not forced, DOSBox-X will show a
     a message box asking whether to load it. (Wengier)
@@ -52,6 +55,10 @@
     section) which allows to specify a custom error
     handler program before error message "Bad command
     or file name" shows up in the DOS shell. (Wengier)
+  - Added config option "stop turbo on key" (in [cpu]
+    section) which allows to automatically stop the
+    Turbo (fast forward) mode when a keyboard input
+    has been detected. (Wengier)
   - Added config option "fat32setversion" (in [dos]
     section) which controls whether DOSBox-X should
     automatically set reported DOS version to 7.0/7.10
@@ -90,6 +97,8 @@
     the specified drive is already mounted. This allows
     multiple directories to be mounted when DOSBox-X
     starts with multiple [name] arguments. (Wengier)
+  - Added HISTORY command to display or clear command-
+    line history for the internal DOS shell. (Wengier)
   - Added ASSOC command to view/change file extension
     associations. You can define a command or program
     to open a file with a specific file extension, e.g.
@@ -99,9 +108,10 @@
     "assoc .*=dir", although in such case exceptions
     including "assoc .com=com", "assoc .exe=exe", and
     "assoc .bat=bat" are probably desired. (Wengier)
-  - COUNTRY command is now an external command that
-    appears on Z drive (Z:/SYSTEM/COUNTRY.COM) rather
-    than an internal shell command. (Wengier)
+  - Commands CHOICE and COUNTRY are external commands
+    that appear on the Z drive (Z:/DOS/CHOICE.COM and
+    Z:/SYSTEM/COUNTRY.COM respectively) now rather than
+    internal shell commands. (Wengier)
   - You can now change most config options in [printer]
     section of the configuration for the virtual printer
     with CONFIG -set commands. (Wengier)
@@ -116,6 +126,9 @@
     segment. It is once again possible to make Mac OS X
     ARM releases and to use dylib files from Brew doing
     so. (joncampbell123)
+  - Fixed command-line options -starttool & -startmapper
+    not showing messages from specified language file
+    for Configuration Tool and Mapper Editor. (Wengier)
   - Fixed an issue with RENDER_Reset function while
     loading previously saved states. (yetmorecode)
   - Fixed E_Exit "RET from illegal descriptor type 0"
