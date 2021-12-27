@@ -3270,11 +3270,7 @@ void DOSBOX_SetupConfigSections(void) {
             "games (Wolfenstein 3D) poll the Adlib status port a fixed number of times assuming\n"
             "that the poll loop takes long enough for the Adlib timer to run out. If the game\n"
             "cannot reliably detect Adlib at higher cycles counts, but can reliably detect at\n"
-            "lower cycles counts, set this option.\n"
-            "NOTE: Technically this decreases emulation accuracy, however it also reflects the\n"
-            "      fact that DOSBox-X's I/O timing code needs some work to better match the\n"
-            "      slowness of the ISA bus per I/O read in consideration of DOS games. So this\n"
-            "      option is ON by default.");
+            "lower cycles counts, set this option.");
     /* NTS: The reason I mention Wolfenstein 3D is that it seems coded not to probe for Sound Blaster unless it
      *      first detects the Adlib at port 0x388. No Adlib, no Sound Blaster. */
     /* ^ NTS: To see what I mean, download Wolf3d source code, look at ID_SD.C line 1585 (Adlib detection routine).
@@ -3697,10 +3693,11 @@ void DOSBOX_SetupConfigSections(void) {
         "for file: specify an output file\n"
         "Additional parameters:\n"
         "    timeout:<milliseconds> = how long to wait before closing the file on inactivity (default:0),\n"
-        "    squote to use single quotes instad of double quotes for quoted program commands.\n"
+        "    squote to use single quotes instead of double quotes for quoted program commands.\n"
         "    shellhide to hide the command window when opening programs on the Windows platform.\n"
         "    openwith:<program>: start a program to open the output file.\n"
         "    openerror:<program>: start a program to open the output file if an error had occurred.\n"
+        "Example: serial1=file file:output1.txt timeout:1000 openwith:notepad\n"
         "for directserial: realport (required), rxdelay (optional).\n"
         "                 (realport:COM1 realport:ttyS0).\n"
         "for modem: listenport (optional).\n"
@@ -3820,7 +3817,7 @@ void DOSBOX_SetupConfigSections(void) {
             "    Without the above parameters data is written to files in the capture dir.\n"
             "    Additional parameters:\n"
             "    timeout:<milliseconds> = how long to wait before closing the file on inactivity (default:0 or 500),\n"
-            "    squote to use single quotes instad of double quotes for quoted program commands.\n"
+            "    squote to use single quotes instead of double quotes for quoted program commands.\n"
             "    shellhide to hide the command window when opening programs on the Windows platform.\n"
             "    addFF to add a formfeed when closing, addLF to add a linefeed if the app doesn't.\n"
             "    cp:<codepage number> to perform codepage translation, i.e. cp:437\n"
@@ -3828,6 +3825,7 @@ void DOSBOX_SetupConfigSections(void) {
             "    openpcl:<program>: start a program to open the file if the print output is detected to be PCL.\n"
             "    openwith:<program>: start a program to open the file in all other conditions.\n"
             "    openerror:<program>: start a program to open the file if an error had occurred.\n"
+            "  Example: parallel1=file file:output1.prn timeout:1000 openpcl:pcl6 openps:gswin32c openwith:notepad\n"
             "  for printer:\n"
             "    printer still has its own configuration section above.\n"
             "Note: LPT1-3 are standard LPT ports in DOS, whereas LPT4-9 are extended LPT ports.\n"
