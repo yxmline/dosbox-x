@@ -1,9 +1,4 @@
 0.83.21
-  - Fix IPL1 partition choice debug message to actually
-    show the partition index chosen, not the -partidx
-    option variable, which if not given by the user, is
-    -1 and was reported as a very large unsigned
-    number. (joncampbell123)
   - Improved clipboard copying & pasting for different
     code pages including box-drawing characters in DBCS
     code pages. Also, for the J-3100 mode, the selected
@@ -115,11 +110,15 @@
     that appear on the Z drive (Z:/DOS/CHOICE.COM and
     Z:/SYSTEM/COUNTRY.COM respectively) now rather than
     internal shell commands. (Wengier)
+  - The internal Virtual Drive Z: can now be rescanned
+    just like mounted local drives. (Wengier)
   - You can now change most config options in [printer]
     section of the configuration for the virtual printer
     with CONFIG -set commands. (Wengier)
   - Added missing ChinaSea characters in code page 950
     with ChinaSea/Big5-2003 extension enabled. (Wengier)
+  - Added support for Bash-shell completion for DOSBox-X
+    on non-Windows platforms. (rderooy & FeignInt)
   - Improved DBCS support for DOS commands including
     ATTRIB, ECHO, TYPE, MORE, and TRUENAME. (Wengier)
   - Improved checking of segment limits. (joncampbell123)
@@ -131,6 +130,11 @@
     segment. It is once again possible to make Mac OS X
     ARM releases and to use dylib files from Brew doing
     so. (joncampbell123)
+  - Fix IPL1 partition choice debug message to actually
+    show the partition index chosen, not the -partidx
+    option variable, which if not given by the user, is
+    -1 and was reported as a very large unsigned
+    number. (joncampbell123)
   - Fixed command-line options -starttool & -startmapper
     not showing messages from specified language file
     for Configuration Tool and Mapper Editor. (Wengier)

@@ -1036,11 +1036,38 @@ int FileDirExistUTF8(std::string &localname, const char *name) {
 extern uint16_t fztime, fzdate;
 extern bool force_conversion, InitCodePage();
 std::string GetDOSBoxXPath(bool withexe=false);
-void drivezRegister(std::string path, std::string dir) {
+void getdrivezpath(std::string &path, std::string dirname) {
+    const host_cnv_char_t* host_name = CodePageGuestToHost(path.c_str());
+    if (host_name == NULL) {path = "";return;}
+    struct stat cstat;
+    ht_stat_t hstat;
+    int res=host_name == NULL?stat(path.c_str(),&cstat):ht_stat(host_name,&hstat);
+    if(res==-1 || !((host_name == NULL?cstat.st_mode:hstat.st_mode) & S_IFDIR)) {
+        path = GetDOSBoxXPath();
+        if (path.size()) {
+            path += dirname;
+            host_name = CodePageGuestToHost(path.c_str());
+            res=host_name == NULL?stat(path.c_str(),&cstat):ht_stat(host_name,&hstat);
+        }
+        if(!path.size() || res==-1 || ((host_name == NULL?cstat.st_mode:hstat.st_mode) & S_IFDIR) == 0) {
+            path = "";
+            Cross::CreatePlatformConfigDir(path);
+            path += dirname;
+            host_name = CodePageGuestToHost(path.c_str());
+            res=host_name == NULL?stat(path.c_str(),&cstat):ht_stat(host_name,&hstat);
+            if(res==-1 || ((host_name == NULL?cstat.st_mode:hstat.st_mode) & S_IFDIR) == 0)
+                path = "";
+        }
+    }
+}
+
+void drivezRegister(std::string path, std::string dir, bool usecp) {
     int cp = dos.loaded_codepage;
-    force_conversion = true;
-    InitCodePage();
-    force_conversion = false;
+    if (!usecp || !cp) {
+        force_conversion = true;
+        InitCodePage();
+        force_conversion = false;
+    }
     char exePath[CROSS_LEN];
     std::vector<std::string> names;
     if (path.size()) {
@@ -1089,6 +1116,7 @@ void drivezRegister(std::string path, std::string dir) {
     const host_cnv_char_t* host_name;
     for (std::string name: names) {
         if (!name.size()) continue;
+        if ((!strcasecmp(name.c_str(), "AUTOEXEC.BAT") || !strcasecmp(name.c_str(), "CONFIG.SYS")) && dir=="/") continue;
         if (name.back()=='/' && dir=="/") {
             ht_stat_t temp_stat;
             host_name = CodePageGuestToHost((path+CROSS_FILESPLIT+name).c_str());
@@ -1103,7 +1131,7 @@ void drivezRegister(std::string path, std::string dir) {
             }
             VFILE_Register(name.substr(0, name.size()-1).c_str(), 0, 0, dir.c_str());
             fztime = fzdate = 0;
-            drivezRegister(path+CROSS_FILESPLIT+name.substr(0, name.size()-1), dir+name);
+            drivezRegister(path+CROSS_FILESPLIT+name.substr(0, name.size()-1), dir+name, usecp);
             continue;
         }
         FILE * f = NULL;
