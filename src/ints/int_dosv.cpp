@@ -336,7 +336,7 @@ static bool LoadFontxFile(const char *fname, int height, bool dbcs) {
 
 }
 
-static bool CheckEmptyData(uint8_t *data, Bitu length)
+bool CheckEmptyData(uint8_t *data, Bitu length)
 {
 	while(length > 0) {
 		if(*data++ != 0) {
@@ -908,6 +908,9 @@ void ShutFontHandle() {
 #if defined(WIN32)
     jfont_16 = jfont_14 = jfont_24 = NULL;
 #endif
+    memset(jfont_cache_dbcs_14, 0, sizeof(jfont_cache_dbcs_14));
+    memset(jfont_cache_dbcs_16, 0, sizeof(jfont_cache_dbcs_16));
+    memset(jfont_cache_dbcs_24, 0, sizeof(jfont_cache_dbcs_24));
 }
 
 bool MakeSbcs16Font() {
