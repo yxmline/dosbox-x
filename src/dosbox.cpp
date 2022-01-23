@@ -2137,7 +2137,7 @@ void DOSBOX_SetupConfigSections(void) {
                     "For Traditional Chinese DOS/V, loading the STDFONT.24 font file from the ETen Chinese DOS system is also supported.");
     Pstring->SetBasic(true);
 
-	Pstring = secprop->Add_string("showdbcsnodosv",Property::Changeable::OnlyAtStart,"auto");
+	Pstring = secprop->Add_string("showdbcsnodosv",Property::Changeable::WhenIdle,"auto");
     Pstring->Set_values(truefalseautoopt);
 	Pstring->Set_help("Enables rendering of Chinese/Japanese/Korean characters for DBCS code pages in non-DOS/V, non-PC98, and non-TTF mode.\n"
                       "Setting to \"auto\" enables rendering of Chinese/Japanese/Korean characters if a language file is loaded in such cases.");
@@ -4230,7 +4230,7 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool = secprop->Add_bool("autoloadfix",Property::Changeable::WhenIdle,true);
     Pbool->Set_help("If set (default), DOSBox-X will automatically re-run the executable with LOADFIX if it failed with the \"Packed file is corrupt\" error.");
 
-    Pstring = secprop->Add_string("autofixwarning",Property::Changeable::WhenIdle,"true");
+    Pstring = secprop->Add_string("autofixwarning",Property::Changeable::WhenIdle,"false");
     Pstring->Set_values(autofix_settings);
     Pstring->Set_help("If set to true or both, DOSBox-X shows messages while trying to automatically fix the \"Packed file is corrupt\" error.\n"
                       "If set to false or none, DOSBox-X will not show such messages on the screen when the error occurred.\n"

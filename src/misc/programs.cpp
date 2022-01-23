@@ -57,8 +57,8 @@ Bitu call_program;
 extern char lastmount;
 extern const char *modifier;
 extern std::string langname, configfile, dosbox_title;
-extern int enablelfn, fat32setver, paste_speed, wheel_key, freesizecap, wpType, wpVersion, wpBG, wpFG, lastset, blinkCursor;
-extern bool dos_kernel_disabled, force_nocachedir, wpcolon, lockmount, enable_config_as_shell_commands, load, winrun, winautorun, startcmd, startwait, startquiet, starttranspath, mountwarning, wheel_guest, clipboard_dosapi, noremark_save_state, force_load_state, sync_time, manualtime, showbold, showital, showline, showsout, char512, printfont, rtl, gbk, chinasea, uao, showdbcs, dbcs_sbcs, autoboxdraw, halfwidthkana, ticksLocked, outcon, enable_dbcs_tables;
+extern int autofixwarn, enablelfn, fat32setver, paste_speed, wheel_key, freesizecap, wpType, wpVersion, wpBG, wpFG, lastset, blinkCursor;
+extern bool dos_kernel_disabled, force_nocachedir, wpcolon, lockmount, enable_config_as_shell_commands, load, winrun, winautorun, startcmd, startwait, startquiet, starttranspath, mountwarning, wheel_guest, clipboard_dosapi, noremark_save_state, force_load_state, sync_time, manualtime, ttfswitch, loadlang, showbold, showital, showline, showsout, char512, printfont, rtl, gbk, chinasea, uao, showdbcs, dbcs_sbcs, autoboxdraw, halfwidthkana, ticksLocked, outcon, enable_dbcs_tables;
 
 /* This registers a file on the virtual drive and creates the correct structure for it*/
 
@@ -100,7 +100,7 @@ static std::vector<InternalProgramEntry*> internal_progs;
 uint8_t DOS_GetAnsiAttr(void);
 bool isDBCSCP(void), CheckBoxDrawing(uint8_t c1, uint8_t c2, uint8_t c3, uint8_t c4), DOS_SetAnsiAttr(uint8_t attr);
 char *FormatDate(uint16_t year, uint8_t month, uint8_t day);
-void EMS_DoShutDown(void), UpdateDefaultPrinterFont(void), GFX_ForceRedrawScreen(void), resetFontSize(void), ttf_reset_colors(void), makestdcp950table(void), makeseacp951table(void), DOSBox_SetSysMenu(void), MSG_Init(void), initRand(void), PRINTER_Init(void);
+void EMS_DoShutDown(void), UpdateDefaultPrinterFont(void), GFX_ForceRedrawScreen(void), resetFontSize(void), ttf_reset_colors(void), makestdcp950table(void), makeseacp951table(void), clearFontCache(void), DOSBox_SetSysMenu(void), MSG_Init(void), initRand(void), PRINTER_Init(void);
 void EMS_Startup(Section* sec), DOSV_SetConfig(Section_prop *section), DOSBOX_UnlockSpeed2(bool pressed), RebootLanguage(std::string filename, bool confirm=false), SetWindowTransparency(int trans), SetOutputSwitch(const char *outputstr), runRescan(const char *str), runSerial(const char *str), runParallel(const char *str), DOS_AddDays(uint8_t days), PRINTER_Shutdown(Section* sec);
 
 void PROGRAMS_Shutdown(void) {
@@ -820,7 +820,10 @@ void ApplySetting(std::string pvar, std::string inputline, bool quiet) {
                 if (turbo != ticksLocked) DOSBOX_UnlockSpeed2(true);
             } else if (!strcasecmp(pvar.c_str(), "dos")) {
                 mountwarning = section->Get_bool("mountwarning");
-                if (!strcasecmp(inputline.substr(0, 4).c_str(), "lfn=")) {
+                if (!strcasecmp(inputline.substr(0, 15).c_str(), "autofixwarning=")) {
+                    std::string autofixwarning=section->Get_string("autofixwarning");
+                    autofixwarn=autofixwarning=="false"||autofixwarning=="0"||autofixwarning=="none"?0:(autofixwarning=="a20fix"?1:(autofixwarning=="loadfix"?2:3));
+                } else if (!strcasecmp(inputline.substr(0, 4).c_str(), "lfn=")) {
                     std::string lfn = section->Get_string("lfn");
                     if (lfn=="true"||lfn=="1") enablelfn=1;
                     else if (lfn=="false"||lfn=="0") enablelfn=0;
@@ -1032,6 +1035,7 @@ void ApplySetting(std::string pvar, std::string inputline, bool quiet) {
                     if (gbk != section->Get_bool("gbk")) {
                         gbk = !gbk;
                         if (enable_dbcs_tables&&dos.tables.dbcs&&(IS_PDOSV||dos.loaded_codepage==936)) mem_writeb(Real2Phys(dos.tables.dbcs)+2,gbk?0x81:0xA1);
+                        clearFontCache();
                         if (dos.loaded_codepage!=950&&dos.loaded_codepage!=951) mainMenu.get_item("ttf_extcharset").check(dos.loaded_codepage==936?gbk:(gbk&&chinasea)).refresh_item(mainMenu);
 #if defined(USE_TTF)
                         if (TTF_using() && dos.loaded_codepage==936) resetFontSize();
@@ -1042,6 +1046,7 @@ void ApplySetting(std::string pvar, std::string inputline, bool quiet) {
                         chinasea = !chinasea;
                         if (!chinasea) makestdcp950table();
                         else makeseacp951table();
+                        clearFontCache();
                         if (dos.loaded_codepage!=936) mainMenu.get_item("ttf_extcharset").check(dos.loaded_codepage==950||dos.loaded_codepage==951?chinasea:(gbk&&chinasea)).refresh_item(mainMenu);
                         if ((TTF_using() || showdbcs) && (dos.loaded_codepage==950 || dos.loaded_codepage==951)) {
                             MSG_Init();
@@ -1053,6 +1058,7 @@ void ApplySetting(std::string pvar, std::string inputline, bool quiet) {
                 } else if (!strcasecmp(inputline.substr(0, 4).c_str(), "uao=")) {
                     if (uao != section->Get_bool("uao")) {
                         uao = !uao;
+                        clearFontCache();
                         if ((TTF_using() || showdbcs) && dos.loaded_codepage==951) {
                             MSG_Init();
                             DOSBox_SetSysMenu();
@@ -1064,7 +1070,14 @@ void ApplySetting(std::string pvar, std::string inputline, bool quiet) {
                     }
                 }
             } else if (!strcasecmp(pvar.c_str(), "dosv")) {
-                if (!strcasecmp(inputline.substr(0, 11).c_str(), "fepcontrol=")||!strcasecmp(inputline.substr(0, 7).c_str(), "vtext1=")||!strcasecmp(inputline.substr(0, 7).c_str(), "vtext2="))
+                if (!strcasecmp(inputline.substr(0, 15).c_str(), "showdbcsnodosv=")
+#if defined(USE_TTF)
+                    && !ttfswitch
+#endif
+                ) {
+                    std::string showdbcsstr = section->Get_string("showdbcsnodosv");
+                    showdbcs = showdbcsstr=="true"||showdbcsstr=="1"||(showdbcsstr=="auto" && loadlang);
+                } else if (!strcasecmp(inputline.substr(0, 11).c_str(), "fepcontrol=")||!strcasecmp(inputline.substr(0, 7).c_str(), "vtext1=")||!strcasecmp(inputline.substr(0, 7).c_str(), "vtext2="))
                     DOSV_SetConfig(section);
             } else if (!strcasecmp(pvar.c_str(), "render")) {
                 if (!strcasecmp(inputline.substr(0, 9).c_str(), "glshader=")) {
