@@ -48,6 +48,13 @@
     tools like CPU-Z to make them happy. (joncampbell123)
   - Added FXSAVE/FXRSTOR which makes Linux happy with
     Pentium III emulation. (joncampbell123)
+  - Added support for archive, hidden, system attributes
+    on mounted local and overlay drives for non-Windows
+    platforms by using special file(s). (Wengier)
+  - Added config option "special operation file prefix"
+    (in [dos] section) to speciay an alterantive file
+    prefix for DOSBox-X's special operations on mounted
+    local and overlay drives. (Wengier)
   - Added code page 3021 for the MIK character set used
     by the Bulgarian language (as in FreeDOS). (Wengier)
   - Added language file for the Brazilian Portuguese,
@@ -65,6 +72,8 @@
   - The default value of config option "autofixwarning"
     (in [dos] section) is now "false", and it is now
     changeable via CONFIG command. (Wengier)
+  - The default output for Linux SDL1 builds is changed
+    from surface to opengl, unlike Linux SDL2. (Wengier)
   - Setting "windowposition" to "-" in the configuration
     will leave DOSBox-X window position as is instead of
     a specific position or being centered. (Wengier)
