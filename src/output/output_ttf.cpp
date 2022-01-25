@@ -87,12 +87,11 @@ int wpBG = -1;
 int wpFG = 7;
 int lastset = 0;
 int lastfontsize = 0;
-int outputswitch = -1;
-int oldblinkc = -1;
+int switchoutput = -1;
 
 static unsigned long ttfSize = sizeof(DOSBoxTTFbi), ttfSizeb = 0, ttfSizei = 0, ttfSizebi = 0;
 static void * ttfFont = DOSBoxTTFbi, * ttfFontb = NULL, * ttfFonti = NULL, * ttfFontbi = NULL;
-extern int posx, posy, switchoutput, eurAscii, NonUserResizeCounter;
+extern int posx, posy, eurAscii, NonUserResizeCounter;
 extern bool rtl, gbk, chinasea, force_conversion, blinking;
 extern uint8_t ccount;
 extern uint16_t cpMap[512], cpMap_PC98[256];
@@ -117,15 +116,20 @@ static bool blinkstate = false;
 bool colorChanged = false, justChanged = false, firstsize = true;
 
 int menuwidth_atleast(int width), FileDirExistCP(const char *name), FileDirExistUTF8(std::string &localname, const char *name);
-void AdjustIMEFontSize(void), initcodepagefont(void), MSG_Init(void), DOSBox_SetSysMenu(void), GetMaxWidthHeight(unsigned int *pmaxWidth, unsigned int *pmaxHeight), resetFontSize(void), RENDER_CallBack( GFX_CallBackFunctions_t function ), makestdcp950table(void), makeseacp951table(void);
+void AdjustIMEFontSize(void), initcodepagefont(void), MSG_Init(void), DOSBox_SetSysMenu(void), GetMaxWidthHeight(unsigned int *pmaxWidth, unsigned int *pmaxHeight), resetFontSize(void), RENDER_CallBack( GFX_CallBackFunctions_t function );
 bool isDBCSCP(void), InitCodePage(void), CodePageGuestToHostUTF16(uint16_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/), systemmessagebox(char const * aTitle, char const * aMessage, char const * aDialogType, char const * aIconType, int aDefaultButton);
 std::string GetDOSBoxXPath(bool withexe=false);
 
 #if defined(C_SDL2)
 void GFX_SetResizeable(bool enable);
 SDL_Window * GFX_SetSDLSurfaceWindow(uint16_t width, uint16_t height);
-#elif defined(WIN32)
+#endif
+#if defined(WIN32)
+#if !defined(C_SDL2)
 extern "C" void SDL1_hax_SetMenu(HMENU menu);
+#elif DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
+void SDL1_hax_SetMenu(HMENU menu);
+#endif
 #endif
 
 Bitu OUTPUT_TTF_SetSize() {
@@ -619,7 +623,7 @@ void OUTPUT_TTF_Select(int fsize) {
         bool trysgf = false;
         if (!*fName) {
             std::string mtype(static_cast<Section_prop *>(control->GetSection("dosbox"))->Get_string("machine"));
-            if (IS_PC98_ARCH||mtype.substr(0, 4)=="pc98"||InitCodePage()&&isDBCSCP()) trysgf = true;
+            if (IS_PC98_ARCH||mtype.substr(0, 4)=="pc98"||(InitCodePage()&&isDBCSCP())) trysgf = true;
         }
         force_conversion = false;
         dos.loaded_codepage = cp;
@@ -813,7 +817,9 @@ void OUTPUT_TTF_Select(int fsize) {
         if (ttf.DOSBox && curSize > MIN_PTSIZE)														// make it even for DOSBox-X internal font (a bit nicer)
             curSize &= ~1;
     }
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
 resize:
+#endif
     GFX_SelectFontByPoints(curSize);
 #if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
     if (!ttf.fullScrn && menu_gui && menu.toggle && menuwidth_atleast(ttf.cols*ttf.width+ttf.offX*2+GetSystemMetrics(SM_CXBORDER)*2)>0) {
@@ -1050,7 +1056,7 @@ void GFX_EndTextLines(bool force) {
                     if(ttf_dosv && ascii == 0x5c)
                         ascii = 0x9d;
                     curAC[x] = newAC[x];
-                    if (ascii > 175 && ascii < 179 && !IS_PC98_ARCH && !IS_JEGA_ARCH && dos.loaded_codepage != 864 && dos.loaded_codepage != 874 && !(dos.loaded_codepage == 932 && halfwidthkana) && (dos.loaded_codepage<1250 || dos.loaded_codepage>1258) && !(altcp && dos.loaded_codepage == altcp) && !(customcp && dos.loaded_codepage == customcp)) {	// special: shade characters 176-178 unless PC-98
+                    if (ascii > 175 && ascii < 179 && !IS_PC98_ARCH && !IS_JEGA_ARCH && dos.loaded_codepage != 864 && dos.loaded_codepage != 874 && dos.loaded_codepage != 3021 && !(dos.loaded_codepage == 932 && halfwidthkana) && (dos.loaded_codepage < 1250 || dos.loaded_codepage > 1258) && !(altcp && dos.loaded_codepage == altcp) && !(customcp && dos.loaded_codepage == customcp)) {	// special: shade characters 176-178 unless PC-98
                         ttf_bgColor.b = (ttf_bgColor.b*(179-ascii) + ttf_fgColor.b*(ascii-175))>>2;
                         ttf_bgColor.g = (ttf_bgColor.g*(179-ascii) + ttf_fgColor.g*(ascii-175))>>2;
                         ttf_bgColor.r = (ttf_bgColor.r*(179-ascii) + ttf_fgColor.r*(ascii-175))>>2;
@@ -1263,180 +1269,5 @@ void ttf_setlines(int cols, int lins) {
     real_writeb(BIOSMEM_SEG,BIOSMEM_NB_COLS,ttf.cols);
     if (IS_EGAVGA_ARCH) real_writeb(BIOSMEM_SEG,BIOSMEM_NB_ROWS,ttf.lins-1);
     vga.draw.address_add = ttf.cols * 2;
-}
-
-bool ttf_blinking_cursor_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    (void)menuitem;//UNUSED
-    if (blinkCursor>-1) {
-        oldblinkc=blinkCursor;
-        blinkCursor=-1;
-        SetVal("ttf", "blinkc", "false");
-        mainMenu.get_item("ttf_blinkc").check(false).refresh_item(mainMenu);
-    } else {
-        blinkCursor=oldblinkc>-1?oldblinkc:(IS_PC98_ARCH?6:4);
-        SetVal("ttf", "blinkc", "true");
-        mainMenu.get_item("ttf_blinkc").check(true).refresh_item(mainMenu);
-    }
-    resetFontSize();
-    return true;
-}
-
-bool ttf_right_left_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    (void)menuitem;//UNUSED
-    rtl=!rtl;
-    SetVal("ttf", "righttoleft", rtl?"true":"false");
-    mainMenu.get_item("ttf_right_left").check(rtl).refresh_item(mainMenu);
-    resetFontSize();
-    return true;
-}
-
-bool ttf_dbcs_sbcs_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    (void)menuitem;//UNUSED
-    if (!isDBCSCP()) {
-        systemmessagebox("Warning", "This function is only available for the Chinese/Japanese/Korean code pages.", "ok","warning", 1);
-        return true;
-    }
-    dbcs_sbcs=!dbcs_sbcs;
-    SetVal("ttf", "autodbcs", dbcs_sbcs?"true":"false");
-    mainMenu.get_item("ttf_dbcs_sbcs").check(dbcs_sbcs).refresh_item(mainMenu);
-    resetFontSize();
-    return true;
-}
-
-bool ttf_auto_boxdraw_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    (void)menuitem;//UNUSED
-    if (!isDBCSCP()) {
-        systemmessagebox("Warning", "This function is only available for the Chinese/Japanese/Korean code pages.", "ok","warning", 1);
-        return true;
-    }
-    autoboxdraw=!autoboxdraw;
-    SetVal("ttf", "autoboxdraw", autoboxdraw?"true":"false");
-    mainMenu.get_item("ttf_autoboxdraw").check(autoboxdraw).refresh_item(mainMenu);
-    resetFontSize();
-    return true;
-}
-
-bool ttf_halfwidth_katakana_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    (void)menuitem;//UNUSED
-    if (!isDBCSCP()||dos.loaded_codepage!=932) {
-        systemmessagebox("Warning", "This function is only available for the Japanese code page (932).", "ok","warning", 1);
-        return true;
-    }
-    halfwidthkana=!halfwidthkana;
-    SetVal("ttf", "halfwidthkana", halfwidthkana?"true":"false");
-    mainMenu.get_item("ttf_halfwidthkana").check(halfwidthkana).refresh_item(mainMenu);
-    setTTFCodePage();
-    resetFontSize();
-    return true;
-}
-
-bool ttf_extend_charset_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    (void)menuitem;//UNUSED
-    if (!isDBCSCP()||(dos.loaded_codepage!=936&&dos.loaded_codepage!=950&&dos.loaded_codepage!=951)) {
-        systemmessagebox("Warning", "This function is only available for the Chinese code pages (936 or 950).", "ok","warning", 1);
-        return true;
-    }
-    if (dos.loaded_codepage==936) {
-        gbk=!gbk;
-        SetVal("ttf", "gbk", gbk?"true":"false");
-        mainMenu.get_item("ttf_extcharset").check(gbk).refresh_item(mainMenu);
-    } else if (dos.loaded_codepage==950) {
-        chinasea=!chinasea;
-        if (!chinasea) makestdcp950table();
-        SetVal("ttf", "chinasea", chinasea?"true":"false");
-        mainMenu.get_item("ttf_extcharset").check(chinasea).refresh_item(mainMenu);
-    } else if (dos.loaded_codepage==951) {
-        chinasea=!chinasea;
-        if (chinasea) makeseacp951table();
-        SetVal("ttf", "chinasea", chinasea?"true":"false");
-        mainMenu.get_item("ttf_extcharset").check(chinasea).refresh_item(mainMenu);
-        MSG_Init();
-    }
-    resetFontSize();
-    return true;
-}
-
-#if C_PRINTER
-bool ttf_print_font_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    (void)menuitem;//UNUSED
-    printfont=!printfont;
-    SetVal("ttf", "printfont", printfont?"true":"false");
-    mainMenu.get_item("ttf_printfont").check(printfont).refresh_item(mainMenu);
-    UpdateDefaultPrinterFont();
-    return true;
-}
-#endif
-
-void ttf_reset_colors() {
-    SetVal("ttf", "colors", "");
-    setColors("#000000 #0000aa #00aa00 #00aaaa #aa0000 #aa00aa #aa5500 #aaaaaa #555555 #5555ff #55ff55 #55ffff #ff5555 #ff55ff #ffff55 #ffffff",-1);
-}
-
-bool ttf_reset_colors_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    (void)menuitem;//UNUSED
-    ttf_reset_colors();
-    return true;
-}
-
-bool ttf_style_change_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    const char *mname = menuitem->get_name().c_str();
-    if (!strcmp(mname, "ttf_showbold")) {
-        showbold=!showbold;
-        SetVal("ttf", "bold", showbold?"true":"false");
-        mainMenu.get_item(mname).check(showbold).refresh_item(mainMenu);
-    } else if (!strcmp(mname, "ttf_showital")) {
-        showital=!showital;
-        SetVal("ttf", "italic", showital?"true":"false");
-        mainMenu.get_item(mname).check(showital).refresh_item(mainMenu);
-    } else if (!strcmp(mname, "ttf_showline")) {
-        showline=!showline;
-        SetVal("ttf", "underline", showline?"true":"false");
-        mainMenu.get_item(mname).check(showline).refresh_item(mainMenu);
-    } else if (!strcmp(mname, "ttf_showsout")) {
-        showsout=!showsout;
-        SetVal("ttf", "strikeout", showsout?"true":"false");
-        mainMenu.get_item(mname).check(showsout).refresh_item(mainMenu);
-    } else
-        return true;
-    resetFontSize();
-    return true;
-}
-
-bool ttf_wp_change_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
-    (void)menu;//UNUSED
-    const char *mname = menuitem->get_name().c_str();
-    if (!strcmp(mname, "ttf_wpno")) {
-        SetVal("ttf", "wp", "");
-        wpType=0;
-    } else if (!strcmp(mname, "ttf_wpwp")) {
-        SetVal("ttf", "wp", "wp");
-        wpType=1;
-    } else if (!strcmp(mname, "ttf_wpws")) {
-        SetVal("ttf", "wp", "ws");
-        wpType=2;
-    } else if (!strcmp(mname, "ttf_wpxy")) {
-        SetVal("ttf", "wp", "xy");
-        wpType=3;
-    } else if (!strcmp(mname, "ttf_wpfe")) {
-        SetVal("ttf", "wp", "fe");
-        wpType=4;
-    } else
-        return true;
-    mainMenu.get_item("ttf_wpno").check(!wpType).refresh_item(mainMenu);
-    mainMenu.get_item("ttf_wpwp").check(wpType==1).refresh_item(mainMenu);
-    mainMenu.get_item("ttf_wpws").check(wpType==2).refresh_item(mainMenu);
-    mainMenu.get_item("ttf_wpxy").check(wpType==3).refresh_item(mainMenu);
-    mainMenu.get_item("ttf_wpfe").check(wpType==4).refresh_item(mainMenu);
-    resetFontSize();
-    return true;
 }
 #endif
