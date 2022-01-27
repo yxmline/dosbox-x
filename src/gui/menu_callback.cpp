@@ -81,7 +81,7 @@ void GFX_LosingFocus(void);
 void GFX_ReleaseMouse(void);
 void GFX_ForceRedrawScreen(void);
 bool GFX_GetPreventFullscreen(void);
-bool isDBCSCP(void);
+bool isDBCSCP(void), toOutput(const char *what);
 bool systemmessagebox(char const * aTitle, char const * aMessage, char const * aDialogType, char const * aIconType, int aDefaultButton);
 int FileDirExistCP(const char *name), FileDirExistUTF8(std::string &localname, const char *name);
 size_t GetGameState_Run(void);
@@ -913,6 +913,10 @@ bool cpu_speed_emulate_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * 
         cyclemu = 130000;
     else if (!strcmp(mname, "cpuak6-300"))
         cyclemu = 193000;
+    else if (!strcmp(mname, "cpuath-600"))
+        cyclemu = 306000;
+    else if (!strcmp(mname, "cpu686-866"))
+        cyclemu = 407000;
     if (cyclemu>0) {
         Section* sec = control->GetSection("cpu");
         if (sec) {
@@ -1910,7 +1914,6 @@ bool vsync_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuit
 
     SetVal("vsync", "vsyncmode", val);
 
-    void change_output(int output);
     change_output(9);
 
     VGA_Vsync VGA_Vsync_Decode(const char *vsyncmodestr);
@@ -1933,118 +1936,6 @@ bool refresh_rate_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const
     (void)menu;//UNUSED
     (void)menuitem;//UNUSED
     GUI_Shortcut(30);
-    return true;
-}
-
-bool toOutput(const char *what) {
-    bool reset=false;
-#if defined(USE_TTF)
-    if (TTF_using()) reset=true;
-#endif
-
-    if (!strcmp(what,"surface")) {
-        if (sdl.desktop.want_type == SCREEN_SURFACE) return false;
-        if (window_was_maximized&&!GFX_IsFullscreen()) {
-            change_output(0);
-#if defined(WIN32)
-            ShowWindow(GetHWND(), SW_MAXIMIZE);
-#endif
-        } else
-            change_output(0);
-        RENDER_Reset();
-    }
-    else if (!strcmp(what,"opengl")) {
-#if C_OPENGL
-        if (sdl.desktop.want_type == SCREEN_OPENGL && sdl_opengl.kind == GLBilinear) return false;
-        if (window_was_maximized&&!GFX_IsFullscreen()) {
-            change_output(3);
-#if defined(WIN32)
-            ShowWindow(GetHWND(), SW_MAXIMIZE);
-#endif
-        } else
-            change_output(3);
-#endif
-    }
-    else if (!strcmp(what,"openglnb")) {
-#if C_OPENGL
-        if (sdl.desktop.want_type == SCREEN_OPENGL && sdl_opengl.kind == GLNearest) return false;
-        if (window_was_maximized&&!GFX_IsFullscreen()) {
-            change_output(4);
-#if defined(WIN32)
-            ShowWindow(GetHWND(), SW_MAXIMIZE);
-#endif
-        } else
-            change_output(4);
-#endif
-    }
-    else if (!strcmp(what,"openglpp")) {
-#if C_OPENGL
-        if (sdl.desktop.want_type == SCREEN_OPENGL && sdl_opengl.kind == GLPerfect) return false;
-        if (window_was_maximized&&!GFX_IsFullscreen()) {
-            change_output(5);
-#if defined(WIN32)
-            ShowWindow(GetHWND(), SW_MAXIMIZE);
-#endif
-        } else
-            change_output(5);
-#endif
-    }
-    else if (!strcmp(what,"direct3d")) {
-#if C_DIRECT3D
-        if (sdl.desktop.want_type == SCREEN_DIRECT3D) return false;
-#if C_OPENGL && defined(C_SDL2)
-        if (sdl.desktop.want_type == SCREEN_OPENGL)
-            GFX_SetSDLWindowMode(currentWindowWidth, currentWindowHeight, SCREEN_SURFACE);
-#endif
-        if (window_was_maximized&&!GFX_IsFullscreen()) {
-            change_output(6);
-#if defined(WIN32)
-            ShowWindow(GetHWND(), SW_MAXIMIZE);
-#endif
-        } else
-            change_output(6);
-#endif
-    }
-    else if (!strcmp(what,"ttf")) {
-#if defined(USE_TTF)
-        if (sdl.desktop.want_type == SCREEN_TTF || (CurMode->type!=M_TEXT && !IS_PC98_ARCH)) return false;
-#if C_OPENGL && defined(MACOSX) && !defined(C_SDL2)
-        if (sdl.desktop.want_type == SCREEN_SURFACE) {
-            sdl_opengl.framebuf = calloc(sdl.draw.width*sdl.draw.height, 4);
-            sdl.desktop.type = SCREEN_OPENGL;
-        }
-#endif
-        bool switchfull = false;
-        if (GFX_IsFullscreen()) {
-            switchfull = true;
-            GFX_SwitchFullScreen();
-        } else if (window_was_maximized) {
-#if defined(WIN32)
-            ShowWindow(GetHWND(), SW_RESTORE);
-#elif defined(C_SDL2)
-            SDL_RestoreWindow(sdl.window);
-#endif
-        }
-#if !defined(C_SDL2)
-        if (posx != -2 || posy != -2) putenv((char*)"SDL_VIDEO_CENTERED=center");
-#endif
-        firstset=false;
-        change_output(10);
-        if (!GFX_IsFullscreen() && switchfull) {
-            switchfull = false;
-            ttf.fullScrn = false;
-            GFX_SwitchFullScreen();
-        } else if (!GFX_IsFullscreen() && ttf.fullScrn) {
-            ttf.fullScrn = false;
-            reset = true;
-#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
-            if (!control->opt_nomenu && static_cast<Section_prop *>(control->GetSection("sdl"))->Get_bool("showmenu")) DOSBox_SetMenu();
-#endif
-        }
-#endif
-    }
-    if (reset) RENDER_Reset();
-    OutputSettingMenuUpdate();
     return true;
 }
 
@@ -2095,7 +1986,7 @@ void show_prompt() {
 
 bool clear_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
-    const char *mname = menuitem->get_name().c_str();
+    (void)menuitem;//UNUSED
     if (!clear_screen()) return true;
     show_prompt();
     return true;
@@ -3073,6 +2964,8 @@ void AllocCallback1() {
             mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpuak6-166").set_text("AMD K6 166MHz (~110000 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
             mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpuak6-200").set_text("AMD K6 200MHz (~130000 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
             mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpuak6-300").set_text("AMD K6-2 300MHz (~193000 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
+            mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpuath-600").set_text("AMD Athlon 600MHz (~306000 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
+            mainMenu.alloc_item(DOSBoxMenu::item_type_id,"cpu686-866").set_text("Pentium III 866MHz EB (~407000 cycles)").set_callback_function(cpu_speed_emulate_menu_callback);
         }
         {
             DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"VideoMenu");

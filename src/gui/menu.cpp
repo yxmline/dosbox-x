@@ -66,7 +66,6 @@ void                                                sdl_hax_nsMenuItemRelease(vo
 #endif
 
 void                                                reflectmenu_INITMENU_cb();
-bool                                                GFX_GetPreventFullscreen(void);
 void                                                RENDER_CallBack( GFX_CallBackFunctions_t function );
 bool                                                OpenGL_using(void);
 
@@ -259,6 +258,8 @@ static const char *def_menu_cpu_speed[] =
     "cpuak6-166",
     "cpuak6-200",
     "cpuak6-300",
+    "cpuath-600",
+    "cpu686-866",
     NULL
 };
 
@@ -1781,10 +1782,21 @@ void SetVal(const std::string& secname, const std::string& preval, const std::st
     }
 }
 
-#if defined(WIN32) && defined(C_SDL2) && defined(SDL_DOSBOX_X_IME)
-extern "C" void SDL2_hax_SetMenu(SDL_Window *window, HMENU menu);
+#if defined(WIN32) && defined(C_SDL2)
 void SDL1_hax_SetMenu(HMENU menu) {
-    SDL2_hax_SetMenu(sdl.window, menu);
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
+    if (GFX_IsFullscreen()) {
+        SetMenu(GetHWND(), NULL);
+        return;
+    }
+    bool res = SetMenu(GetHWND(), menu);
+    if (!res) {
+        mainMenu.unbuild();
+        mainMenu.rebuild();
+        res = SetMenu(GetHWND(), mainMenu.getWinMenu());
+    }
+    DrawMenuBar(GetHWND());
+#endif
 }
 #elif DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
 extern "C" void SDL1_hax_SetMenu(HMENU menu);
@@ -1875,8 +1887,6 @@ void DOSBox_NoMenu(void) {
 }
 
 void ToggleMenu(bool pressed) {
-    bool GFX_GetPreventFullscreen(void);
-
     /* prevent removing the menu in 3Dfx mode */
     if (GFX_GetPreventFullscreen())
         return;
@@ -1896,7 +1906,7 @@ void ToggleMenu(bool pressed) {
     DOSBox_SetSysMenu();
 }
 
-#if !(defined(WIN32) && !defined(C_SDL2) && !defined(HX_DOS))
+#if !defined(WIN32) || defined(HX_DOS)
 int Reflect_Menu(void) {
     return 0;
 }
@@ -1911,7 +1921,6 @@ void DOSBox_CheckOS(int &id, int &major, int &minor) {
 
 void MSG_WM_COMMAND_handle(SDL_SysWMmsg &Message) {
 #if defined(WIN32) && !defined(HX_DOS)
-    bool GFX_GetPreventFullscreen(void);
     bool MAPPER_IsRunning(void);
     bool GUI_IsRunning(void);
 
@@ -2092,7 +2101,7 @@ void DOSBox_SetSysMenu(void) {
     }
 #endif
 }
-#if defined(WIN32) && !defined(C_SDL2) && !defined(HX_DOS)
+#if defined(WIN32) && !defined(HX_DOS)
 #include <shlobj.h>
 
 void GetDefaultSize(void) {
@@ -2315,7 +2324,7 @@ void MENU_KeyDelayRate(int delay, int rate) {
 }
 
 int Reflect_Menu(void) {
-#if !defined(HX_DOS)
+#if !defined(HX_DOS) && !defined(C_SDL2)
     SDL1_hax_INITMENU_cb = reflectmenu_INITMENU_cb;
 #endif
     return 1;

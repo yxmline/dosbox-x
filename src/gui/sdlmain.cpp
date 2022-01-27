@@ -74,7 +74,8 @@ bool usesystemcursor = false, enableime = false;
 bool mountfro[26], mountiro[26];
 bool OpenGL_using(void), Direct3D_using(void);
 void DOSBox_SetSysMenu(void), GFX_OpenGLRedrawScreen(void), InitFontHandle(void), DOSV_FillScreen(void), SetWindowTransparency(int trans);
-void MenuBrowseProgramFile(void), OutputSettingMenuUpdate(void), update_pc98_clock_pit_menu(void), AllocCallback1(void), AllocCallback2(void);
+void MenuBrowseProgramFile(void), OutputSettingMenuUpdate(void), update_pc98_clock_pit_menu(void), AllocCallback1(void), AllocCallback2(void), ToggleMenu(bool pressed);
+int Reflect_Menu(void);
 
 #ifndef _GNU_SOURCE
 # define _GNU_SOURCE
@@ -310,10 +311,6 @@ extern bool IME_GetEnable();
 #endif
 
 int NonUserResizeCounter = 0;
-
-#if defined(WIN32) && !defined(C_SDL2)
-extern "C" void SDL1_hax_SetMenu(HMENU menu);
-#endif
 
 #if defined(WIN32) && !defined(HX_DOS)
 enum class CornerPreference {
@@ -1227,7 +1224,6 @@ int menuwidth_atleast(int width) {
 void HideMenu_mapper_shortcut(bool pressed) {
     if (!pressed) return;
 
-    void ToggleMenu(bool pressed);
     ToggleMenu(true);
 
     mainMenu.get_item("mapper_togmenu").check(!menu.toggle).refresh_item(mainMenu);
@@ -1647,10 +1643,8 @@ void GFX_ForceRedrawScreen(void) {
     GFX_Start();
 #if defined(USE_TTF)
     if (TTF_using() && CurMode->type==M_TEXT) ttf.inUse = true;
-    if (ttf.inUse) {
-       void GFX_EndTextLines(bool force);
+    if (ttf.inUse)
        GFX_EndTextLines(true);
-    }
 #endif
 }
 
@@ -1673,9 +1667,7 @@ void GFX_ResetScreen(void) {
     GFX_Start();
     CPU_Reset_AutoAdjust();
     fullscreen_switch=true;
-#if !defined(C_SDL2)
-    if (!sdl.desktop.fullscreen) DOSBox_RefreshMenu(); // for menu
-#endif
+    DOSBox_RefreshMenu(); // for menu
 }
 
 void GFX_ForceFullscreenExit(void) {
@@ -2732,7 +2724,8 @@ void GFX_PreventFullscreen(bool lockout) {
         DOSBox_SetSysMenu();
 #if !defined(C_SDL2) && defined(SDL_DOSBOX_X_SPECIAL)
         SDL1_hax_RemoveMinimize = lockout ? 1 : 0;
-        int Reflect_Menu(void);
+#endif
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
         Reflect_Menu();
 #endif
 #endif
@@ -5214,13 +5207,26 @@ void GFX_Events() {
                     break;
                 case WM_SYSCOMMAND:
                     switch (event.syswm.msg->msg.win.wParam) {
+                        case ID_WIN_SYSMENU_RESTOREMENU:
+                            /* prevent removing the menu in 3Dfx mode */
+                            if (!GFX_GetPreventFullscreen()) {
+                                DOSBox_SetMenu();
+                                mainMenu.get_item("mapper_togmenu").check(!menu.toggle).refresh_item(mainMenu);
+                            }
+                            break;
                         case ID_WIN_SYSMENU_TOGGLEMENU:
                             /* prevent removing the menu in 3Dfx mode */
                             if (!GFX_GetPreventFullscreen())
                             {
-                                void ToggleMenu(bool pressed);
                                 ToggleMenu(true);
                                 mainMenu.get_item("mapper_togmenu").check(!menu.toggle).refresh_item(mainMenu);
+#if defined(USE_TTF) && DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
+                                int last = 0;
+                                while (TTF_using() && !sdl.desktop.fullscreen && menu_gui && menu.toggle && menuwidth_atleast(ttf.cols*ttf.width+ttf.offX*2+GetSystemMetrics(SM_CXBORDER)*2)>0 && ttf.pointsize>last) {
+                                    last = ttf.pointsize;
+                                    increaseFontSize();
+                                }
+#endif
                             }
                             break;
                         case ID_WIN_SYSMENU_MAPPER:
@@ -6986,8 +6992,7 @@ bool VM_Boot_DOSBox_Kernel() {
 
         dos_kernel_disabled = true;
 
-#if defined(WIN32) && !defined(C_SDL2)
-        int Reflect_Menu(void);
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
         Reflect_Menu();
 #endif
     }
@@ -7003,8 +7008,7 @@ bool VM_Boot_DOSBox_Kernel() {
         void DOS_Startup(Section* sec);
         DOS_Startup(NULL);
 
-#if defined(WIN32) && !defined(C_SDL2)
-        int Reflect_Menu(void);
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
         Reflect_Menu();
 #endif
 
@@ -8410,10 +8414,8 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
          * Init functions are called low-level first to high level last,
          * because some init functions rely on others. */
 
-#if !defined(C_SDL2)
-# if defined(WIN32)
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
         Reflect_Menu();
-# endif
 #endif
 
         AllocCallback1();
@@ -8530,7 +8532,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         PARALLEL_Init();
         NE2K_Init();
 
-#if defined(WIN32) && !defined(C_SDL2)
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
         Reflect_Menu();
 #endif
 
@@ -8826,7 +8828,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         }
 
 #if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
-        int Reflect_Menu(void);
         Reflect_Menu();
 #endif
 
@@ -8903,8 +8904,7 @@ fresh_boot:
             throw;
         }
 
-#if defined(WIN32) && !defined(C_SDL2)
-        int Reflect_Menu(void);
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
         Reflect_Menu();
 #endif
 
@@ -8996,14 +8996,12 @@ fresh_boot:
             else
                 DispatchVMEvent(VM_EVENT_DOS_EXIT_KERNEL);
 
-#if defined(WIN32) && !defined(C_SDL2)
-            int Reflect_Menu(void);
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
             Reflect_Menu();
 #endif
         }
 
-#if defined(WIN32) && !defined(C_SDL2)
-        int Reflect_Menu(void);
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
         Reflect_Menu();
 #endif
 
@@ -9050,8 +9048,7 @@ fresh_boot:
             goto fresh_boot;
         }
 
-#if defined(WIN32) && !defined(C_SDL2)
-        int Reflect_Menu(void);
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
         Reflect_Menu();
 #endif
 
@@ -9127,8 +9124,7 @@ fresh_boot:
             goto fresh_boot;
         }
 
-#if defined(WIN32) && !defined(C_SDL2)
-        int Reflect_Menu(void);
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
         Reflect_Menu();
 #endif
 
@@ -9201,11 +9197,9 @@ fresh_boot:
 
     LOG::Exit();
 
-#if defined(WIN32) && !defined(C_SDL2) && defined(SDL_DOSBOX_X_SPECIAL)
-# if !defined(HX_DOS)
+#if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU && defined(WIN32) && !defined(HX_DOS) && (!defined(C_SDL2) && defined(SDL_DOSBOX_X_SPECIAL) || defined(C_SDL2))
     ShowWindow(GetHWND(), SW_HIDE);
     SDL1_hax_SetMenu(NULL);/* detach menu from window, or else Windows will destroy the menu out from under the C++ class */
-# endif
 #endif
 #if DOSBOXMENU_TYPE == DOSBOXMENU_NSMENU
     void sdl_hax_macosx_setmenu(void *nsMenu);
