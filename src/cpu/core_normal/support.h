@@ -145,6 +145,21 @@ static INLINE void SSE_ANDPS(XMM_Reg &d,const XMM_Reg &s) {
 
 ////
 
+#define STEP(i) SSE_ANDNPS_i(d.f32[i],s.f32[i])
+static INLINE void SSE_ANDNPS_i(FPU_Reg_32 &d,const FPU_Reg_32 &s) {
+	d.raw = (~d.raw) & s.raw;
+}
+
+static INLINE void SSE_ANDNPS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+}
+#undef STEP
+
+////
+
 #define STEP(i) SSE_XORPS_i(d.f32[i],s.f32[i])
 static INLINE void SSE_XORPS_i(FPU_Reg_32 &d,const FPU_Reg_32 &s) {
 	d.raw ^= s.raw;
@@ -321,6 +336,109 @@ static INLINE void SSE_UCOMISS(const XMM_Reg &d,const XMM_Reg &s) {
 static INLINE void SSE_COMISS(const XMM_Reg &d,const XMM_Reg &s) {
 	SSE_COMISS_common(d,s);
 }
+
+////
+
+static INLINE void SSE_MOVMSKPS(uint32_t &d,const XMM_Reg &s) {
+	/* take sign bits from floats, stick into low bits of register, zero extend */
+	d =
+		(s.f32[0].f.sign ? 0x1 : 0x0) +
+		(s.f32[1].f.sign ? 0x2 : 0x0) +
+		(s.f32[2].f.sign ? 0x4 : 0x0) +
+		(s.f32[3].f.sign ? 0x8 : 0x0);
+
+}
+
+////
+
+#define STEP(i) SSE_RSQRTPS_i(d.f32[i],s.f32[i])
+static INLINE void SSE_RSQRTPS_i(FPU_Reg_32 &d,const FPU_Reg_32 &s) {
+	d.v = 1.0f / sqrtf(s.v);
+}
+
+static INLINE void SSE_RSQRTPS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+}
+
+static INLINE void SSE_RSQRTSS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+}
+#undef STEP
+
+////
+
+#define STEP(i) SSE_RCPPS_i(d.f32[i],s.f32[i])
+static INLINE void SSE_RCPPS_i(FPU_Reg_32 &d,const FPU_Reg_32 &s) {
+	d.v = 1.0f / s.v;
+}
+
+static INLINE void SSE_RCPPS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+}
+
+static INLINE void SSE_RCPSS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+}
+#undef STEP
+
+////
+
+#define STEP(i) SSE_ORPS_i(d.f32[i],s.f32[i])
+static INLINE void SSE_ORPS_i(FPU_Reg_32 &d,const FPU_Reg_32 &s) {
+	d.raw |= s.raw;
+}
+
+static INLINE void SSE_ORPS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+}
+#undef STEP
+
+////
+
+#define STEP(i) SSE_ADDPS_i(d.f32[i],s.f32[i])
+static INLINE void SSE_ADDPS_i(FPU_Reg_32 &d,const FPU_Reg_32 &s) {
+	d.v += s.v;
+}
+
+static INLINE void SSE_ADDPS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+}
+
+static INLINE void SSE_ADDSS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+}
+#undef STEP
+
+////
+
+#define STEP(i) SSE_SUBPS_i(d.f32[i],s.f32[i])
+static INLINE void SSE_SUBPS_i(FPU_Reg_32 &d,const FPU_Reg_32 &s) {
+	d.v -= s.v;
+}
+
+static INLINE void SSE_SUBPS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+}
+
+static INLINE void SSE_SUBSS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+}
+#undef STEP
 
 #endif // 386+
 
