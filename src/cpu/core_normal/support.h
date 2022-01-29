@@ -440,6 +440,116 @@ static INLINE void SSE_SUBSS(XMM_Reg &d,const XMM_Reg &s) {
 }
 #undef STEP
 
+////
+
+#define STEP(i) SSE_DIVPS_i(d.f32[i],s.f32[i])
+static INLINE void SSE_DIVPS_i(FPU_Reg_32 &d,const FPU_Reg_32 &s) {
+	d.v /= s.v;
+}
+
+static INLINE void SSE_DIVPS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+}
+
+static INLINE void SSE_DIVSS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+}
+#undef STEP
+
+////
+
+#define STEP(i) SSE_MINPS_i(d.f32[i],s.f32[i])
+static INLINE void SSE_MINPS_i(FPU_Reg_32 &d,const FPU_Reg_32 &s) {
+	d.v = std::min(d.v,s.v);
+}
+
+static INLINE void SSE_MINPS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+}
+
+static INLINE void SSE_MINSS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+}
+#undef STEP
+
+////
+
+#define STEP(i) SSE_MAXPS_i(d.f32[i],s.f32[i])
+static INLINE void SSE_MAXPS_i(FPU_Reg_32 &d,const FPU_Reg_32 &s) {
+	d.v = std::max(d.v,s.v);
+}
+
+static INLINE void SSE_MAXPS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+}
+
+static INLINE void SSE_MAXSS(XMM_Reg &d,const XMM_Reg &s) {
+	STEP(0);
+}
+#undef STEP
+
+////
+
+#define STEP(i) SSE_CMPPS_i(d.u32[i],d.f32[i],s.f32[i],cf)
+static INLINE void SSE_CMPPS_i(uint32_t &d,const FPU_Reg_32 &s1,const FPU_Reg_32 &s2,const uint8_t cf) {
+	switch (cf) {
+		case 0:/*CMPEQPS*/	d = (s1.v == s2.v) ? (uint32_t)0xFFFFFFFFul : (uint32_t)0x00000000ul; break;
+		case 1:/*CMPLTPS*/	d = (s1.v <  s2.v) ? (uint32_t)0xFFFFFFFFul : (uint32_t)0x00000000ul; break;
+		case 2:/*CMPLEPS*/	d = (s1.v <= s2.v) ? (uint32_t)0xFFFFFFFFul : (uint32_t)0x00000000ul; break;
+		case 3:/*CMPUNORDPS*/	d = ( isnan(s1.v) ||  isnan(s2.v)) ? (uint32_t)0xFFFFFFFFul : (uint32_t)0x00000000ul; break;
+#if 0 // These don't actually exist until AVX and you're supposed to emulate in software? WTF Intel?
+		case 4:/*CMPNEQPS*/	d = (s1.v != s2.v) ? (uint32_t)0xFFFFFFFFul : (uint32_t)0x00000000ul; break;
+		case 5:/*CMPNLTPS*/	d = (s1.v >= s2.v) ? (uint32_t)0xFFFFFFFFul : (uint32_t)0x00000000ul; break;
+		case 6:/*CMPNLEPS*/	d = (s1.v >  s2.v) ? (uint32_t)0xFFFFFFFFul : (uint32_t)0x00000000ul; break;
+		case 7:/*CMPORDPS*/	d = (!isnan(s1.v) && !isnan(s2.v)) ? (uint32_t)0xFFFFFFFFul : (uint32_t)0x00000000ul; break;
+#endif
+	}
+}
+
+static INLINE void SSE_CMPPS(XMM_Reg &d,const XMM_Reg &s,const uint8_t cf) {
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+}
+
+static INLINE void SSE_CMPSS(XMM_Reg &d,const XMM_Reg &s,const uint8_t cf) {
+	STEP(0);
+}
+#undef STEP
+
+////
+
+static INLINE void SSE_PINSRW(MMX_reg &d,const uint32_t &s,const uint8_t i) {
+	const uint8_t shf = (i&3u)*16u;
+	const uint64_t mask = (uint64_t)0xFFFF << (uint64_t)shf;
+	d.q = (d.q & (~mask)) | (((uint64_t)(s&0xFFFFu)) << (uint64_t)shf);
+}
+
+////
+
+static INLINE void SSE_PEXTRW(uint32_t &d,const MMX_reg &s,const uint8_t i) {
+	const uint8_t shf = (i&3u)*16u;
+	d = (s.q >> (uint64_t)shf) & (uint64_t)0xFFFFu;
+}
+
+////
+
+static INLINE void SSE_SHUFPS(XMM_Reg &d,const XMM_Reg &s,const uint8_t i) {
+	d.u32[0] = s.u32[(i>>0u)&3u];
+	d.u32[1] = s.u32[(i>>2u)&3u];
+	d.u32[2] = s.u32[(i>>4u)&3u];
+	d.u32[3] = s.u32[(i>>6u)&3u];
+}
 #endif // 386+
 
 #define SETcc(cc)							\
