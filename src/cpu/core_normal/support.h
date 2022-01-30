@@ -548,6 +548,118 @@ static INLINE void SSE_SHUFPS(XMM_Reg &d,const XMM_Reg &s,const uint8_t i) {
 	d.u32[2] = s.u32[(i>>4u)&3u];
 	d.u32[3] = s.u32[(i>>6u)&3u];
 }
+
+////
+
+static INLINE void SSE_PMOVMSKB(uint32_t &d,const MMX_reg &s) {
+	d =
+		((s.ub.b7 & 0x80u) ? 0x80 : 0x00) |
+		((s.ub.b6 & 0x80u) ? 0x40 : 0x00) |
+		((s.ub.b5 & 0x80u) ? 0x20 : 0x00) |
+		((s.ub.b4 & 0x80u) ? 0x10 : 0x00) |
+		((s.ub.b3 & 0x80u) ? 0x08 : 0x00) |
+		((s.ub.b2 & 0x80u) ? 0x04 : 0x00) |
+		((s.ub.b1 & 0x80u) ? 0x02 : 0x00) |
+		((s.ub.b0 & 0x80u) ? 0x01 : 0x00);
+}
+
+////
+
+static INLINE void SSE_PMINUB(MMX_reg &d,MMX_reg &s) {
+#define STEP(i) d.ub.b##i = std::min(d.ub.b##i,s.ub.b##i)
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+	STEP(4);
+	STEP(5);
+	STEP(6);
+	STEP(7);
+#undef STEP
+}
+
+////
+
+static INLINE void SSE_PMAXUB(MMX_reg &d,MMX_reg &s) {
+#define STEP(i) d.ub.b##i = std::max(d.ub.b##i,s.ub.b##i)
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+	STEP(4);
+	STEP(5);
+	STEP(6);
+	STEP(7);
+#undef STEP
+}
+
+////
+
+static INLINE void SSE_PAVGB(MMX_reg &d,MMX_reg &s) {
+#define STEP(i) d.ub.b##i = (uint8_t)(((uint16_t)(d.ub.b##i) + (uint16_t)(s.ub.b##i) + 1u) >> 1u)
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+	STEP(4);
+	STEP(5);
+	STEP(6);
+	STEP(7);
+#undef STEP
+}
+
+////
+
+static INLINE void SSE_PAVGW(MMX_reg &d,MMX_reg &s) {
+#define STEP(i) d.uw.w##i = (uint16_t)(((uint32_t)(d.uw.w##i) + (uint32_t)(s.uw.w##i) + 1u) >> 1u)
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+#undef STEP
+}
+
+////
+
+static INLINE void SSE_PMULHUW(MMX_reg &d,MMX_reg &s) {
+#define STEP(i) d.uw.w##i = (uint16_t)(((uint32_t)(d.uw.w##i) * (uint32_t)(s.uw.w##i)) >> (uint32_t)16u)
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+#undef STEP
+}
+
+////
+
+static INLINE void SSE_PMINSW(MMX_reg &d,MMX_reg &s) {
+#define STEP(i) d.sw.w##i = std::min(d.sw.w##i,s.sw.w##i)
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+#undef STEP
+}
+
+////
+
+static INLINE void SSE_PMAXSW(MMX_reg &d,MMX_reg &s) {
+#define STEP(i) d.sw.w##i = std::max(d.sw.w##i,s.sw.w##i)
+	STEP(0);
+	STEP(1);
+	STEP(2);
+	STEP(3);
+#undef STEP
+}
+
+////
+
+static INLINE void SSE_PSADBW(MMX_reg &d,MMX_reg &s) {
+#define STEP(i) (uint16_t)abs((int16_t)(d.ub.b##i) - (int16_t)(s.ub.b##i))
+	d.uw.w0 = STEP(0) + STEP(1) + STEP(2) + STEP(3) + STEP(4) + STEP(5) + STEP(6) + STEP(7);
+	d.uw.w1 = d.uw.w2 = d.uw.w3 = 0;
+#undef STEP
+}
 #endif // 386+
 
 #define SETcc(cc)							\

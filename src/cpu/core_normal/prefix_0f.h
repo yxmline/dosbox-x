@@ -737,7 +737,7 @@
 		{
 			if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUM) goto illegal_opcode;
 			/* Use a fixed number when in auto cycles mode as else the reported value changes constantly */
-			int64_t tsc=(int64_t)(PIC_FullIndex()*(double) (CPU_CycleAutoAdjust?70000:CPU_CycleMax));
+			int64_t tsc=CPU_RDTSC();
 			reg_edx=(uint32_t)(tsc>>32);
 			reg_eax=(uint32_t)(tsc&0xffffffff);
 		}
@@ -1766,6 +1766,7 @@
 
 #if CPU_CORE >= CPU_ARCHTYPE_386
 	CASE_0F_B(0xc4)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
 		{
 			GetRM;
 			uint8_t imm;
@@ -1793,6 +1794,7 @@
 
 #if CPU_CORE >= CPU_ARCHTYPE_386
 	CASE_0F_B(0xc5)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
 		{
 			GetRM;
 			uint8_t imm;
@@ -1886,6 +1888,291 @@
 	CASE_0F_W(0xcf)												/* BSWAP DI */
 		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegal_opcode;
 		BSWAPW(reg_di);break;
+
+#if CPU_CORE >= CPU_ARCHTYPE_386
+	CASE_0F_B(0xd7)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
+		{
+			XMM_Reg xmmsrc;
+			GetRM;
+			uint8_t imm;
+			const unsigned char reg = (rm >> 3) & 7;
+
+			switch (last_prefix) {
+				case MP_NONE:									/* 0F D7 PMOVMSKB reg, r/m */
+					if (rm >= 0xc0) {
+						SSE_PMOVMSKB(cpu_regs.regs[reg].dword[0],*reg_mmx[rm & 7]);
+					} else {
+						goto illegal_opcode;
+					}
+					break;
+				default:
+					goto illegal_opcode;
+			};
+		}
+		break;
+#endif
+
+#if CPU_CORE >= CPU_ARCHTYPE_386
+	CASE_0F_B(0xda)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
+		{
+			GetRM;
+			MMX_reg smmx;
+			const unsigned char reg = (rm >> 3) & 7;
+
+			switch (last_prefix) {
+				case MP_NONE:									/* 0F DA PMINUB reg, r/m */
+					if (rm >= 0xc0) {
+						SSE_PMINUB(*reg_mmx[reg],*reg_mmx[rm & 7]);
+					} else {
+						GetEAa;
+						smmx.q = LoadMq(eaa);
+						SSE_PMINUB(*reg_mmx[reg],smmx);
+					}
+					break;
+				default:
+					goto illegal_opcode;
+			};
+		}
+		break;
+#endif
+
+#if CPU_CORE >= CPU_ARCHTYPE_386
+	CASE_0F_B(0xde)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
+		{
+			GetRM;
+			MMX_reg smmx;
+			const unsigned char reg = (rm >> 3) & 7;
+
+			switch (last_prefix) {
+				case MP_NONE:									/* 0F DE PMAXUB reg, r/m */
+					if (rm >= 0xc0) {
+						SSE_PMAXUB(*reg_mmx[reg],*reg_mmx[rm & 7]);
+					} else {
+						GetEAa;
+						smmx.q = LoadMq(eaa);
+						SSE_PMAXUB(*reg_mmx[reg],smmx);
+					}
+					break;
+				default:
+					goto illegal_opcode;
+			};
+		}
+		break;
+#endif
+
+#if CPU_CORE >= CPU_ARCHTYPE_386
+	CASE_0F_B(0xe0)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
+		{
+			GetRM;
+			MMX_reg smmx;
+			const unsigned char reg = (rm >> 3) & 7;
+
+			switch (last_prefix) {
+				case MP_NONE:									/* 0F E0 PAVGB reg, r/m */
+					if (rm >= 0xc0) {
+						SSE_PAVGB(*reg_mmx[reg],*reg_mmx[rm & 7]);
+					} else {
+						GetEAa;
+						smmx.q = LoadMq(eaa);
+						SSE_PAVGB(*reg_mmx[reg],smmx);
+					}
+					break;
+				default:
+					goto illegal_opcode;
+			};
+		}
+		break;
+#endif
+
+#if CPU_CORE >= CPU_ARCHTYPE_386
+	CASE_0F_B(0xe3)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
+		{
+			GetRM;
+			MMX_reg smmx;
+			const unsigned char reg = (rm >> 3) & 7;
+
+			switch (last_prefix) {
+				case MP_NONE:									/* 0F E3 PAVGW reg, r/m */
+					if (rm >= 0xc0) {
+						SSE_PAVGW(*reg_mmx[reg],*reg_mmx[rm & 7]);
+					} else {
+						GetEAa;
+						smmx.q = LoadMq(eaa);
+						SSE_PAVGW(*reg_mmx[reg],smmx);
+					}
+					break;
+				default:
+					goto illegal_opcode;
+			};
+		}
+		break;
+#endif
+
+#if CPU_CORE >= CPU_ARCHTYPE_386
+	CASE_0F_B(0xe4)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
+		{
+			GetRM;
+			MMX_reg smmx;
+			const unsigned char reg = (rm >> 3) & 7;
+
+			switch (last_prefix) {
+				case MP_NONE:									/* 0F E4 PULHUW reg, r/m */
+					if (rm >= 0xc0) {
+						SSE_PMULHUW(*reg_mmx[reg],*reg_mmx[rm & 7]);
+					} else {
+						GetEAa;
+						smmx.q = LoadMq(eaa);
+						SSE_PMULHUW(*reg_mmx[reg],smmx);
+					}
+					break;
+				default:
+					goto illegal_opcode;
+			};
+		}
+		break;
+#endif
+
+#if CPU_CORE >= CPU_ARCHTYPE_386
+	CASE_0F_B(0xe7)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
+		{
+			GetRM;
+			const unsigned char reg = (rm >> 3) & 7;
+
+			switch (last_prefix) {
+				case MP_NONE:									/* 0F E7 MOVNTQ r/m, reg */
+					if (rm >= 0xc0) {
+						goto illegal_opcode;
+					} else {
+						GetEAa;
+						SaveMq(eaa,(*reg_mmx[reg]).q);
+					}
+					break;
+				default:
+					goto illegal_opcode;
+			};
+		}
+		break;
+#endif
+
+#if CPU_CORE >= CPU_ARCHTYPE_386
+	CASE_0F_B(0xea)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
+		{
+			GetRM;
+			MMX_reg smmx;
+			const unsigned char reg = (rm >> 3) & 7;
+
+			switch (last_prefix) {
+				case MP_NONE:									/* 0F EA PMINSW reg, r/m */
+					if (rm >= 0xc0) {
+						SSE_PMINSW(*reg_mmx[reg],*reg_mmx[rm & 7]);
+					} else {
+						GetEAa;
+						smmx.q = LoadMq(eaa);
+						SSE_PMINSW(*reg_mmx[reg],smmx);
+					}
+					break;
+				default:
+					goto illegal_opcode;
+			};
+		}
+		break;
+#endif
+
+#if CPU_CORE >= CPU_ARCHTYPE_386
+	CASE_0F_B(0xee)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
+		{
+			GetRM;
+			MMX_reg smmx;
+			const unsigned char reg = (rm >> 3) & 7;
+
+			switch (last_prefix) {
+				case MP_NONE:									/* 0F EE PMAXSW reg, r/m */
+					if (rm >= 0xc0) {
+						SSE_PMAXSW(*reg_mmx[reg],*reg_mmx[rm & 7]);
+					} else {
+						GetEAa;
+						smmx.q = LoadMq(eaa);
+						SSE_PMAXSW(*reg_mmx[reg],smmx);
+					}
+					break;
+				default:
+					goto illegal_opcode;
+			};
+		}
+		break;
+#endif
+
+#if CPU_CORE >= CPU_ARCHTYPE_386
+	CASE_0F_B(0xf6)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
+		{
+			GetRM;
+			MMX_reg smmx;
+			const unsigned char reg = (rm >> 3) & 7;
+
+			switch (last_prefix) {
+				case MP_NONE:									/* 0F F6 PMAXSW reg, r/m */
+					if (rm >= 0xc0) {
+						SSE_PSADBW(*reg_mmx[reg],*reg_mmx[rm & 7]);
+					} else {
+						GetEAa;
+						smmx.q = LoadMq(eaa);
+						SSE_PSADBW(*reg_mmx[reg],smmx);
+					}
+					break;
+				default:
+					goto illegal_opcode;
+			};
+		}
+		break;
+#endif
+
+#if CPU_CORE >= CPU_ARCHTYPE_386
+	CASE_0F_B(0xf7)												/* SSE instruction group */
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMIII || !CPU_SSE()) goto illegal_opcode;
+		{
+			GetRM;
+			const unsigned char reg = (rm >> 3) & 7;
+
+			switch (last_prefix) {
+				case MP_NONE:									/* 0F F7 MASKMOVQ reg, r/m */
+					if (rm >= 0xc0) {
+						/* the MSB of each byte in second operand indicates whether to write the corresponding byte value from the first operand
+						 * i.e. MASKMOVQ mm1,mm2 would selectively write bytes from mm1 according to MSBs of each byte in mm1. The target memory
+						 * location is DS:EDI (DS can be overridden by a segment prefix). */
+						/* On real hardware, this controls the byte enables on the wide data path from the processor.
+						 * We don't have that here, so we have to break up the writes */
+						PhysPt aa = BaseDS + (reg_edi & AddrMaskTable[core.prefixes & PREFIX_ADDR]);
+						const MMX_reg *data = reg_mmx[reg];
+						const MMX_reg *msk = reg_mmx[rm & 7];
+						if (msk->ub.b0 & 0x80) SaveMb(aa+0,data->ub.b0);
+						if (msk->ub.b1 & 0x80) SaveMb(aa+1,data->ub.b1);
+						if (msk->ub.b2 & 0x80) SaveMb(aa+2,data->ub.b2);
+						if (msk->ub.b3 & 0x80) SaveMb(aa+3,data->ub.b3);
+						if (msk->ub.b4 & 0x80) SaveMb(aa+4,data->ub.b4);
+						if (msk->ub.b5 & 0x80) SaveMb(aa+5,data->ub.b5);
+						if (msk->ub.b6 & 0x80) SaveMb(aa+6,data->ub.b6);
+						if (msk->ub.b7 & 0x80) SaveMb(aa+7,data->ub.b7);
+					} else {
+						goto illegal_opcode;
+					}
+					break;
+				default:
+					goto illegal_opcode;
+			};
+		}
+		break;
+#endif
+
 #if C_FPU
 #define CASE_0F_MMX(x) CASE_0F_W(x)
 #include "prefix_0f_mmx.h"
