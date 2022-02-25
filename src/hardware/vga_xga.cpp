@@ -27,6 +27,12 @@
 #include "callback.h"
 #include "cpu.h"		// for 0x3da delay
 
+#define S3_VALIDATE_VIRGE_PORTS
+
+#ifdef S3_VALIDATE_VIRGE_PORTS
+#include <assert.h>
+#endif
+
 #ifdef _MSC_VER
 # define MIN(a,b) ((a) < (b) ? (a) : (b))
 #else
@@ -82,7 +88,136 @@ struct XGAStatus {
 		bool bswap16; /* bit 12 of the CMD register (S3 86C928, Trio32/Trio64/Trio64V+): For any 16-bit word, swap hi/lo bytes (including both 16-bit words in 32-bit transfer) */
 	} waitcmd;
 
+	/* S3 Virge state */
+	struct XGA_VirgeState {
+		struct reggroup {
+			uint32_t src_base;               /* +00D4 */
+			uint32_t dst_base;               /* +00D8 */
+			uint32_t right_clip;             /* +00DC [LO WORD] "position of last pixel to be drawn" which means left <= x <= right inclusive, right? */
+			uint32_t left_clip;              /* +00DC [HI WORD] */
+			uint32_t bottom_clip;            /* +00E0 [LO WORD] "position of last pixel to be drawn" which means top <= y <= bottom inclusive, right? */
+			uint32_t top_clip;               /* +00E0 [HI WORD] */
+			uint32_t src_stride;             /* +00E4 [LO WORD] */
+			uint32_t dst_stride;             /* +00E4 [HI WORD] */
+			uint64_t mono_pat;               /* +00E8, +00EC */
+			uint32_t mono_pat_bgcolor;       /* +00F0 */
+			uint32_t mono_pat_fgcolor;       /* +00F4 */
+			uint32_t src_bgcolor;            /* +00F8 */
+			uint32_t src_fgcolor;            /* +00FC */
+			uint32_t command_set;            /* +0100 */
+			uint32_t rect_width;             /* +0104 [LO WORD] */
+			uint32_t rect_height;            /* +0104 [HI WORD] */
+			uint32_t rect_src_x;             /* +0108 [LO WORD] */
+			uint32_t rect_src_y;             /* +0108 [HI WORD] */
+			uint32_t rect_dst_x;             /* +010C [LO WORD] */
+			uint32_t rect_dst_y;             /* +010C [HI WORD] */
+
+			void set__src_base(uint32_t val); /* +00D4 */
+			void set__dst_base(uint32_t val); /* +00D8 */
+			void set__src_dest_stride_00e4(uint32_t val); /* +00E4 */
+			void set__mono_pat_dword(unsigned int idx,uint32_t val); /* +00E8, +00EC */
+			void set__mono_pat_bgcolor(uint32_t val); /* +00F0 */
+			void set__mono_pat_fgcolor(uint32_t val); /* +00F4 */
+			void set__src_bgcolor(uint32_t val); /* +00F8 */
+			void set__src_fgcolor(uint32_t val); /* +00FC */
+			void set__command_set(uint32_t val); /* +0100 */
+			void set__rect_width_height_0104(uint32_t val); /* +0104 */
+			void set__rect_src_xy_0108(uint32_t val); /* +0108 */
+			void set__rect_dst_xy_010c(uint32_t val); /* +010C */
+			void set__left_right_clip_00dc(uint32_t val); /* +00DC */
+			void set__top_bottom_clip_00e0(uint32_t val); /* +00E0 */
+		};
+		struct reggroup                  bitblt; /* 0xA400-0xA7FF */
+		struct reggroup                  line2d; /* 0xA800-0xABFF */
+		struct reggroup                  poly2d; /* 0xAC00-0xAFFF */
+
+		inline struct reggroup &bitblt_validate_port(const uint32_t port) {
+#ifdef S3_VALIDATE_VIRGE_PORTS
+			assert((port&0xFC00) == 0xA400);
+#endif
+			return bitblt;
+		}
+
+		inline struct reggroup &line2d_validate_port(const uint32_t port) {
+#ifdef S3_VALIDATE_VIRGE_PORTS
+			assert((port&0xFC00) == 0xA800);
+#endif
+			return line2d;
+		}
+
+		inline struct reggroup &poly2d_validate_port(const uint32_t port) {
+#ifdef S3_VALIDATE_VIRGE_PORTS
+			assert((port&0xFC00) == 0xAC00);
+#endif
+			return poly2d;
+		}
+	} virge;
 } xga;
+
+void XGAStatus::XGA_VirgeState::reggroup::set__src_base(uint32_t val) {
+	src_base = val & 0x003FFFF8; /* bits [21:3] base address in vmem source data for 2D operations */
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__dst_base(uint32_t val) {
+	dst_base = val & 0x003FFFF8; /* bits [21:3] base address in vmem source data for 2D operations */
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__src_dest_stride_00e4(uint32_t val) {
+	xga.virge.bitblt.src_stride = val & 0x0FF8; /* bits [11:3] byte stride */
+	xga.virge.bitblt.dst_stride = (val >> 16u) & 0x0FF8; /* bits [27:19] (11+16,3+16) byte stride */
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__mono_pat_dword(unsigned int idx,uint32_t val) {
+	/* idx == 0, low 32 bits.
+	 * idx == 1, high 32 bits.
+	 * This trick only works if the host processor is little Endian */
+	((uint32_t*)(&xga.virge.bitblt.mono_pat))[idx&1] = val;
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__mono_pat_bgcolor(uint32_t val) {
+	mono_pat_bgcolor = val & 0x00FFFFFFul;
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__mono_pat_fgcolor(uint32_t val) {
+	mono_pat_fgcolor = val & 0x00FFFFFFul;
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__src_bgcolor(uint32_t val) {
+	src_bgcolor = val & 0x00FFFFFFul;
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__src_fgcolor(uint32_t val) {
+	src_fgcolor = val & 0x00FFFFFFul;
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__command_set(uint32_t val) {
+	command_set = val;
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__rect_width_height_0104(uint32_t val) {
+	rect_height = val & 0x07FF;
+	rect_width = (val >> 16ul) & 0x07FF;
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__rect_src_xy_0108(uint32_t val) {
+	rect_src_y = val & 0x07FF;
+	rect_src_x = (val >> 16ul) & 0x07FF;
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__rect_dst_xy_010c(uint32_t val) {
+	rect_dst_y = val & 0x07FF;
+	rect_dst_x = (val >> 16ul) & 0x07FF;
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__left_right_clip_00dc(uint32_t val) {
+	right_clip = val & 0x07FF;
+	left_clip = (val >> 16ul) & 0x07FF;
+}
+
+void XGAStatus::XGA_VirgeState::reggroup::set__top_bottom_clip_00e0(uint32_t val) {
+	bottom_clip = val & 0x07FF;
+	top_clip = (val >> 16ul) & 0x07FF;
+}
 
 void XGA_Write_Multifunc(Bitu val, Bitu len) {
     (void)len;//UNUSED
@@ -1544,7 +1679,163 @@ void XGA_Write(Bitu port, Bitu val, Bitu len) {
 			if(len==1) vga_write_p3d5(0,val,1);
 			else E_Exit("unimplemented XGA MMIO");
 			break;
+		case 0xa4d4:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__src_base(val);
+			else goto default_case;
+			break;
+		case 0xa8d4:
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__src_base(val);
+			else goto default_case;
+			break;
+		case 0xacd4:
+			if (s3Card >= S3_ViRGE) xga.virge.poly2d_validate_port(port).set__src_base(val);
+			else goto default_case;
+			break;
+		case 0xa4d8:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__dst_base(val);
+			else goto default_case;
+			break;
+		case 0xa8d8:
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__dst_base(val);
+			else goto default_case;
+			break;
+		case 0xacd8:
+			if (s3Card >= S3_ViRGE) xga.virge.poly2d_validate_port(port).set__dst_base(val);
+			else goto default_case;
+			break;
+		case 0xa4dc:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__left_right_clip_00dc(val);
+			else goto default_case;
+			break;
+		case 0xa8dc:
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__left_right_clip_00dc(val);
+			else goto default_case;
+			break;
+		case 0xacdc:
+			if (s3Card >= S3_ViRGE) xga.virge.poly2d_validate_port(port).set__left_right_clip_00dc(val);
+			else goto default_case;
+			break;
+		case 0xa4e0:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__top_bottom_clip_00e0(val);
+			else goto default_case;
+			break;
+		case 0xa8e0:
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__top_bottom_clip_00e0(val);
+			else goto default_case;
+			break;
+		case 0xace0:
+			if (s3Card >= S3_ViRGE) xga.virge.poly2d_validate_port(port).set__top_bottom_clip_00e0(val);
+			else goto default_case;
+			break;
+		case 0xa4e4:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__src_dest_stride_00e4(val);
+			else goto default_case;
+			break;
+		case 0xa8e4:
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__src_dest_stride_00e4(val);
+			else goto default_case;
+			break;
+		case 0xace4:
+			if (s3Card >= S3_ViRGE) xga.virge.poly2d_validate_port(port).set__src_dest_stride_00e4(val);
+			else goto default_case;
+			break;
+		case 0xa4e8:
+		case 0xa4ec:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__mono_pat_dword((port>>2u)&1u,val);
+			else goto default_case;
+			break;
+		case 0xace8:
+		case 0xacec:
+			if (s3Card >= S3_ViRGE) xga.virge.poly2d_validate_port(port).set__mono_pat_dword((port>>2u)&1u,val);
+			else goto default_case;
+			break;
+		case 0xa4f0:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__mono_pat_bgcolor(val);
+			else goto default_case;
+			break;
+		case 0xacf0:
+			if (s3Card >= S3_ViRGE) xga.virge.poly2d_validate_port(port).set__mono_pat_bgcolor(val);
+			else goto default_case;
+			break;
+		case 0xa4f4:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__mono_pat_fgcolor(val);
+			else goto default_case;
+			break;
+		case 0xa8f4:
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__mono_pat_fgcolor(val);
+			else goto default_case;
+			break;
+		case 0xacf4:
+			if (s3Card >= S3_ViRGE) xga.virge.poly2d_validate_port(port).set__mono_pat_fgcolor(val);
+			else goto default_case;
+			break;
+		case 0xa4f8:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__src_bgcolor(val);
+			else goto default_case;
+			break;
+		case 0xa4fc:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__src_fgcolor(val);
+			else goto default_case;
+			break;
+		case 0xa500:
+			if (s3Card >= S3_ViRGE) {
+				xga.virge.bitblt_validate_port(port).set__command_set(val);
+				// TODO: If bit 0 set (autoexecute) then execute the command
+			}
+			else goto default_case;
+			break;
+		case 0xa900:
+			if (s3Card >= S3_ViRGE) {
+				xga.virge.line2d_validate_port(port).set__command_set(val);
+				// TODO: If bit 0 set (autoexecute) then execute the command
+			}
+			else goto default_case;
+			break;
+		case 0xad00:
+			if (s3Card >= S3_ViRGE) {
+				xga.virge.poly2d_validate_port(port).set__command_set(val);
+				// TODO: If bit 0 set (autoexecute) then execute the command
+			}
+			else goto default_case;
+			break;
+		case 0xa504:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__rect_width_height_0104(val);
+			else goto default_case;
+			break;
+		case 0xa904:
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__rect_width_height_0104(val);
+			else goto default_case;
+			break;
+		case 0xad04:
+			if (s3Card >= S3_ViRGE) xga.virge.poly2d_validate_port(port).set__rect_width_height_0104(val);
+			else goto default_case;
+			break;
+		case 0xa508:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__rect_src_xy_0108(val);
+			else goto default_case;
+			break;
+		case 0xa908:
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__rect_src_xy_0108(val);
+			else goto default_case;
+			break;
+		case 0xad08:
+			if (s3Card >= S3_ViRGE) xga.virge.poly2d_validate_port(port).set__rect_src_xy_0108(val);
+			else goto default_case;
+			break;
+		case 0xa50c:
+			if (s3Card >= S3_ViRGE) xga.virge.bitblt_validate_port(port).set__rect_dst_xy_010c(val);
+			else goto default_case;
+			break;
+		case 0xa90c:
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__rect_dst_xy_010c(val);
+			else goto default_case;
+			break;
+		case 0xad0c:
+			if (s3Card >= S3_ViRGE) xga.virge.poly2d_validate_port(port).set__rect_dst_xy_010c(val);
+			else goto default_case;
+			break;
 		default:
+		default_case:
 			if(port <= 0x4000) {
 				//LOG_MSG("XGA: Wrote to port %4x with %08x, len %x", port, val, len);
 				xga.waitcmd.newline = false;
