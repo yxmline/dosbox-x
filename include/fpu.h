@@ -266,10 +266,11 @@ static_assert( sizeof(FPU_Reg) == 8, "FPU_Reg error" );
 
 // dynamic x86 core needs this
 typedef struct {
+    // 80-bit extended float (m2:m1 = 64-bit mantissa  m3 = sign:exponent)
     uint32_t m1;
     uint32_t m2;
     uint16_t m3;
-
+    // Padding to make the structure 16 bytes so the inline asm in fpu_instructions_x86.h can shift by 4 to index FPU registers
     uint16_t d1;
     uint32_t d2;
 } FPU_P_Reg;
@@ -347,7 +348,7 @@ struct FPUControlWord
 	template<class T>
 	FPUControlWord& operator=(T val)
 	{
-		reg = (val & (CPU_ArchitectureType==CPU_ARCHTYPE_8086 ? mask8087 : maskNon8087)) | reservedMask;
+		reg = (val & (FPU_ArchitectureType<=FPU_ARCHTYPE_8087 ? mask8087 : maskNon8087)) | reservedMask;
 		return *this;
 	}
 	operator unsigned() const
