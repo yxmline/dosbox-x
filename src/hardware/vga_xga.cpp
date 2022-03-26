@@ -1426,6 +1426,7 @@ uint32_t XGA_MixVirgePixel(uint32_t srcpixel,uint32_t patpixel,uint32_t dstpixel
 		case 0xAA/*D           */: return dstpixel;
 		case 0xB8/*PSDPxax     */: return ((dstpixel ^ patpixel) & srcpixel) ^ patpixel;
 		case 0xBB/*DSno        */: return (~srcpixel) | dstpixel;
+		case 0xC0/*PSa         */: return patpixel ^ srcpixel;
 		case 0xCC/*S           */: return srcpixel;
 		case 0xE2/*DSPDxax     */: return ((patpixel ^ dstpixel) & srcpixel) ^ dstpixel;
 		case 0xEE/*DSo         */: return dstpixel | srcpixel;
@@ -2022,24 +2023,163 @@ void XGA_ViRGE_BitBlt_Execute_deferred(void) {
 	};
 }
 
+struct VIRGELineDDA {
+	int32_t		xf,xdelta;	/* 1<<20 X delta and fractional */
+
+	void		adv(void);
+	int		read_xtr(void);
+};
+
+void VIRGELineDDA::adv(void) {
+	xf += xdelta;
+}
+
+int VIRGELineDDA::read_xtr(void) {
+	return xf >> 20;
+}
+
 void XGA_ViRGE_DrawLine(XGAStatus::XGA_VirgeState::reggroup &rset) {
 	uint32_t srcpixel,mixpixel,dstpixel,patpixel;
-	int y,x,ycount,xdir;
-	int32_t xf,xdelta;
+	int y,x,ycount,xend,xto,xdir,xstart;
+	unsigned int safety;
+	VIRGELineDDA ldda;
 
+	/* HACK: Why doesn't the Windows 98 S3 ViRGE driver set the stride for the line2d register set?
+	 *       I'm beginning to wonder if all dest/source offset and stride registers are really just
+	 *       tied together into one set in the back. This hack is needed to make sure lines and
+	 *       curves aren't jumbled up at the top of the screen when drawn. */
+	if (rset.src_stride == 0 && rset.dst_stride == 0 && xga.virge.bitblt.src_stride != 0 && xga.virge.bitblt.dst_stride != 0) {
+		LOG(LOG_MISC,LOG_DEBUG)("XGA ViRGE: Asked to draw line without src/dest stride, borrowing BitBlt strides. Windows 98 hack.");
+		rset.src_stride = xga.virge.bitblt.src_stride;
+		rset.dst_stride = xga.virge.bitblt.dst_stride;
+	}
+
+	xdir = (rset.lindrawcounty & 0x80000000u) ? 1/*left to right*/ : -1/*right to left*/;
 	ycount = (int)(rset.lindrawcounty & 0x1FFFu); /* bits [10:0] */
-	xdir = (rset.lindrawcounty & 0x80000000) ? 1/*left to right*/ : -1/*right to left*/;
 	y = (int)(rset.lindrawstarty & 0x1FFFu); /* bits [10:0] */
-	xf = rset.lindrawstartx; /* S11.20 fixed point signed, 1.0 = 1 << 20 */
-	xdelta = rset.lindrawxdelta; /* S11.20 fixed point signed, 1.0 = 1 << 20 */
-	x = (int)rset.lindrawend0;
+	ldda.xf = rset.lindrawstartx; /* S11.20 fixed point signed, 1.0 = 1 << 20 */
+	ldda.xdelta = rset.lindrawxdelta; /* S11.20 fixed point signed, 1.0 = 1 << 20      -(dX / dY) */
+	xend = (int)rset.lindrawend1;/*last pixel*/
+	xstart = (int)rset.lindrawend0;/*first pixel*/
 
-	(void)rset;
+	// unused for now
+	(void)safety;
 
-	LOG(LOG_VGA,LOG_DEBUG)("TODO: ViRGE Line Draw src_base=%x dst_base=%x ycount=%d xdir=%d y=%d xf=%d xdelta=%d x=%d cmd=%x lc=%d rc=%d tc=%d bc=%d sstr=%d dstr=%d",
-		rset.src_base,rset.dst_base,ycount,xdir,y,xf,xdelta,x,rset.command_set,
+	/* S3 ViRGE Integrated 3D Accelerator [http://hackipedia.org/browse.cgi/Computer/Platform/PC%2c%20IBM%20compatible/Video/VGA/SVGA/S3%20Graphics%2c%20Ltd/S3%20ViRGE%20Integrated%203D%20Accelerator%20%281996%2d08%29%2epdf]
+	 * PDF page 238 Line Draw X Start Register.
+	 *
+	 * For X major line, +XDELTA, value = (x1 << 20) + (XDELTA/2)
+	 * For X major line, -XDELTA, value = (x1 << 20) + (XDELTA/2) + ((1 << 20) - 1)
+	 * For Y major line, value = x1 << 20
+	 *
+	 * NTS: Windows 3.1 S3 ViRGE drivers use (x1 << 20) + (1 << 19) equiv (x1 + 0.5) for Y major lines.
+	 *
+	 * Line Draw X Delta Register: XDELTA = -(changeInX << 20) / changeInY
+	 *
+	 * Also notice that based on how this line rendering works, is it vital to turn on
+	 * clipping and set the clip region to the area you intend for the line to sit within,
+	 * else when changeInX is large and changeInY is small, the line segment will extend
+	 * some pixels past the end pixel. So in reality the XDELTA and start X registers
+	 * describe horizontal line segments that extend slightly past the clipping region.
+	 * At least that's how the Windows 3.1 treats this hardware acceleration function. */
+
+	x = xstart;
+#if 0//DEBUG
+	LOG(LOG_VGA,LOG_DEBUG)("TODO: ViRGE Line Draw xdir=%d src_base=%x dst_base=%x ycount=%d y=%d xf=%d(%.3f) xdelta=%d(%.3f) xstart=%d xend=%d x=%d cmd=%x lc=%d rc=%d tc=%d bc=%d sstr=%d dstr=%d",
+		xdir,rset.src_base,rset.dst_base,ycount,y,ldda.xf,(double)ldda.xf / (1<<20),ldda.xdelta,(double)ldda.xdelta / (1<<20),xstart,xend,x,rset.command_set,
 		rset.left_clip,rset.right_clip,rset.top_clip,rset.bottom_clip,
 		rset.src_stride,rset.dst_stride);
+#endif
+
+	/* NTS: Drawing completely horizontal lines according to S3 documentation:
+	 *      - Set XDELTA to 0, as if changeInY == 0
+	 *
+	 *      Drawing completely horizontal lines, Windows 3.1 style (ViRGE drivers);
+	 *      - Set ycount == 1, XDELTA to (xend + 1 - xstart) without the 20-bit shift, which
+	 *        is then a value that is very close to zero, but not quite you lazy hack of a driver.
+	 *        xstart <= x <= xend are the extents of the horizontal line to draw.
+	 *
+	 *      Note that small to zero XDELTA values ALSO represent a vertical or near vertical line,
+	 *      so that value alone isn't enough to determine if we're being asked to draw horizontal
+	 *      lines, however when Windows 3.1 does it, ycount == 1, XDELTA is some small value,
+	 *      XF is right in the middle of xstart-xend, and xstart-end are far wider than one pixel.
+	 *      Not sure by what logic or special case S3 would have handled horizontal lines here.
+	 *      Based on driver behavior, if the intent was to draw a 1-pixel high vertical line,
+	 *      then the xstart/xend values would equal (xf >> 20) without any additional room. */
+
+	if (ldda.xdelta >= -(1 << 20) && ldda.xdelta <= (1 << 20)) { // Y-major
+		if (ycount == 0 || (ycount == 1 && (ldda.xdelta >= -4096 && ldda.xdelta <= 4096) && abs(xstart-xend) > 0)) {
+			/* horizontal line special case */
+			xdir = (xstart > xend) ? -1 : 1;
+			do {
+				srcpixel = 0;
+				dstpixel = XGA_ReadDestVirgePixel(rset,x,y);
+				patpixel = rset.mono_pat_fgcolor/*See notes*/;
+				mixpixel = XGA_MixVirgePixel(srcpixel,patpixel,dstpixel,(rset.command_set>>17u)&0xFFu);
+				XGA_DrawVirgePixelCR(rset,x,y,mixpixel);
+				if (x == xend) break;
+				x += xdir;
+			} while (1);
+		}
+		else {
+			while (ycount > 0) {
+				x = ldda.read_xtr();
+				srcpixel = 0;
+				dstpixel = XGA_ReadDestVirgePixel(rset,x,y);
+				patpixel = rset.mono_pat_fgcolor/*See notes*/;
+				mixpixel = XGA_MixVirgePixel(srcpixel,patpixel,dstpixel,(rset.command_set>>17u)&0xFFu);
+				XGA_DrawVirgePixelCR(rset,x,y,mixpixel);
+				ldda.adv();
+				y--;
+
+				/* lines are drawn bottom-up */
+				ycount--;
+			}
+		}
+	}
+	else if (ldda.xdelta >= 0) { // X-major going to the left (draws bottom up, remember?)
+		while (ycount > 0) {
+			xto = ldda.read_xtr();
+			while (x <= xto) {
+				if (x >= xstart && x <= xend) {
+					srcpixel = 0;
+					dstpixel = XGA_ReadDestVirgePixel(rset,x,y);
+					patpixel = rset.mono_pat_fgcolor/*See notes*/;
+					mixpixel = XGA_MixVirgePixel(srcpixel,patpixel,dstpixel,(rset.command_set>>17u)&0xFFu);
+					XGA_DrawVirgePixelCR(rset,x,y,mixpixel);
+				}
+
+				x++;
+			}
+			ldda.adv();
+			y--;
+
+			/* lines are drawn bottom-up */
+			ycount--;
+		}
+	}
+	else { // X-major going to the right, xdelta < 0 (draws bottom up, remember?)
+		std::swap(xstart,xend);
+		while (ycount > 0) {
+			xto = ldda.read_xtr();
+			while (x >= xto) {
+				if (x >= xstart && x <= xend) {
+					srcpixel = 0;
+					dstpixel = XGA_ReadDestVirgePixel(rset,x,y);
+					patpixel = rset.mono_pat_fgcolor/*See notes*/;
+					mixpixel = XGA_MixVirgePixel(srcpixel,patpixel,dstpixel,(rset.command_set>>17u)&0xFFu);
+					XGA_DrawVirgePixelCR(rset,x,y,mixpixel);
+				}
+
+				x--;
+			}
+			ldda.adv();
+			y--;
+
+			/* lines are drawn bottom-up */
+			ycount--;
+		}
+	}
 }
 
 void XGA_ViRGE_Line2D_Execute(bool commandwrite) {
