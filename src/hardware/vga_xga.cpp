@@ -473,6 +473,7 @@ void XGA_DrawLineVector(Bitu val) {
 	Bitu srcval;
 	Bitu destval;
 	Bitu dstdata;
+	bool skiplast;
 	Bits i;
 
 	Bits dx, sx, sy;
@@ -520,6 +521,14 @@ void XGA_DrawLineVector(Bitu val) {
 			break;
 	}
 
+	/* Do we skip drawing the last pixel? (bit 2), Trio64 documentation.
+	 * This is needed to correctly draw polylines in Windows */
+	skiplast = (val >> 2) & 1;
+	if (skiplast) {
+		if (dx > 0) dx--;
+		else return;
+	}
+
 	for (i=0;i<=dx;i++) {
 		Bitu mixmode = (xga.pix_cntl >> 6) & 0x3;
 		switch (mixmode) {
@@ -565,6 +574,7 @@ void XGA_DrawLineVector(Bitu val) {
 	xga.cury = (uint16_t)yat;
 }
 
+/* NTS: The Windows 3.1 driver does not use this XGA command for horizontal and vertical lines */
 void XGA_DrawLineBresenham(Bitu val) {
 	Bits xat, yat;
 	Bitu srcval;
@@ -572,126 +582,152 @@ void XGA_DrawLineBresenham(Bitu val) {
 	Bitu dstdata;
 	Bits i;
 	Bits tmpswap;
+	bool skiplast;
 	bool steep;
 
-#define SWAP(a,b) tmpswap = a; a = b; b = tmpswap;
+#define SWAP(a,b) { tmpswap = a; a = b; b = tmpswap; }
 
-	Bits dx, sx, dy, sy, e, dmajor, dminor,destxtmp;
+	Bits dx, sx, dy, sy, e, dmajor, dminor, destxtmp;
 
 	// Probably a lot easier way to do this, but this works.
 
+	/* S3 Trio64 documentation: The "desty" register is both a destination Y for BitBlt (hence the name)
+	 * and "Line Parameter Axial Step Constant" for line drawing, in case the name of the variable is
+	 * confusing here. The "desty" variable name exists as inherited from DOSBox SVN source code.
+	 *
+	 * lpast = 2 * min(abs(dx),abs(dy)) */
 	dminor = (Bits)((int16_t)xga.desty);
 	if(xga.desty&0x2000) dminor |= ~((Bits)0x1fff);
 	dminor >>= 1;
 
-	destxtmp=(Bits)((int16_t)xga.destx);
+	/* S3 Trio64 documentation: The "destx" register is both a destination X for BitBlt (hence the name)
+	 * and "Line Parameter Diagonal Step Constant" for line drawing, in case the name of the variable is
+	 * confusing here. The "destx" variable name exists as inherited from DOSBox SVN source code.
+	 *
+	 * lpdst = 2 * min(abs(dx),abs(dy)) - max(abs(dx),abs(dy)) */
+	destxtmp = (Bits)((int16_t)xga.destx);
 	if(xga.destx&0x2000) destxtmp |= ~((Bits)0x1fff);
 
-
 	dmajor = -(destxtmp - (dminor << (Bits)1)) >> (Bits)1;
-	
+
 	dx = dmajor;
-	if((val >> 5) & 0x1) {
-        sx = 1;
-	} else {
+	if ((val >> 5) & 0x1)
+		sx = 1;
+	else
 		sx = -1;
-	}
+
 	dy = dminor;
-	if((val >> 7) & 0x1) {
-        sy = 1;
-	} else {
+	if ((val >> 7) & 0x1)
+		sy = 1;
+	else
 		sy = -1;
-	}
+
+	/* Do we skip drawing the last pixel? (bit 2), Trio64 documentation.
+	 * This is needed to correctly draw polylines in Windows */
+	skiplast = (val >> 2) & 1;
+
+	/* S3 Trio64 documentation:
+	 * if x1 < x2: 2 * min(abs(dx),abs(dy)) - max(abs(dx),abs(dy))
+	 * if x1 >= x2: 2 * min(abs(dx),abs(dy)) - max(abs(dx),abs(dy)) - 1 */
 	e = (Bits)((int16_t)xga.ErrTerm);
-	if(xga.ErrTerm&0x2000) e |= ~((Bits)0x1fff); /* sign extend 13-bit error term */
+	if (xga.ErrTerm&0x2000) e |= ~((Bits)0x1fff); /* sign extend 13-bit error term */
+
 	xat = xga.curx;
 	yat = xga.cury;
 
-	if((val >> 6) & 0x1) {
+	if ((val >> 6) & 0x1) {
 		steep = false;
 		SWAP(xat, yat);
 		SWAP(sx, sy);
 	} else {
 		steep = true;
 	}
-    
-//	LOG_MSG("XGA: Bresenham: ASC %ld, LPDSC %ld, sx %ld, sy %ld, err %ld, steep %ld, length %ld, dmajor %ld, dminor %ld, xstart %ld, ystart %ld",
-//		dx, dy, sx, sy, e, (unsigned long)steep, (unsigned long)xga.MAPcount, dmajor, dminor, xat, yat);
 
-	for (i=0;i<=xga.MAPcount;i++) { 
-			Bitu mixmode = (xga.pix_cntl >> 6) & 0x3;
-			switch (mixmode) {
-				case 0x00: /* FOREMIX always used */
-					mixmode = xga.foremix;
-					switch((mixmode >> 5) & 0x03) {
-						case 0x00: /* Src is background color */
-							srcval = xga.backcolor;
-							break;
-						case 0x01: /* Src is foreground color */
-							srcval = xga.forecolor;
-							break;
-						case 0x02: /* Src is pixel data from PIX_TRANS register */
-							//srcval = tmpval;
-							LOG_MSG("XGA: DrawRect: Wants data from PIX_TRANS register");
-							srcval = 0;
-							break;
-						case 0x03: /* Src is bitmap data */
-							LOG_MSG("XGA: DrawRect: Wants data from srcdata");
-							//srcval = srcdata;
-							srcval = 0;
-							break;
-						default:
-							LOG_MSG("XGA: DrawRect: Shouldn't be able to get here!");
-							srcval = 0;
-							break;
-					}
+#if 0
+	LOG_MSG("XGA: Bresenham: ASC %ld, LPDSC %ld, sx %ld, sy %ld, err %ld, steep %ld, length %ld, dmajor %ld, dminor %ld, xstart %ld, ystart %ld, skiplast %u",
+		(signed long)dx, (signed long)dy, (signed long)sx, (signed long)sy, (signed long)e,
+		(signed long)steep, (signed long)xga.MAPcount, (signed long)dmajor, (signed long)dminor,
+		(signed long)xat, (signed long)yat, skiplast?1:0);
+#endif
 
-					if(steep) {
-						dstdata = XGA_GetPoint((Bitu)xat,(Bitu)yat);
-					} else {
-						dstdata = XGA_GetPoint((Bitu)yat,(Bitu)xat);
-					}
+	const Bits run = xga.MAPcount - (skiplast ? 1 : 0);
 
-					destval = XGA_GetMixResult(mixmode, srcval, dstdata);
+	for (i=0;i<=run;i++) {
+		Bitu mixmode = (xga.pix_cntl >> 6) & 0x3;
 
-					if(steep) {
-						XGA_DrawPoint((Bitu)xat,(Bitu)yat, destval);
-					} else {
-						XGA_DrawPoint((Bitu)yat,(Bitu)xat, destval);
-					}
+		switch (mixmode) {
+			case 0x00: /* FOREMIX always used */
+				mixmode = xga.foremix;
+				switch((mixmode >> 5) & 0x03) {
+					case 0x00: /* Src is background color */
+						srcval = xga.backcolor;
+						break;
+					case 0x01: /* Src is foreground color */
+						srcval = xga.forecolor;
+						break;
+					case 0x02: /* Src is pixel data from PIX_TRANS register */
+						//srcval = tmpval;
+						LOG_MSG("XGA: DrawRect: Wants data from PIX_TRANS register");
+						srcval = 0;
+						break;
+					case 0x03: /* Src is bitmap data */
+						LOG_MSG("XGA: DrawRect: Wants data from srcdata");
+						//srcval = srcdata;
+						srcval = 0;
+						break;
+					default:
+						LOG_MSG("XGA: DrawRect: Shouldn't be able to get here!");
+						srcval = 0;
+						break;
+				}
 
-					break;
-				default: 
-					LOG_MSG("XGA: DrawLine: Needs mixmode %x", (int)mixmode);
-					break;
-			}
-			while (e > 0) {
-				yat += sy;
-				e -= (dx << 1);
-			}
-			xat += sx;
-			e += (dy << 1);
+				if (steep)
+					dstdata = XGA_GetPoint((Bitu)xat,(Bitu)yat);
+				else
+					dstdata = XGA_GetPoint((Bitu)yat,(Bitu)xat);
+
+				destval = XGA_GetMixResult(mixmode, srcval, dstdata);
+
+				if (steep)
+					XGA_DrawPoint((Bitu)xat,(Bitu)yat, destval);
+				else
+					XGA_DrawPoint((Bitu)yat,(Bitu)xat, destval);
+
+				break;
+			default: 
+				LOG_MSG("XGA: DrawLine: Needs mixmode %x", (int)mixmode);
+				break;
+		}
+
+		while (e > 0) {
+			yat += sy;
+			e -= (dx << 1);
+		}
+
+		xat += sx;
+		e += (dy << 1);
 	}
 
-	if(steep) {
+	if (steep) {
 		xga.curx = (uint16_t)xat;
 		xga.cury = (uint16_t)yat;
 	} else {
 		xga.curx = (uint16_t)yat;
 		xga.cury = (uint16_t)xat;
 	}
-	//	}
-	//}
-	
+#undef SWAP
 }
 
 void XGA_DrawRectangle(Bitu val) {
-	uint32_t xat, yat;
+	uint32_t xat, yat, xrun;
 	Bitu srcval;
 	Bitu destval;
 	Bitu dstdata;
+	bool skiplast;
 
 	Bits srcx, srcy, dx, dy;
+
+	skiplast = (val >> 2) & 1;
 
 	dx = -1;
 	dy = -1;
@@ -701,9 +737,16 @@ void XGA_DrawRectangle(Bitu val) {
 
 	srcy = xga.cury;
 
+	/* Undocumented, but seen with Windows 3.1 drivers: Horizontal lines are drawn with this XGA command and "skip last pixel" set, else they are one pixel too wide */
+	xrun = xga.MAPcount;
+	if (skiplast) {
+		if (xrun > 0u) xrun--;
+		else return;
+	}
+
 	for(yat=0;yat<=xga.MIPcount;yat++) {
 		srcx = xga.curx;
-		for(xat=0;xat<=xga.MAPcount;xat++) {
+		for(xat=0;xat<=xrun;xat++) {
 			Bitu mixmode = (xga.pix_cntl >> 6) & 0x3;
 			switch (mixmode) {
 				case 0x00: /* FOREMIX always used */
@@ -1426,7 +1469,7 @@ uint32_t XGA_MixVirgePixel(uint32_t srcpixel,uint32_t patpixel,uint32_t dstpixel
 		case 0xAA/*D           */: return dstpixel;
 		case 0xB8/*PSDPxax     */: return ((dstpixel ^ patpixel) & srcpixel) ^ patpixel;
 		case 0xBB/*DSno        */: return (~srcpixel) | dstpixel;
-		case 0xC0/*PSa         */: return patpixel ^ srcpixel;
+		case 0xC0/*PSa         */: return patpixel & srcpixel;
 		case 0xCC/*S           */: return srcpixel;
 		case 0xE2/*DSPDxax     */: return ((patpixel ^ dstpixel) & srcpixel) ^ dstpixel;
 		case 0xEE/*DSo         */: return dstpixel | srcpixel;
@@ -2048,11 +2091,10 @@ void XGA_ViRGE_DrawLine(XGAStatus::XGA_VirgeState::reggroup &rset) {
 	 *       I'm beginning to wonder if all dest/source offset and stride registers are really just
 	 *       tied together into one set in the back. This hack is needed to make sure lines and
 	 *       curves aren't jumbled up at the top of the screen when drawn. */
-	if (rset.src_stride == 0 && rset.dst_stride == 0 && xga.virge.bitblt.src_stride != 0 && xga.virge.bitblt.dst_stride != 0) {
-		LOG(LOG_MISC,LOG_DEBUG)("XGA ViRGE: Asked to draw line without src/dest stride, borrowing BitBlt strides. Windows 98 hack.");
-		rset.src_stride = xga.virge.bitblt.src_stride;
-		rset.dst_stride = xga.virge.bitblt.dst_stride;
-	}
+	rset.src_stride = xga.virge.bitblt.src_stride;
+	rset.dst_stride = xga.virge.bitblt.dst_stride;
+	rset.src_base = xga.virge.bitblt.src_base;
+	rset.dst_base = xga.virge.bitblt.dst_base;
 
 	xdir = (rset.lindrawcounty & 0x80000000u) ? 1/*left to right*/ : -1/*right to left*/;
 	ycount = (int)(rset.lindrawcounty & 0x1FFFu); /* bits [10:0] */
@@ -2107,12 +2149,9 @@ void XGA_ViRGE_DrawLine(XGAStatus::XGA_VirgeState::reggroup &rset) {
 	 *      Based on driver behavior, if the intent was to draw a 1-pixel high vertical line,
 	 *      then the xstart/xend values would equal (xf >> 20) without any additional room. */
 
-	if (ldda.xdelta >= -(1 << 20) && ldda.xdelta <= (1 << 20)) { // Y-major
-		/* fill first line, x is at xstart, fill to where the first pixel of the line will go */
-		xto = ldda.read_xtr();
-		xdir = (xstart > xend) ? -1 : 1;
+	if (ycount <= 1) {
 		do {
-			if ((xdir > 0 && x >= xto) || (xdir < 0 && x <= xto)) break;
+			if ((xdir > 0 && x > xend) || (xdir < 0 && x < xend)) break;
 			srcpixel = 0;
 			dstpixel = XGA_ReadDestVirgePixel(rset,x,y);
 			patpixel = rset.mono_pat_fgcolor/*See notes*/;
@@ -2120,9 +2159,32 @@ void XGA_ViRGE_DrawLine(XGAStatus::XGA_VirgeState::reggroup &rset) {
 			XGA_DrawVirgePixelCR(rset,x,y,mixpixel);
 			x += xdir;
 		} while (1);
+	}
+	else if (ldda.xdelta >= -(1 << 20) && ldda.xdelta <= (1 << 20)) { // Y-major
+		/* NTS: xstart/xend must be considered to render Y-major lines correctly when the guest driver
+		 *      wants to draw a line but omit the last pixel when drawing line segments of a polygon or shape.
+		 *      This is needed to correctly render the shape in progress for example when drawing circles or
+		 *      rounded rectangles in Microsoft Word (uses XOR raster operation), and to render curves in
+		 *      Windows 98 correctly (Curves And Colors screen saver). Without the option to NOT render the
+		 *      last pixel, XOR-based poly lines will be missing pixels, since the overlapping pixels cancel
+		 *      each other out. */
+
+		/* check: xstart skip last pixel, when drawing a line going downard, with XGA hardware that only draws upward */
+		x = ldda.read_xtr();
+		if ((xdir > 0 && x < xstart) || (xdir < 0 && x > xstart)) {
+			ldda.adv();
+			ycount--;
+			y--;
+		}
 
 		while (ycount > 0) {
 			x = ldda.read_xtr();
+			if (ycount == 1) { /* check: xend skip last pixel, when drawing a line going upward */
+				if ((xdir > 0 && x > xend) || (xdir < 0 && x < xend)) {
+					break;
+				}
+			}
+
 			srcpixel = 0;
 			dstpixel = XGA_ReadDestVirgePixel(rset,x,y);
 			patpixel = rset.mono_pat_fgcolor/*See notes*/;
@@ -2134,21 +2196,6 @@ void XGA_ViRGE_DrawLine(XGAStatus::XGA_VirgeState::reggroup &rset) {
 			/* lines are drawn bottom-up */
 			ycount--;
 		}
-
-		/* fill last line, xend is the LAST pixel to draw (inclusive) */
-		x += xdir;
-		y++;
-		if (xdir > 0 && x < xstart) x = xstart;
-		else if (xdir < 0 && x > xstart) x = xstart;
-		do {
-			if ((xdir > 0 && x > xend) || (xdir < 0 && x < xend)) break;
-			srcpixel = 0;
-			dstpixel = XGA_ReadDestVirgePixel(rset,x,y);
-			patpixel = rset.mono_pat_fgcolor/*See notes*/;
-			mixpixel = XGA_MixVirgePixel(srcpixel,patpixel,dstpixel,(rset.command_set>>17u)&0xFFu);
-			XGA_DrawVirgePixelCR(rset,x,y,mixpixel);
-			x += xdir;
-		} while (1);
 	}
 	else if (ldda.xdelta >= 0) { // X-major going to the left (draws bottom up, remember?)
 		while (ycount > 0) {
@@ -2727,48 +2774,23 @@ void XGA_Write(Bitu port, Bitu val, Bitu len) {
 			else goto default_case;
 			break;
 		case 0xA96C:
-			if (s3Card >= S3_ViRGE) {
-				auto &rg = xga.virge.line2d_validate_port(port);
-				rg.set__lindrawend_016c(val);
-				if (rg.command_set & 1) XGA_ViRGE_Line2D_Execute_deferred();
-				else XGA_ViRGE_Line2D_Execute(true);
-			}
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__lindrawend_016c(val);
 			else goto default_case;
 			break;
 		case 0xA970:
-			if (s3Card >= S3_ViRGE) {
-				auto &rg = xga.virge.line2d_validate_port(port);
-				rg.set__lindrawxdelta_0170(val);
-				if (rg.command_set & 1) XGA_ViRGE_Line2D_Execute_deferred();
-				else XGA_ViRGE_Line2D_Execute(true);
-			}
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__lindrawxdelta_0170(val);
 			else goto default_case;
 			break;
 		case 0xA974:
-			if (s3Card >= S3_ViRGE) {
-				auto &rg = xga.virge.line2d_validate_port(port);
-				rg.set__lindrawstartx_0174(val);
-				if (rg.command_set & 1) XGA_ViRGE_Line2D_Execute_deferred();
-				else XGA_ViRGE_Line2D_Execute(true);
-			}
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__lindrawstartx_0174(val);
 			else goto default_case;
 			break;
 		case 0xA978:
-			if (s3Card >= S3_ViRGE) {
-				auto &rg = xga.virge.line2d_validate_port(port);
-				rg.set__lindrawstartx_0178(val);
-				if (rg.command_set & 1) XGA_ViRGE_Line2D_Execute_deferred();
-				else XGA_ViRGE_Line2D_Execute(true);
-			}
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__lindrawstartx_0178(val);
 			else goto default_case;
 			break;
 		case 0xA97C:
-			if (s3Card >= S3_ViRGE) {
-				auto &rg = xga.virge.line2d_validate_port(port);
-				rg.set__lindrawcounty_017c(val);
-				if (rg.command_set & 1) XGA_ViRGE_Line2D_Execute_deferred();
-				else XGA_ViRGE_Line2D_Execute(true);
-			}
+			if (s3Card >= S3_ViRGE) xga.virge.line2d_validate_port(port).set__lindrawcounty_017c(val);
 			else goto default_case;
 			break;
 		case 0xad00:
