@@ -861,7 +861,7 @@ const char* Mouse_GetSelected(int x1, int y1, int x2, int y2, int w, int h, uint
 		r2=t;
 	}
 	text[0]=0;
-    uint16_t seg = IS_DOSV?GetTextSeg():0;
+    uint16_t seg = IS_DOSV?GetTextSeg():VGAMEM_CTEXT;
     bool ttfuse = false;
     int ttfcols = 0;
 #if defined(USE_TTF)
@@ -894,7 +894,11 @@ const char* Mouse_GetSelected(int x1, int y1, int x2, int y2, int w, int h, uint
 #endif
 	for (int i=r1; i<=r2; i++) {
         bool lead1 = false, lead2 = false;
-        if ((IS_DOSV && DOSV_CheckCJKVideoMode()) || (IS_J3100 && J3_IsJapanese())) {
+        if ((showdbcs && !ttfuse && !IS_DOSV && isDBCSCP()
+#if defined(USE_TTF)
+            && dbcs_sbcs
+#endif
+            ) || (IS_DOSV && DOSV_CheckCJKVideoMode()) || (IS_J3100 && J3_IsJapanese())) {
             for (int k=0; k<c1; k++) {
                 if (lead1) lead1=false;
                 else if (isKanji1(real_readb(seg,(i*c+k)*2))) lead1=true;
