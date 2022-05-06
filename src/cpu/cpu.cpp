@@ -388,14 +388,21 @@ int GetDynamicType() {
 #endif
 }
 
+#if (C_DYNAMIC_X86) && (C_DYNREC)
+#define BOTH_DYNAMIC 1
+#else
+#define BOTH_DYNAMIC 0
+#endif
+
 void menu_update_dynamic() {
+#if (C_DYNAMIC_X86) || (C_DYNREC)
 	const Section_prop * cpu_section = static_cast<Section_prop *>(control->GetSection("cpu"));
     std::string core(cpu_section->Get_string("core"));
     std::string text = mainMenu.get_item("mapper_dynamic").get_text();
     size_t found = text.find_last_of(" ");
     if (found != std::string::npos && text.substr(found+1).size() && *text.substr(found+1).c_str() == '(') text = text.substr(0, found);
 #if (C_DYNREC)
-    if ((core == "dynamic" && GetDynamicType()==2) || core == "dynamic_rec" || save_dynamic_rec) {
+    if ((core == "dynamic" && GetDynamicType()==2) || core == "dynamic_rec" || save_dynamic_rec || !BOTH_DYNAMIC) {
         save_dynamic_rec = true;
         mainMenu.get_item("mapper_dynamic").set_text(text+" (dynamic_rec)");
     } else
@@ -404,6 +411,7 @@ void menu_update_dynamic() {
         save_dynamic_rec = false;
         mainMenu.get_item("mapper_dynamic").set_text(text+" (dynamic_x86)");
     }
+#endif
 }
 
 void menu_update_core(void) {
