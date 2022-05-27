@@ -154,6 +154,7 @@ public:
     enum IDEDeviceType type;
     bool faked_command; /* if set, DOSBox is sending commands to itself */
     bool allow_writing;
+    bool irq_signal;
     bool motor_on;
     bool asleep;
     bool slave;
@@ -183,6 +184,9 @@ public:
     double ide_spinup_delay;    /* time it takes to spin the hard disk motor up to speed */
     double ide_spindown_delay;  /* time it takes for hard disk motor to spin down */
     double ide_identify_command_delay;
+public:
+    void raise_irq();
+    void lower_irq();
 public:
     IDEDevice(IDEController *c,bool _slave);
     virtual ~IDEDevice();
@@ -316,41 +320,45 @@ public:
     IDEController(Section* configuration,unsigned char index);
     void register_isapnp();
     void install_io_port();
+    void check_device_irq();
+    ~IDEController();
+private:// Sorry, IDE devices and external code don't get to force IDE IRQs anymore
     void raise_irq();
     void lower_irq();
-    ~IDEController();
 };
 
 static IDEController* idecontroller[MAX_IDE_CONTROLLERS]={NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
 
-static void IDE_DelayedCommand(Bitu idx/*which IDE device*/);
+static void IDE_DelayedCommand(Bitu pk/*which IDE device*/);
 static IDEController* GetIDEController(Bitu idx);
 
-static void IDE_ATAPI_SpinDown(Bitu idx/*which IDE device*/) {
-    IDEController *ctrl = GetIDEController(idx);
-    if (ctrl == NULL) return;
+static void IDE_ATAPI_SpinDown(Bitu pk/*which IDE device*/) {
+	IDEEventPack ep(pk);
+	const unsigned int idx = ep.interface();
+	const unsigned int devidx = ep.device();
 
-    for (unsigned int i=0;i < 2;i++) {
-        IDEDevice *dev = ctrl->device[i];
-        if (dev == NULL) continue;
+	IDEController *ctrl = GetIDEController(idx);
+	if (ctrl == NULL) return;
 
-        if (dev->type == IDE_TYPE_HDD) {
-        }
-        else if (dev->type == IDE_TYPE_CDROM) {
-            IDEATAPICDROMDevice *atapi = (IDEATAPICDROMDevice*)dev;
+	IDEDevice *dev = ctrl->device[devidx];
+	if (dev == NULL) return;
 
-            if (atapi->loading_mode == LOAD_DISC_READIED || atapi->loading_mode == LOAD_READY) {
-                atapi->loading_mode = LOAD_IDLE;
-                LOG_MSG("ATAPI CD-ROM: spinning down\n");
-            }
-        }
-        else {
-            LOG_MSG("Unknown ATAPI spinup callback\n");
-        }
-    }
+	if (dev->type == IDE_TYPE_HDD) {
+	}
+	else if (dev->type == IDE_TYPE_CDROM) {
+		IDEATAPICDROMDevice *atapi = (IDEATAPICDROMDevice*)dev;
+
+		if (atapi->loading_mode == LOAD_DISC_READIED || atapi->loading_mode == LOAD_READY) {
+			atapi->loading_mode = LOAD_IDLE;
+			LOG_MSG("ATAPI CD-ROM: spinning down\n");
+		}
+	}
+	else {
+		LOG_MSG("Unknown ATAPI spinup callback\n");
+	}
 }
 
-static void IDE_ATAPI_SpinUpComplete(Bitu idx/*which IDE device*/);
+static void IDE_ATAPI_SpinUpComplete(Bitu pk/*which IDE device*/);
 
 static void IDE_ATAPI_CDInsertion(Bitu pk/*which IDE device*/) {
 	IDEEventPack ep(pk);
@@ -970,7 +978,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
                     state = IDE_DEV_READY;
                     feature = ((sense[2]&0xF) << 4) | ((sense[2]&0xF) ? 0x04/*abort*/ : 0x00);
                     status = IDE_STATUS_DRIVE_READY|((sense[2]&0xF) ? IDE_STATUS_ERROR:IDE_STATUS_DRIVE_SEEK_COMPLETE);
-                    controller->raise_irq();
+                    raise_irq();
                     allow_writing = true;
                     return;
                 }
@@ -991,7 +999,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x1E: /* PREVENT ALLOW MEDIUM REMOVAL */
@@ -1007,7 +1015,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x25: /* READ CAPACITY */ {
@@ -1041,7 +1049,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             } break;
         case 0x2B: /* SEEK */
@@ -1075,7 +1083,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x12: /* INQUIRY */
@@ -1091,7 +1099,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x28: /* READ(10) */
@@ -1132,7 +1140,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x42: /* READ SUB-CHANNEL */
@@ -1146,7 +1154,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x43: /* READ TOC */
@@ -1160,7 +1168,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x45: /* PLAY AUDIO(10) */
@@ -1176,7 +1184,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x47: /* PLAY AUDIO MSF */
@@ -1192,7 +1200,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x4B: /* PAUSE/RESUME */
@@ -1208,7 +1216,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x55: /* MODE SELECT(10) */
@@ -1231,7 +1239,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             feature = 0x00;
             state = IDE_DEV_DATA_WRITE;
             status = IDE_STATUS_DRIVE_READY|IDE_STATUS_DRQ|IDE_STATUS_DRIVE_SEEK_COMPLETE;
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x5A: /* MODE SENSE(10) */
@@ -1245,13 +1253,13 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             lba[2] = sector_total >> 8;
             lba[1] = sector_total;
 
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         default:
             LOG_MSG("Unknown ATAPI command after busy wait. Why?\n");
             abort_error();
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
     }
@@ -1365,7 +1373,7 @@ void IDEATAPICDROMDevice::atapi_io_completion() {
 
     /* Apparently: real IDE ATAPI controllers fire another IRQ after the transfer.
        And there are MS-DOS CD-ROM drivers that assume that. */
-    controller->raise_irq();
+    raise_irq();
 }
     
 void IDEATAPICDROMDevice::io_completion() {
@@ -1581,7 +1589,7 @@ void IDEATAPICDROMDevice::atapi_cmd_completion() {
             state = IDE_DEV_READY;
             feature = ((sense[2]&0xF) << 4) | ((sense[2]&0xF) ? 0x04/*abort*/ : 0x00);
             status = IDE_STATUS_DRIVE_READY|((sense[2]&0xF) ? IDE_STATUS_ERROR:IDE_STATUS_DRIVE_SEEK_COMPLETE);
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x03: /* REQUEST SENSE */
@@ -1615,7 +1623,7 @@ void IDEATAPICDROMDevice::atapi_cmd_completion() {
                 state = IDE_DEV_READY;
                 feature = ((sense[2]&0xF) << 4) | ((sense[2]&0xF) ? 0x04/*abort*/ : 0x00);
                 status = IDE_STATUS_DRIVE_READY|((sense[2]&0xF) ? IDE_STATUS_ERROR:IDE_STATUS_DRIVE_SEEK_COMPLETE);
-                controller->raise_irq();
+                raise_irq();
                 allow_writing = true;
             }
             break;
@@ -1662,7 +1670,7 @@ void IDEATAPICDROMDevice::atapi_cmd_completion() {
                 state = IDE_DEV_READY;
                 feature = ((sense[2]&0xF) << 4) | ((sense[2]&0xF) ? 0x04/*abort*/ : 0x00);
                 status = IDE_STATUS_DRIVE_READY|((sense[2]&0xF) ? IDE_STATUS_ERROR:IDE_STATUS_DRIVE_SEEK_COMPLETE);
-                controller->raise_irq();
+                raise_irq();
                 allow_writing = true;
             }
             break;
@@ -1701,7 +1709,7 @@ void IDEATAPICDROMDevice::atapi_cmd_completion() {
                 state = IDE_DEV_READY;
                 feature = ((sense[2]&0xF) << 4) | ((sense[2]&0xF) ? 0x04/*abort*/ : 0x00);
                 status = IDE_STATUS_DRIVE_READY|((sense[2]&0xF) ? IDE_STATUS_ERROR:IDE_STATUS_DRIVE_SEEK_COMPLETE);
-                controller->raise_irq();
+                raise_irq();
                 allow_writing = true;
             }
             break;
@@ -1719,7 +1727,7 @@ void IDEATAPICDROMDevice::atapi_cmd_completion() {
                 state = IDE_DEV_READY;
                 feature = ((sense[2]&0xF) << 4) | ((sense[2]&0xF) ? 0x04/*abort*/ : 0x00);
                 status = IDE_STATUS_DRIVE_READY|((sense[2]&0xF) ? IDE_STATUS_ERROR:IDE_STATUS_DRIVE_SEEK_COMPLETE);
-                controller->raise_irq();
+                raise_irq();
                 allow_writing = true;
             }
             break;
@@ -1737,7 +1745,7 @@ void IDEATAPICDROMDevice::atapi_cmd_completion() {
                 state = IDE_DEV_READY;
                 feature = ((sense[2]&0xF) << 4) | ((sense[2]&0xF) ? 0x04/*abort*/ : 0x00);
                 status = IDE_STATUS_DRIVE_READY|((sense[2]&0xF) ? IDE_STATUS_ERROR:IDE_STATUS_DRIVE_SEEK_COMPLETE);
-                controller->raise_irq();
+                raise_irq();
                 allow_writing = true;
             }
             break;
@@ -1757,7 +1765,7 @@ void IDEATAPICDROMDevice::atapi_cmd_completion() {
                 state = IDE_DEV_READY;
                 feature = ((sense[2]&0xF) << 4) | ((sense[2]&0xF) ? 0x04/*abort*/ : 0x00);
                 status = IDE_STATUS_DRIVE_READY|((sense[2]&0xF) ? IDE_STATUS_ERROR:IDE_STATUS_DRIVE_SEEK_COMPLETE);
-                controller->raise_irq();
+                raise_irq();
                 allow_writing = true;
             }
             break;
@@ -1782,7 +1790,7 @@ void IDEATAPICDROMDevice::atapi_cmd_completion() {
             abort_error();
             count = 0x03; /* no more data (command/data=1, input/output=1) */
             feature = 0xF4;
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
     }
@@ -2431,13 +2439,6 @@ static IDEController* GetIDEController(Bitu idx) {
     return idecontroller[idx];
 }
 
-#if 0//unused
-static IDEDevice* GetIDESelectedDevice(IDEController *ide) {
-    if (ide == NULL) return NULL;
-    return ide->device[ide->select];
-}
-#endif
-
 static bool IDE_CPU_Is_Vm86() {
     return (cpu.pmode && ((GETFLAG_IOPL<cpu.cpl) || GETFLAG(VM)));
 }
@@ -2828,7 +2829,10 @@ void IDE_ResetDiskByBIOS(unsigned char disk) {
                         dev->writecommand(0x08);
 
                         /* and then immediately clear the IRQ */
-                        ide->lower_irq();
+                        if (ide->device[ide->select] != NULL)
+                            ide->device[ide->select]->lower_irq();
+
+                        ide->check_device_irq();
                     }
                 }
             }
@@ -2860,7 +2864,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 if (disk == NULL) {
                     LOG_MSG("ATA READ fail, bios disk N/A\n");
                     ata->abort_error();
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     return;
                 }
 
@@ -2877,7 +2881,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                     if (ata->lba[0] == 0) {
                         LOG_MSG("ATA sector 0 does not exist\n");
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
                     else if ((unsigned int)(ata->drivehead & 0xFu) >= (unsigned int)ata->heads ||
@@ -2891,7 +2895,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                             (unsigned int)ata->heads,
                             (unsigned int)ata->sects);
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
 
@@ -2903,7 +2907,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 if (disk->Write_AbsoluteSector(sectorn, ata->sector) != 0) {
                     LOG_MSG("Failed to write sector\n");
                     ata->abort_error();
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     return;
                 }
 
@@ -2915,7 +2919,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                     /* end of the transfer */
                     ata->count = 0;
                     ata->status = IDE_STATUS_DRIVE_READY|IDE_STATUS_DRIVE_SEEK_COMPLETE;
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     ata->state = IDE_DEV_READY;
                     ata->allow_writing = true;
                     return;
@@ -2934,7 +2938,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 dev->state = IDE_DEV_DATA_WRITE;
                 dev->status = IDE_STATUS_DRQ|IDE_STATUS_DRIVE_READY|IDE_STATUS_DRIVE_SEEK_COMPLETE;
                 ata->prepare_write(0,512);
-                dev->controller->raise_irq();
+                dev->raise_irq();
                 break;
 
             case 0x20:/* READ SECTOR */
@@ -2942,7 +2946,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 if (disk == NULL) {
                     LOG_MSG("ATA READ fail, bios disk N/A\n");
                     ata->abort_error();
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     return;
                 }
 
@@ -2959,7 +2963,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                     if (ata->lba[0] == 0) {
                         LOG_MSG("WARNING C/H/S access mode and sector==0\n");
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
                     else if ((unsigned int)(ata->drivehead & 0xF) >= (unsigned int)ata->heads ||
@@ -2973,7 +2977,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                             (unsigned int)ata->heads,
                             (unsigned int)ata->sects);
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
 
@@ -2985,7 +2989,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 if (disk->Read_AbsoluteSector(sectorn, ata->sector) != 0) {
                     LOG_MSG("ATA read failed\n");
                     ata->abort_error();
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     return;
                 }
 
@@ -2997,7 +3001,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 dev->state = IDE_DEV_DATA_READ;
                 dev->status = IDE_STATUS_DRQ|IDE_STATUS_DRIVE_READY|IDE_STATUS_DRIVE_SEEK_COMPLETE;
                 ata->prepare_read(0,512);
-                dev->controller->raise_irq();
+                dev->raise_irq();
                 break;
 
             case 0x40:/* READ SECTOR VERIFY WITH RETRY */
@@ -3006,7 +3010,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 if (disk == NULL) {
                     LOG_MSG("ATA READ fail, bios disk N/A\n");
                     ata->abort_error();
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     return;
                 }
 
@@ -3023,7 +3027,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                     if (ata->lba[0] == 0) {
                         LOG_MSG("WARNING C/H/S access mode and sector==0\n");
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
                     else if ((unsigned int)(ata->drivehead & 0xF) >= (unsigned int)ata->heads ||
@@ -3037,7 +3041,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                             (unsigned int)ata->heads,
                             (unsigned int)ata->sects);
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
 
@@ -3049,7 +3053,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 if (disk->Read_AbsoluteSector(sectorn, ata->sector) != 0) {
                     LOG_MSG("ATA read failed\n");
                     ata->abort_error();
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     return;
                 }
 
@@ -3057,7 +3061,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                     /* end of the transfer */
                     ata->count = 0;
                     ata->status = IDE_STATUS_DRIVE_READY|IDE_STATUS_DRIVE_SEEK_COMPLETE;
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     ata->state = IDE_DEV_READY;
                     ata->allow_writing = true;
                     return;
@@ -3082,7 +3086,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 if (disk == NULL) {
                     LOG_MSG("ATA READ fail, bios disk N/A\n");
                     ata->abort_error();
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     return;
                 }
 
@@ -3099,7 +3103,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                     if (ata->lba[0] == 0) {
                         LOG_MSG("WARNING C/H/S access mode and sector==0\n");
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
                     else if ((unsigned int)(ata->drivehead & 0xF) >= (unsigned int)ata->heads ||
@@ -3113,7 +3117,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                             (unsigned int)ata->heads,
                             (unsigned int)ata->sects);
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
 
@@ -3130,7 +3134,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                     if (disk->Read_AbsoluteSector(sectorn+cc, ata->sector+(cc*512)) != 0) {
                         LOG_MSG("ATA read failed\n");
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
                 }
@@ -3143,7 +3147,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 dev->state = IDE_DEV_DATA_READ;
                 dev->status = IDE_STATUS_DRQ|IDE_STATUS_DRIVE_READY|IDE_STATUS_DRIVE_SEEK_COMPLETE;
                 ata->prepare_read(0,512*MIN((Bitu)ata->multiple_sector_count,(Bitu)sectcount));
-                dev->controller->raise_irq();
+                dev->raise_irq();
                 break;
 
             case 0xC5:/* WRITE MULTIPLE */
@@ -3151,7 +3155,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 if (disk == NULL) {
                     LOG_MSG("ATA READ fail, bios disk N/A\n");
                     ata->abort_error();
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     return;
                 }
 
@@ -3168,7 +3172,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                     if (ata->lba[0] == 0) {
                         LOG_MSG("ATA sector 0 does not exist\n");
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
                     else if ((unsigned int)(ata->drivehead & 0xF) >= (unsigned int)ata->heads ||
@@ -3182,7 +3186,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                             (unsigned int)ata->heads,
                             (unsigned int)ata->sects);
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
 
@@ -3196,7 +3200,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                     if (disk->Write_AbsoluteSector(sectorn+cc, ata->sector+(cc*512)) != 0) {
                         LOG_MSG("Failed to write sector\n");
                         ata->abort_error();
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         return;
                     }
                 }
@@ -3206,7 +3210,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                         /* end of the transfer */
                         ata->count = 0;
                         ata->status = IDE_STATUS_DRIVE_READY|IDE_STATUS_DRIVE_SEEK_COMPLETE;
-                        dev->controller->raise_irq();
+                        dev->raise_irq();
                         ata->state = IDE_DEV_READY;
                         ata->allow_writing = true;
                         return;
@@ -3228,7 +3232,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 dev->state = IDE_DEV_DATA_WRITE;
                 dev->status = IDE_STATUS_DRQ|IDE_STATUS_DRIVE_READY|IDE_STATUS_DRIVE_SEEK_COMPLETE;
                 ata->prepare_write(0,512*MIN((Bitu)ata->multiple_sector_count,(Bitu)sectcount));
-                dev->controller->raise_irq();
+                dev->raise_irq();
                 break;
 
             case 0xEC:/*IDENTIFY DEVICE (CONTINUED) */
@@ -3241,12 +3245,12 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 dev->feature = 0x00;
                 dev->lba[1] = 0x00;
                 dev->lba[2] = 0x00;
-                dev->controller->raise_irq();
+                dev->raise_irq();
                 break;
             default:
                 LOG_MSG("Unknown delayed IDE/ATA command\n");
                 dev->abort_error();
-                dev->controller->raise_irq();
+                dev->raise_irq();
                 break;
         }
     }
@@ -3261,7 +3265,7 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                 default:
                     LOG_MSG("Unknown delayed IDE/ATAPI busy wait command\n");
                     dev->abort_error();
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     break;
             }
         }
@@ -3279,12 +3283,12 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
                     dev->status = IDE_STATUS_DRQ|IDE_STATUS_DRIVE_READY|IDE_STATUS_DRIVE_SEEK_COMPLETE;
                     atapi->generate_identify_device();
                     atapi->prepare_read(0,512);
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     break;
                 default:
                     LOG_MSG("Unknown delayed IDE/ATAPI command\n");
                     dev->abort_error();
-                    dev->controller->raise_irq();
+                    dev->raise_irq();
                     break;
             }
         }
@@ -3292,11 +3296,23 @@ static void IDE_DelayedCommand(Bitu pk/*which IDE device*/) {
     else {
         LOG_MSG("Unknown delayed command\n");
         dev->abort_error();
-        dev->controller->raise_irq();
+        dev->raise_irq();
     }
 }
 
 void PC98_IDE_UpdateIRQ(void);
+
+void IDEController::check_device_irq() {
+    IDEDevice* dev = device[select];
+    bool sig = false;
+
+    if (dev) sig = dev->irq_signal;
+
+    if (irq_pending != sig) {
+        if (sig) raise_irq();
+        else lower_irq();
+    }
+}
 
 void IDEController::raise_irq() {
     irq_pending = true;
@@ -3336,6 +3352,20 @@ IDEController *match_ide_controller(Bitu port) {
     return NULL;
 }
 
+void IDEDevice::raise_irq() {
+    if (!irq_signal) {
+        irq_signal = true;
+        controller->check_device_irq();
+    }
+}
+
+void IDEDevice::lower_irq() {
+    if (irq_signal) {
+        irq_signal = false;
+        controller->check_device_irq();
+    }
+}
+
 Bitu IDEDevice::data_read(Bitu iolen) {
     (void)iolen;//UNUSED
     return 0xAAAAU;
@@ -3353,6 +3383,7 @@ IDEDevice::IDEDevice(IDEController *c,bool _slave) {
     controller = c;
     asleep = false;
     motor_on = true;
+    irq_signal = false;
     allow_writing = true;
     state = IDE_DEV_READY;
     feature = count = lba[0] = lba[1] = lba[2] = command = drivehead = 0;
@@ -3486,7 +3517,7 @@ void IDEATAPICDROMDevice::writecommand(uint8_t cmd) {
             feature = 0x04; /* abort */
             lba[1] = 0x14;  /* <- magic ATAPI identification */
             lba[2] = 0xEB;
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0xA0: /* ATAPI PACKET */
@@ -3496,7 +3527,7 @@ void IDEATAPICDROMDevice::writecommand(uint8_t cmd) {
                 abort_error();
                 count = 0x03; /* no more data (command/data=1, input/output=1) */
                 feature = 0xF4;
-                controller->raise_irq();
+                raise_irq();
             }
             else {
                 state = IDE_DEV_BUSY;
@@ -3525,7 +3556,7 @@ void IDEATAPICDROMDevice::writecommand(uint8_t cmd) {
             feature = 0x04; /* abort */
             lba[1] = 0x14;  /* <- magic ATAPI identification */
             lba[2] = 0xEB;
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0xEF: /* SET FEATURES */
@@ -3540,7 +3571,7 @@ void IDEATAPICDROMDevice::writecommand(uint8_t cmd) {
                 abort_error();
             }
             allow_writing = true;
-            controller->raise_irq();
+            raise_irq();
             break;
         default:
             LOG_MSG("Unknown IDE/ATAPI command %02X\n",cmd);
@@ -3548,7 +3579,7 @@ void IDEATAPICDROMDevice::writecommand(uint8_t cmd) {
             allow_writing = true;
             count = 0x03; /* no more data (command/data=1, input/output=1) */
             feature = 0xF4;
-            controller->raise_irq();
+            raise_irq();
             break;
     }
 }
@@ -3590,7 +3621,7 @@ void IDEATADevice::writecommand(uint8_t cmd) {
         case 0x00: /* NOP */
             feature = 0x04;
             status = IDE_STATUS_DRIVE_READY|IDE_STATUS_ERROR;
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x08: /* DEVICE RESET */
@@ -3600,7 +3631,7 @@ void IDEATADevice::writecommand(uint8_t cmd) {
             lba[1] = lba[2] = 0;
             /* NTS: Testing suggests that ATA hard drives DO fire an IRQ at this stage.
                     In fact, Windows 95 won't detect hard drives that don't fire an IRQ in desponse */
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x10: case 0x11: case 0x12: case 0x13: case 0x14: case 0x15: case 0x16: case 0x17: /* RECALIBRATE (1xh) */
@@ -3613,7 +3644,7 @@ void IDEATADevice::writecommand(uint8_t cmd) {
             drivehead &= 0x10; controller->drivehead = drivehead;
             lba[1] = lba[2] = 0;
             feature = 0x00;
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0x20: /* READ SECTOR */
@@ -3693,7 +3724,7 @@ void IDEATADevice::writecommand(uint8_t cmd) {
                 feature = 0x04; /* abort error */
                 abort_error();
             }
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0xA0:/*ATAPI PACKET*/
@@ -3714,7 +3745,7 @@ void IDEATADevice::writecommand(uint8_t cmd) {
             feature = 0x04; /* abort */
             lba[1] = 0x00;
             lba[2] = 0x00;
-            controller->raise_irq();
+            raise_irq();
             allow_writing = true;
             break;
         case 0xEC: /* IDENTIFY DEVICE */
@@ -3734,13 +3765,13 @@ void IDEATADevice::writecommand(uint8_t cmd) {
                 abort_error();
             }
             allow_writing = true;
-            controller->raise_irq();
+            raise_irq();
             break;
         default:
             LOG_MSG("Unknown IDE/ATA command %02X\n",cmd);
             abort_error();
             allow_writing = true;
-            controller->raise_irq();
+            raise_irq();
             break;
     }
 }
@@ -3989,7 +4020,7 @@ static void ide_altio_w(Bitu port,Bitu val,Bitu iolen) {
     if (port == 0) {/*3F6*/
         ide->interrupt_enable = (val&2u)?0:1;
         if (ide->interrupt_enable) {
-            if (ide->irq_pending) ide->raise_irq();
+            ide->check_device_irq();
         }
         else {
             if (IS_PC98_ARCH) {
@@ -4088,16 +4119,14 @@ static Bitu ide_baseio_r(Bitu port,Bitu iolen) {
             ret = ide->drivehead;
             break;
         case 7: /* 1F7 */
-            /* if an IDE device exists at selection return it's status, else return our status */
-            if (dev && dev->status & IDE_STATUS_BUSY) {
-            }
-            else if (dev == NULL && ide->status & IDE_STATUS_BUSY) {
-            }
-            else {
-                ide->lower_irq();
-            }
+            /* reading this port clears the device pending IRQ */
+            if (dev) {
+                if (!(dev->status & IDE_STATUS_BUSY))
+                    dev->lower_irq();
+	    }
 
             ret = (dev != NULL) ? dev->status : ide->status;
+            ide->check_device_irq();
             break;
     }
 
@@ -4188,7 +4217,6 @@ static void ide_baseio_w(Bitu port,Bitu val,Bitu iolen) {
             break;
         case 6: /* 1F6 */
             if (((val>>4)&1) != ide->select) {
-                ide->lower_irq();
                 /* update select pointer if bit 4 changes.
                    also emulate IDE busy state when changing drives */
                 if (dev) dev->deselect();
@@ -4205,6 +4233,7 @@ static void ide_baseio_w(Bitu port,Bitu val,Bitu iolen) {
             }
 
             ide->drivehead = val;
+            ide->check_device_irq();
             break;
         case 7: /* 1F7 */
             if (dev) dev->writecommand(val);
