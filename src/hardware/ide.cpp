@@ -1,8 +1,20 @@
 /*
- * IDE ATA/ATAPI and controller emulation for DOSBox-X
- * (C) 2012 Jonathan Campbell
+ *  IDE ATA/ATAPI and controller emulation for DOSBox-X
+ *  Copyright (C) 2012-2022 Jonathan Campbell
 
- * [insert open source license here]
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 /* $Id: ide.cpp,v 1.49 2009-04-10 09:53:04 c2woody Exp $ */
@@ -40,7 +52,7 @@
 #endif
 
 struct IDEEventPack {
-#if defined(HX_DOS) || defined(__MINGW32__)
+#if defined(HX_DOS) || (defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR))
 	IDEEventPack() = default;
 #endif
 	IDEEventPack(const unsigned int interface,const unsigned int device) : v(pack(interface,device)) {
@@ -4061,10 +4073,17 @@ void IDEController::register_isapnp() {
         i += 7+1;
 
         if (IRQ > 0) {
-            tmp[i+0] = (4 << 3) | 3;        /* IRQ resource */
+            /* NTS: Even though the ISA Plug & Play standard documents a 2 byte version (only the IRQ mask)
+	     *      and a 3 byte version (IRQ mask + additional bitmask for IRQ edge/level), Microsoft
+	     *      Windows only supports the 2 byte version.
+	     *
+	     *      Windows 2000 apparently does not like the 3 byte version and it's IDE driver will fail
+	     *      to detect the IDE ATA drive it booted from. Meaning, for some reason it will only
+	     *      probe the ATA drive like a CD-ROM drive and then give up without ever checking for an
+	     *      ATA device. Weird. */
+            tmp[i+0] = (4 << 3) | 2;        /* IRQ resource */
             host_writew(tmp+i+1,1 << IRQ);
-            tmp[i+3] = 0x09;            /* HTE=1 LTL=1 */
-            i += 3+1;
+            i += 2+1;
         }
 
         tmp[i+0] = 0x79;                /* END TAG */
