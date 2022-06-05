@@ -15,9 +15,17 @@ bool setSizeButNotResize();
 
 // output API below
 
+void X11_ErrorHandlerInstall(void);
+
 void OUTPUT_SURFACE_Initialize()
 {
-    // nothing to initialize (yet?)
+#if C_X11
+    // Apparently if the window size changes rapidly enough, SDL2 can be tricked into
+    // blitting the wrong dimensions to the window and trigger an X11 BadValue error.
+    // Set up an error handler that prints the error to STDERR and then returns,
+    // instead of the default handler which prints an error and exit()s this program.
+    X11_ErrorHandlerInstall();
+#endif
 }
 
 void OUTPUT_SURFACE_Select()
@@ -165,6 +173,8 @@ Bitu OUTPUT_SURFACE_SetSize()
              * This is a way to prevent that! */
             SDL_SetWindowMinimumSize(sdl.window, sdl.clip.x+sdl.clip.w, sdl.clip.y+sdl.clip.h);
             sdl.window = GFX_SetSDLWindowMode(sdl.clip.x+sdl.clip.w, sdl.clip.y+sdl.clip.h, SCREEN_SURFACE);
+            if (sdl.window == NULL)
+                E_Exit("Could not set windowed video mode %ix%i: %s", (int)sdl.draw.width, (int)sdl.draw.height, SDL_GetError());
         }
     }
     sdl.surface = SDL_GetWindowSurface(sdl.window);
@@ -200,9 +210,13 @@ Bitu OUTPUT_SURFACE_SetSize()
 #endif
 
     /* WARNING: If the user is resizing our window to smaller than what we want, SDL2 will give us a
-     *          window surface according to the smaller size, and then we crash! */
-    assert(sdl.surface->w >= (sdl.clip.x+sdl.clip.w));
-    assert(sdl.surface->h >= (sdl.clip.y+sdl.clip.h));
+     *          window surface according to the smaller size, and then we crash!
+     *
+     *          To avoid this crash, disable rendering until the window is big enough again. */
+    if (sdl.surface->w < (sdl.clip.x+sdl.clip.w) || sdl.surface->h < (sdl.clip.y+sdl.clip.h))
+        sdl.window_too_small = true;
+    else
+        sdl.window_too_small = false;
 
     sdl.deferred_resize = false;
     sdl.must_redraw_all = true;
