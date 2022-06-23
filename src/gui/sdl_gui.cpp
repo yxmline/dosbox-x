@@ -2163,7 +2163,8 @@ public:
         Section_prop * sec = static_cast<Section_prop *>(control->GetSection("vsync"));
         if (arg == MSG_Get("OK")) {
             if (sec) {
-                std::string s((const char *)name->getText(), 20);
+                std::string s((const char *)name->getText());
+                if (s.size()>20) s=s.substr(0,20);
                 std::string tmp("vsyncrate=");
                 tmp.append(s);
                 sec->HandleInputline(tmp);
