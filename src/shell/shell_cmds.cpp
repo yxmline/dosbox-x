@@ -1524,7 +1524,7 @@ static bool dirPaused(DOS_Shell * shell, Bitu w_size, bool optP, bool optW, bool
 	return true;
 }
 
-static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat, Bitu w_size, bool optW, bool optZ, bool optS, bool optP, bool optB, bool optA, bool optAD, bool optAminusD, bool optAS, bool optAminusS, bool optAH, bool optAminusH, bool optAR, bool optAminusR, bool optAA, bool optAminusA, bool optOGN, bool optOGD, bool optOGE, bool optOGS, bool optOG, bool optON, bool optOD, bool optOE, bool optOS, bool reverseSort) {
+static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat, Bitu w_size, bool optW, bool optZ, bool optS, bool optP, bool optB, bool optA, bool optAD, bool optAminusD, bool optAS, bool optAminusS, bool optAH, bool optAminusH, bool optAR, bool optAminusR, bool optAA, bool optAminusA, bool optOGN, bool optOGD, bool optOGE, bool optOGS, bool optOG, bool optON, bool optOD, bool optOE, bool optOS, bool reverseSort, bool rev2Sort) {
 	char path[DOS_PATHLENGTH];
 	char sargs[CROSS_LEN], largs[CROSS_LEN];
     unsigned int tcols=IS_PC98_ARCH?80:real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
@@ -1586,6 +1586,7 @@ static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat,
 		} while ( (ret=DOS_FindNext()) );
 		lfn_filefind_handle=fbak;
 
+		bool oneRev = (reverseSort||rev2Sort)&&reverseSort!=rev2Sort;
 		if (optON) {
 			// Sort by name
 			std::sort(results.begin(), results.end(), DtaResult::compareName);
@@ -1603,20 +1604,18 @@ static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat,
 			std::sort(results.begin(), results.end(), DtaResult::groupDirs);
 		} else if (optOGN) {
 			// Directories first, then files, both sort by name
-			std::sort(results.begin(), results.end(), reverseSort?DtaResult::groupRevDef:DtaResult::groupDef);
+			std::sort(results.begin(), results.end(), oneRev?DtaResult::groupRevDef:DtaResult::groupDef);
 		} else if (optOGE) {
 			// Directories first, then files, both sort by extension
-			std::sort(results.begin(), results.end(), reverseSort?DtaResult::groupRevExt:DtaResult::groupExt);
+			std::sort(results.begin(), results.end(), oneRev?DtaResult::groupRevExt:DtaResult::groupExt);
 		} else if (optOGS) {
 			// Directories first, then files, both sort by size
-			std::sort(results.begin(), results.end(), reverseSort?DtaResult::groupRevSize:DtaResult::groupSize);
+			std::sort(results.begin(), results.end(), oneRev?DtaResult::groupRevSize:DtaResult::groupSize);
 		} else if (optOGD) {
-			// Directories first, then files, both sort by dte
-			std::sort(results.begin(), results.end(), reverseSort?DtaResult::groupRevDate:DtaResult::groupDate);
+			// Directories first, then files, both sort by date
+			std::sort(results.begin(), results.end(), oneRev?DtaResult::groupRevDate:DtaResult::groupDate);
 		}
-		if (reverseSort) {
-			std::reverse(results.begin(), results.end());
-		}
+		if (reverseSort) std::reverse(results.begin(), results.end());
 
 		for (std::vector<DtaResult>::iterator iter = results.begin(); iter != results.end(); ++iter) {
 			if (CheckBreak(shell)) return false;
@@ -1838,7 +1837,7 @@ void DOS_Shell::CMD_DIR(char * args) {
 		optAminusA = false;
 	}
 	// Sorting flags
-	bool reverseSort = false;
+	bool reverseSort = false, rev2Sort = false;
 	bool optON=ScanCMDBool(args,"ON")||ScanCMDBool(args,"O:N");
 	if (ScanCMDBool(args,"O-N")) {
 		optON = true;
@@ -1864,25 +1863,34 @@ void DOS_Shell::CMD_DIR(char * args) {
 		optOG = true;
 		reverseSort = true;
 	}
+	bool b1 = false, b2 = false, b3 = false;
 	bool optOGN=ScanCMDBool(args,"O")||ScanCMDBool(args,"OGN")||ScanCMDBool(args,"O:GN");
-	if (ScanCMDBool(args,"O-GN")) {
+	b1=ScanCMDBool(args,"O-GN")||ScanCMDBool(args,"O:-GN");b2=ScanCMDBool(args,"O-G-N")||ScanCMDBool(args,"O:-G-N"),b3=ScanCMDBool(args,"OG-N")||ScanCMDBool(args,"O:G-N");
+	if (b1||b2||b3) {
 		optOGN = true;
-		reverseSort = true;
+		reverseSort = b1||b2;
+		rev2Sort = b2||b3;
 	}
 	bool optOGD=ScanCMDBool(args,"OGD")||ScanCMDBool(args,"O:GD");
-	if (ScanCMDBool(args,"O-GD")) {
+	b1=ScanCMDBool(args,"O-GD")||ScanCMDBool(args,"O:-GD");b2=ScanCMDBool(args,"O-G-D")||ScanCMDBool(args,"O:-G-D");b3=ScanCMDBool(args,"OG-D")||ScanCMDBool(args,"O:G-D");
+	if (b1||b2||b3) {
 		optOGD = true;
-		reverseSort = true;
+		reverseSort = b1||b2;
+		rev2Sort = b2||b3;
 	}
 	bool optOGE=ScanCMDBool(args,"OGE")||ScanCMDBool(args,"O:GE");
-	if (ScanCMDBool(args,"O-GE")) {
+	b1=ScanCMDBool(args,"O-GE")||ScanCMDBool(args,"O:-GE");b2=ScanCMDBool(args,"O-G-E")||ScanCMDBool(args,"O:-G-E");b3=ScanCMDBool(args,"OG-E")||ScanCMDBool(args,"O:G-E");
+	if (b1||b2||b3) {
 		optOGE = true;
-		reverseSort = true;
+		reverseSort = b1||b2;
+		rev2Sort = b2||b3;
 	}
 	bool optOGS=ScanCMDBool(args,"OGS")||ScanCMDBool(args,"O:GS");
-	if (ScanCMDBool(args,"O-GS")) {
+	b1=ScanCMDBool(args,"O-GS")||ScanCMDBool(args,"O:-GS");b2=ScanCMDBool(args,"O-G-S")||ScanCMDBool(args,"O:-G-S");b3=ScanCMDBool(args,"OG-S")||ScanCMDBool(args,"O:G-S");
+	if (b1||b2||b3) {
 		optOGS = true;
-		reverseSort = true;
+		reverseSort = b1||b2;
+		rev2Sort = b2||b3;
 	}
 	if (optOGN||optOGD||optOGE||optOGS) optOG = false;
 	if (ScanCMDBool(args,"-O")) {
@@ -1897,7 +1905,14 @@ void DOS_Shell::CMD_DIR(char * args) {
 		optOGS = false;
 		reverseSort = false;
 	}
-	const char *valid[] = {"4","W","P","-W","-P","WP","PW","Z","-Z","S","-S","B","-B","A","-A","AD","A:D","A-D","AS","A:S","A-S","AH","A:H","A-H","AR","A:R","A-R","AA","A:A","A-A","O","-O","ON","O:N","O-N","OD","O:D","O-D","OE","O:E","O-E","OS","O:S","O-S","OG","O:G","O-G","OGN","O:GN","O-GN","OGD","O:GD","O-GD","OGE","O:GE","O-GE","OGS","O:GS","O-GS",NULL};
+	const char *valid[] = {"4","W","P","-W","-P","WP","PW","Z","-Z","S","-S","B","-B",
+	"A","-A","AD","A:D","A-D","AS","A:S","A-S","AH","A:H","A-H","AR","A:R","A-R","AA","A:A","A-A",
+	"O","-O","ON","O:N","O-N","OD","O:D","O-D","OE","O:E","O-E","OS","O:S","O-S","OG","O:G","O-G",
+	"OGN","O:GN","O-GN","O:-GN","OG-N","O:G-N","O-G-N","O:-G-N",
+	"OGD","O:GD","O-GD","O:-GD","OG-D","O:G-D","O-G-D","O:-G-D",
+	"OGE","O:GE","O-GE","O:-GE","OG-E","O:G-E","O-G-E","O:-G-E",
+	"OGS","O:GS","O-GS","O:-GS","OG-S","O:G-S","O-G-S","O:-G-S",
+	NULL};
 	if (args && strlen(args)>1) for (int i=0; valid[i] && *args && strchr(args,'/'); i++) while (ScanCMDBool(args,valid[i]));
 	char * rem=ScanCMDRemain(args);
 	if (rem) {
@@ -1994,7 +2009,7 @@ void DOS_Shell::CMD_DIR(char * args) {
 	inshell=true;
 	while (!dirs.empty()) {
 		ctrlbrk=false;
-		if (!doDir(this, (char *)dirs.begin()->c_str(), dta, numformat, w_size, optW, optZ, optS, optP, optB, optA, optAD, optAminusD, optAS, optAminusS, optAH, optAminusH, optAR, optAminusR, optAA, optAminusA, optOGN, optOGD, optOGE, optOGS, optOG, optON, optOD, optOE, optOS, reverseSort)) {dos.dta(save_dta);inshell=false;return;}
+		if (!doDir(this, (char *)dirs.begin()->c_str(), dta, numformat, w_size, optW, optZ, optS, optP, optB, optA, optAD, optAminusD, optAS, optAminusS, optAH, optAminusH, optAR, optAminusR, optAA, optAminusA, optOGN, optOGD, optOGE, optOGS, optOG, optON, optOD, optOE, optOS, reverseSort, rev2Sort)) {dos.dta(save_dta);inshell=false;return;}
 		dirs.erase(dirs.begin());
 	}
 	inshell=false;
