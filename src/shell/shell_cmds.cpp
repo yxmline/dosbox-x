@@ -658,6 +658,13 @@ struct DtaResult {
 	uint8_t attr;
 
 	static bool groupDef(const DtaResult &lhs, const DtaResult &rhs) { return (lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY)?true:((((lhs.attr & DOS_ATTR_DIRECTORY) && (rhs.attr & DOS_ATTR_DIRECTORY)) || (!(lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY))) && strcmp(lhs.name, rhs.name) < 0); }
+	static bool groupExt(const DtaResult &lhs, const DtaResult &rhs) { return (lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY)?true:((((lhs.attr & DOS_ATTR_DIRECTORY) && (rhs.attr & DOS_ATTR_DIRECTORY)) || (!(lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY))) && strcmp(lhs.getExtension(), rhs.getExtension()) < 0); }
+	static bool groupSize(const DtaResult &lhs, const DtaResult &rhs) { return (lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY)?true:((((lhs.attr & DOS_ATTR_DIRECTORY) && (rhs.attr & DOS_ATTR_DIRECTORY)) || (!(lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY))) && lhs.size < rhs.size); }
+	static bool groupDate(const DtaResult &lhs, const DtaResult &rhs) { return (lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY)?true:((((lhs.attr & DOS_ATTR_DIRECTORY) && (rhs.attr & DOS_ATTR_DIRECTORY)) || (!(lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY))) && (lhs.date < rhs.date || (lhs.date == rhs.date && lhs.time < rhs.time))); }
+	static bool groupRevDef(const DtaResult &lhs, const DtaResult &rhs) { return (lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY)?true:((((lhs.attr & DOS_ATTR_DIRECTORY) && (rhs.attr & DOS_ATTR_DIRECTORY)) || (!(lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY))) && strcmp(lhs.name, rhs.name) > 0); }
+	static bool groupRevExt(const DtaResult &lhs, const DtaResult &rhs) { return (lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY)?true:((((lhs.attr & DOS_ATTR_DIRECTORY) && (rhs.attr & DOS_ATTR_DIRECTORY)) || (!(lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY))) && strcmp(lhs.getExtension(), rhs.getExtension()) > 0); }
+	static bool groupRevSize(const DtaResult &lhs, const DtaResult &rhs) { return (lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY)?true:((((lhs.attr & DOS_ATTR_DIRECTORY) && (rhs.attr & DOS_ATTR_DIRECTORY)) || (!(lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY))) && lhs.size > rhs.size); }
+	static bool groupRevDate(const DtaResult &lhs, const DtaResult &rhs) { return (lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY)?true:((((lhs.attr & DOS_ATTR_DIRECTORY) && (rhs.attr & DOS_ATTR_DIRECTORY)) || (!(lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY))) && (lhs.date > rhs.date || (lhs.date == rhs.date && lhs.time > rhs.time))); }
 	static bool groupDirs(const DtaResult &lhs, const DtaResult &rhs) { return (lhs.attr & DOS_ATTR_DIRECTORY) && !(rhs.attr & DOS_ATTR_DIRECTORY); }
 	static bool compareName(const DtaResult &lhs, const DtaResult &rhs) { return strcmp(lhs.name, rhs.name) < 0; }
 	static bool compareExt(const DtaResult &lhs, const DtaResult &rhs) { return strcmp(lhs.getExtension(), rhs.getExtension()) < 0; }
@@ -1517,7 +1524,7 @@ static bool dirPaused(DOS_Shell * shell, Bitu w_size, bool optP, bool optW, bool
 	return true;
 }
 
-static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat, Bitu w_size, bool optW, bool optZ, bool optS, bool optP, bool optB, bool optA, bool optAD, bool optAminusD, bool optAS, bool optAminusS, bool optAH, bool optAminusH, bool optAR, bool optAminusR, bool optAA, bool optAminusA, bool optO, bool optOG, bool optON, bool optOD, bool optOE, bool optOS, bool reverseSort) {
+static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat, Bitu w_size, bool optW, bool optZ, bool optS, bool optP, bool optB, bool optA, bool optAD, bool optAminusD, bool optAS, bool optAminusS, bool optAH, bool optAminusH, bool optAR, bool optAminusR, bool optAA, bool optAminusA, bool optOGN, bool optOGD, bool optOGE, bool optOGS, bool optOG, bool optON, bool optOD, bool optOE, bool optOS, bool reverseSort) {
 	char path[DOS_PATHLENGTH];
 	char sargs[CROSS_LEN], largs[CROSS_LEN];
     unsigned int tcols=IS_PC98_ARCH?80:real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
@@ -1594,9 +1601,18 @@ static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat,
 		} else if (optOG) {
 			// Directories first, then files
 			std::sort(results.begin(), results.end(), DtaResult::groupDirs);
-		} else if (optO) {
+		} else if (optOGN) {
 			// Directories first, then files, both sort by name
-			std::sort(results.begin(), results.end(), DtaResult::groupDef);
+			std::sort(results.begin(), results.end(), reverseSort?DtaResult::groupRevDef:DtaResult::groupDef);
+		} else if (optOGE) {
+			// Directories first, then files, both sort by extension
+			std::sort(results.begin(), results.end(), reverseSort?DtaResult::groupRevExt:DtaResult::groupExt);
+		} else if (optOGS) {
+			// Directories first, then files, both sort by size
+			std::sort(results.begin(), results.end(), reverseSort?DtaResult::groupRevSize:DtaResult::groupSize);
+		} else if (optOGD) {
+			// Directories first, then files, both sort by dte
+			std::sort(results.begin(), results.end(), reverseSort?DtaResult::groupRevDate:DtaResult::groupDate);
 		}
 		if (reverseSort) {
 			std::reverse(results.begin(), results.end());
@@ -1848,18 +1864,40 @@ void DOS_Shell::CMD_DIR(char * args) {
 		optOG = true;
 		reverseSort = true;
 	}
-	bool optO=ScanCMDBool(args,"O");
-	if (ScanCMDBool(args,"OGN")) optO=true;
+	bool optOGN=ScanCMDBool(args,"O")||ScanCMDBool(args,"OGN")||ScanCMDBool(args,"O:GN");
+	if (ScanCMDBool(args,"O-GN")) {
+		optOGN = true;
+		reverseSort = true;
+	}
+	bool optOGD=ScanCMDBool(args,"OGD")||ScanCMDBool(args,"O:GD");
+	if (ScanCMDBool(args,"O-GD")) {
+		optOGD = true;
+		reverseSort = true;
+	}
+	bool optOGE=ScanCMDBool(args,"OGE")||ScanCMDBool(args,"O:GE");
+	if (ScanCMDBool(args,"O-GE")) {
+		optOGE = true;
+		reverseSort = true;
+	}
+	bool optOGS=ScanCMDBool(args,"OGS")||ScanCMDBool(args,"O:GS");
+	if (ScanCMDBool(args,"O-GS")) {
+		optOGS = true;
+		reverseSort = true;
+	}
+	if (optOGN||optOGD||optOGE||optOGS) optOG = false;
 	if (ScanCMDBool(args,"-O")) {
-		optO = false;
 		optOG = false;
 		optON = false;
 		optOD = false;
 		optOE = false;
 		optOS = false;
+		optOGN = false;
+		optOGD = false;
+		optOGE = false;
+		optOGS = false;
 		reverseSort = false;
 	}
-	const char *valid[] = {"4","W","P","-W","-P","WP","PW","Z","-Z","S","-S","B","-B","A","-A","AD","A:D","A-D","AS","A:S","A-S","AH","A:H","A-H","AR","A:R","A-R","AA","A:A","A-A","O","-O","ON","O:N","O-N","OD","O:D","O-D","OE","O:E","O-E","OS","O:S","O-S","OG","O:G","O-G","OGN",NULL};
+	const char *valid[] = {"4","W","P","-W","-P","WP","PW","Z","-Z","S","-S","B","-B","A","-A","AD","A:D","A-D","AS","A:S","A-S","AH","A:H","A-H","AR","A:R","A-R","AA","A:A","A-A","O","-O","ON","O:N","O-N","OD","O:D","O-D","OE","O:E","O-E","OS","O:S","O-S","OG","O:G","O-G","OGN","O:GN","O-GN","OGD","O:GD","O-GD","OGE","O:GE","O-GE","OGS","O:GS","O-GS",NULL};
 	if (args && strlen(args)>1) for (int i=0; valid[i] && *args && strchr(args,'/'); i++) while (ScanCMDBool(args,valid[i]));
 	char * rem=ScanCMDRemain(args);
 	if (rem) {
@@ -1956,7 +1994,7 @@ void DOS_Shell::CMD_DIR(char * args) {
 	inshell=true;
 	while (!dirs.empty()) {
 		ctrlbrk=false;
-		if (!doDir(this, (char *)dirs.begin()->c_str(), dta, numformat, w_size, optW, optZ, optS, optP, optB, optA, optAD, optAminusD, optAS, optAminusS, optAH, optAminusH, optAR, optAminusR, optAA, optAminusA, optO, optOG, optON, optOD, optOE, optOS, reverseSort)) {dos.dta(save_dta);inshell=false;return;}
+		if (!doDir(this, (char *)dirs.begin()->c_str(), dta, numformat, w_size, optW, optZ, optS, optP, optB, optA, optAD, optAminusD, optAS, optAminusS, optAH, optAminusH, optAR, optAminusR, optAA, optAminusA, optOGN, optOGD, optOGE, optOGS, optOG, optON, optOD, optOE, optOS, reverseSort)) {dos.dta(save_dta);inshell=false;return;}
 		dirs.erase(dirs.begin());
 	}
 	inshell=false;

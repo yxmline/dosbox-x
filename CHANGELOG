@@ -79,6 +79,8 @@
     command possible such as ECHO. ECHO; ECHO: ECHO[
     ECHO] ECHO\ ECHO/ ECHO" ECHO+ (issue #3503).
     (joncampbell123).
+  - DIR command supports more sorting methods including
+    "DIR /OGD", "DIR /OGE", and "DIR /OGS". (Wengier)
   - EGA: Add machine type to emulate 200-line (CGA
     compatible) EGA display mode, machine=ega200.
     All text modes have 8x8 character cells, use CGA
