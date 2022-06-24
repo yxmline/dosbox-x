@@ -607,7 +607,7 @@ void DOS_Drive_Cache::CreateShortName(CFileInfo* curDir, CFileInfo* info) {
     char* pos = strchr(tmpName,'.');
     if (pos) {
         // ignore preceding '.' if extension is longer than "3"
-        if (strlen(pos)>4) {
+        if (strlen(pos)>4 || (strlen(pos) == strlen(tmpName) && strcmp(tmpName, ".") && strcmp(tmpName, ".."))) {
             while (*tmpName=='.') tmpName++;
             createShort = true;
         }
