@@ -1814,15 +1814,15 @@ void DOS_Shell::CMD_DIR(char * args) {
 	if (ScanCMDBool(args,"-B")) optB=false;
 	bool optA=ScanCMDBool(args,"A");
 	bool optAD=ScanCMDBool(args,"AD")||ScanCMDBool(args,"A:D");
-	bool optAminusD=ScanCMDBool(args,"A-D");
+	bool optAminusD=ScanCMDBool(args,"A-D")||ScanCMDBool(args,"A:-D");
 	bool optAS=ScanCMDBool(args,"AS")||ScanCMDBool(args,"A:S");
-	bool optAminusS=ScanCMDBool(args,"A-S");
+	bool optAminusS=ScanCMDBool(args,"A-S")||ScanCMDBool(args,"A:-S");
 	bool optAH=ScanCMDBool(args,"AH")||ScanCMDBool(args,"A:H");
-	bool optAminusH=ScanCMDBool(args,"A-H");
+	bool optAminusH=ScanCMDBool(args,"A-H")||ScanCMDBool(args,"A:-H");
 	bool optAR=ScanCMDBool(args,"AR")||ScanCMDBool(args,"A:R");
-	bool optAminusR=ScanCMDBool(args,"A-R");
+	bool optAminusR=ScanCMDBool(args,"A-R")||ScanCMDBool(args,"A:-R");
 	bool optAA=ScanCMDBool(args,"AA")||ScanCMDBool(args,"A:A");
-	bool optAminusA=ScanCMDBool(args,"A-A");
+	bool optAminusA=ScanCMDBool(args,"A-A")||ScanCMDBool(args,"A:-A");
 	if (ScanCMDBool(args,"-A")) {
 		optA = false;
 		optAD = false;
@@ -1839,55 +1839,56 @@ void DOS_Shell::CMD_DIR(char * args) {
 	// Sorting flags
 	bool reverseSort = false, rev2Sort = false;
 	bool optON=ScanCMDBool(args,"ON")||ScanCMDBool(args,"O:N");
-	if (ScanCMDBool(args,"O-N")) {
+	if (ScanCMDBool(args,"O-N")||ScanCMDBool(args,"O:-N")) {
 		optON = true;
 		reverseSort = true;
 	}
 	bool optOD=ScanCMDBool(args,"OD")||ScanCMDBool(args,"O:D");
-	if (ScanCMDBool(args,"O-D")) {
+	if (ScanCMDBool(args,"O-D")||ScanCMDBool(args,"O:-D")) {
 		optOD = true;
 		reverseSort = true;
 	}
 	bool optOE=ScanCMDBool(args,"OE")||ScanCMDBool(args,"O:E");
-	if (ScanCMDBool(args,"O-E")) {
+	if (ScanCMDBool(args,"O-E")||ScanCMDBool(args,"O:-E")) {
 		optOE = true;
 		reverseSort = true;
 	}
 	bool optOS=ScanCMDBool(args,"OS")||ScanCMDBool(args,"O:S");
-	if (ScanCMDBool(args,"O-S")) {
+	if (ScanCMDBool(args,"O-S")||ScanCMDBool(args,"O:-S")) {
 		optOS = true;
 		reverseSort = true;
 	}
 	bool optOG=ScanCMDBool(args,"OG")||ScanCMDBool(args,"O:G");
-	if (ScanCMDBool(args,"O-G")) {
+	if (ScanCMDBool(args,"O-G")||ScanCMDBool(args,"O:-G")) {
 		optOG = true;
 		reverseSort = true;
 	}
-	bool b1 = false, b2 = false, b3 = false;
-	bool optOGN=ScanCMDBool(args,"O")||ScanCMDBool(args,"OGN")||ScanCMDBool(args,"O:GN");
-	b1=ScanCMDBool(args,"O-GN")||ScanCMDBool(args,"O:-GN");b2=ScanCMDBool(args,"O-G-N")||ScanCMDBool(args,"O:-G-N"),b3=ScanCMDBool(args,"OG-N")||ScanCMDBool(args,"O:G-N");
-	if (b1||b2||b3) {
+	bool b0 = false, b1 = false, b2 = false, b3 = false;
+	bool optOGN = false, optOGD = false, optOGE = false, optOGS = false;
+	b0=ScanCMDBool(args,"O")||ScanCMDBool(args,"OGN")||ScanCMDBool(args,"O:GN");b1=ScanCMDBool(args,"O-GN")||ScanCMDBool(args,"O:-GN");
+	b2=ScanCMDBool(args,"O-G-N")||ScanCMDBool(args,"O:-G-N"),b3=ScanCMDBool(args,"OG-N")||ScanCMDBool(args,"O:G-N");
+	if (b0||b1||b2||b3) {
 		optOGN = true;
 		reverseSort = b1||b2;
 		rev2Sort = b2||b3;
 	}
-	bool optOGD=ScanCMDBool(args,"OGD")||ScanCMDBool(args,"O:GD");
-	b1=ScanCMDBool(args,"O-GD")||ScanCMDBool(args,"O:-GD");b2=ScanCMDBool(args,"O-G-D")||ScanCMDBool(args,"O:-G-D");b3=ScanCMDBool(args,"OG-D")||ScanCMDBool(args,"O:G-D");
-	if (b1||b2||b3) {
+	b0=ScanCMDBool(args,"OGD")||ScanCMDBool(args,"O:GD");b1=ScanCMDBool(args,"O-GD")||ScanCMDBool(args,"O:-GD");
+	b2=ScanCMDBool(args,"O-G-D")||ScanCMDBool(args,"O:-G-D");b3=ScanCMDBool(args,"OG-D")||ScanCMDBool(args,"O:G-D");
+	if (b0||b1||b2||b3) {
 		optOGD = true;
 		reverseSort = b1||b2;
 		rev2Sort = b2||b3;
 	}
-	bool optOGE=ScanCMDBool(args,"OGE")||ScanCMDBool(args,"O:GE");
-	b1=ScanCMDBool(args,"O-GE")||ScanCMDBool(args,"O:-GE");b2=ScanCMDBool(args,"O-G-E")||ScanCMDBool(args,"O:-G-E");b3=ScanCMDBool(args,"OG-E")||ScanCMDBool(args,"O:G-E");
-	if (b1||b2||b3) {
+	b0=ScanCMDBool(args,"OGE")||ScanCMDBool(args,"O:GE");b1=ScanCMDBool(args,"O-GE")||ScanCMDBool(args,"O:-GE");
+	b2=ScanCMDBool(args,"O-G-E")||ScanCMDBool(args,"O:-G-E");b3=ScanCMDBool(args,"OG-E")||ScanCMDBool(args,"O:G-E");
+	if (b0||b1||b2||b3) {
 		optOGE = true;
 		reverseSort = b1||b2;
 		rev2Sort = b2||b3;
 	}
-	bool optOGS=ScanCMDBool(args,"OGS")||ScanCMDBool(args,"O:GS");
-	b1=ScanCMDBool(args,"O-GS")||ScanCMDBool(args,"O:-GS");b2=ScanCMDBool(args,"O-G-S")||ScanCMDBool(args,"O:-G-S");b3=ScanCMDBool(args,"OG-S")||ScanCMDBool(args,"O:G-S");
-	if (b1||b2||b3) {
+	b0=ScanCMDBool(args,"OGS")||ScanCMDBool(args,"O:GS");b1=ScanCMDBool(args,"O-GS")||ScanCMDBool(args,"O:-GS");
+	b2=ScanCMDBool(args,"O-G-S")||ScanCMDBool(args,"O:-G-S");b3=ScanCMDBool(args,"OG-S")||ScanCMDBool(args,"O:G-S");
+	if (b0||b1||b2||b3) {
 		optOGS = true;
 		reverseSort = b1||b2;
 		rev2Sort = b2||b3;
@@ -1906,8 +1907,8 @@ void DOS_Shell::CMD_DIR(char * args) {
 		reverseSort = false;
 	}
 	const char *valid[] = {"4","W","P","-W","-P","WP","PW","Z","-Z","S","-S","B","-B",
-	"A","-A","AD","A:D","A-D","AS","A:S","A-S","AH","A:H","A-H","AR","A:R","A-R","AA","A:A","A-A",
-	"O","-O","ON","O:N","O-N","OD","O:D","O-D","OE","O:E","O-E","OS","O:S","O-S","OG","O:G","O-G",
+	"A","-A","AD","A:D","A-D","A:-D","AS","A:S","A-S","A:-S","AH","A:H","A-H","A:-H","AR","A:R","A-R","A:-R","AA","A:A","A-A","A:-A",
+	"O","-O","ON","O:N","O-N","O:-N","OD","O:D","O-D","O:-D","OE","O:E","O-E","O:-E","OS","O:S","O-S","O:-S","OG","O:G","O-G","O:-G",
 	"OGN","O:GN","O-GN","O:-GN","OG-N","O:G-N","O-G-N","O:-G-N",
 	"OGD","O:GD","O-GD","O:-GD","OG-D","O:G-D","O-G-D","O:-G-D",
 	"OGE","O:GE","O-GE","O:-GE","OG-E","O:G-E","O-G-E","O:-G-E",
