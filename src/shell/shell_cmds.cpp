@@ -150,13 +150,13 @@ static void StripSpaces(char*&args,char also) {
 		args++;
 }
 
-static char* ExpandDot(char*args, char* buffer , size_t bufsize) {
+static char* ExpandDot(char*args, char* buffer , size_t bufsize, bool expand) {
 	if(*args == '.') {
 		if(*(args+1) == 0){
 			safe_strncpy(buffer, "*.*", bufsize);
 			return buffer;
 		}
-		if( (*(args+1) != '.') && (*(args+1) != '\\') ) {
+		if( (*(args+1) != '.') && (*(args+1) != '\\') && expand) {
 			buffer[0] = '*';
 			buffer[1] = 0;
 			if (bufsize > 2) strncat(buffer,args,bufsize - 1 /*used buffer portion*/ - 1 /*trailing zero*/  );
@@ -165,6 +165,32 @@ static char* ExpandDot(char*args, char* buffer , size_t bufsize) {
 			safe_strncpy (buffer, args, bufsize);
 	}
 	else safe_strncpy(buffer,args, bufsize);
+	return buffer;
+}
+
+static char* ExpandDotMore(char*args, char* buffer , size_t bufsize) {
+	char * find_last;
+	find_last=strrchr_dbcs(args,'\\');
+	if (find_last!=NULL) find_last++;
+	if (find_last!=NULL && *find_last == '.') {
+		if(*(find_last+1) == 0){
+			safe_strncpy(buffer, args, bufsize);
+			return buffer;
+		}
+		if( (*(find_last+1) != '.')) {
+			*find_last = 0;
+			strcpy(buffer, args);
+			*find_last = '.';
+			size_t len = strlen(buffer);
+			buffer[len] = '*';
+			buffer[len+1] = 0;
+			if (bufsize > len + 2) strncat(buffer,find_last,bufsize - len - 1 /*used buffer portion*/ - 1 /*trailing zero*/  );
+			else safe_strncpy(buffer, args, bufsize);
+			return buffer;
+		} else
+			safe_strncpy(buffer, args, bufsize);
+	}
+	else safe_strncpy(buffer, args, bufsize);
 	return buffer;
 }
 
@@ -493,7 +519,7 @@ void DOS_Shell::CMD_DELETE(char * args) {
 	char buffer[CROSS_LEN];
     char name[DOS_NAMELENGTH_ASCII],lname[LFN_NAMELENGTH+1];
     uint32_t size;uint16_t time,date;uint8_t attr;
-	args = ExpandDot(args,buffer, CROSS_LEN);
+	args = ExpandDot(args,buffer, CROSS_LEN, false);
 	StripSpaces(args);
 	if (!DOS_Canonicalize(args,full)) { WriteOut(MSG_Get("SHELL_ILLEGAL_PATH"));dos.dta(save_dta);return; }
 	if (strlen(args)&&args[strlen(args)-1]!='\\') {
@@ -816,7 +842,7 @@ void DOS_Shell::CMD_DELTREE(char * args) {
 		if (strlen(find_last)>0&&args[strlen(args)-1]=='*'&&strchr(find_last, '.')==NULL) strcat(args, ".*");
 	}
 	char buffer[CROSS_LEN];
-	args = ExpandDot(args,buffer, CROSS_LEN);
+	args = ExpandDot(args,buffer, CROSS_LEN, true);
 	StripSpaces(args);
 	RealPt save_dta=dos.dta();
 	dos.dta(dos.tables.tempdta);
@@ -1526,7 +1552,7 @@ static bool dirPaused(DOS_Shell * shell, Bitu w_size, bool optP, bool optW, bool
 
 static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat, Bitu w_size, bool optW, bool optZ, bool optS, bool optP, bool optB, bool optA, bool optAD, bool optAminusD, bool optAS, bool optAminusS, bool optAH, bool optAminusH, bool optAR, bool optAminusR, bool optAA, bool optAminusA, bool optOGN, bool optOGD, bool optOGE, bool optOGS, bool optOG, bool optON, bool optOD, bool optOE, bool optOS, bool reverseSort, bool rev2Sort) {
 	char path[DOS_PATHLENGTH];
-	char sargs[CROSS_LEN], largs[CROSS_LEN];
+	char sargs[CROSS_LEN], largs[CROSS_LEN], buffer[CROSS_LEN];
     unsigned int tcols=IS_PC98_ARCH?80:real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
     if (!tcols) tcols=80;
 
@@ -1559,6 +1585,11 @@ static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat,
 	int fbak=lfn_filefind_handle;
 	lfn_filefind_handle=uselfn&&!optZ?LFN_FILEFIND_INTERNAL:LFN_FILEFIND_NONE;
 	bool ret=DOS_FindFirst(args,0xffff & ~DOS_ATTR_VOLUME), found=true, first=true;
+	if (!ret) {
+		size_t len = strlen(args);
+		args = ExpandDotMore(args,buffer,CROSS_LEN);
+		if (strlen(args)!=len) ret=DOS_FindFirst(args,0xffff & ~DOS_ATTR_VOLUME);
+	}
 	lfn_filefind_handle=fbak;
 	if (ret) {
 		std::vector<DtaResult> results;
@@ -1939,7 +1970,7 @@ void DOS_Shell::CMD_DIR(char * args) {
 			break;
 		}
 	}
-	args = ExpandDot(args,buffer,CROSS_LEN);
+	args = ExpandDot(args,buffer,CROSS_LEN,!uselfn);
 
 	if (DOS_FindDevice(args) != DOS_DEVICES) {
 		WriteOut(MSG_Get("SHELL_CMD_FILE_NOT_FOUND"),args);
@@ -2099,7 +2130,7 @@ void DOS_Shell::CMD_LS(char *args) {
 
 	// Handle patterns starting with a dot.
 	char buffer[CROSS_LEN];
-	pattern = ExpandDot((char *)pattern.c_str(), buffer, sizeof(buffer));
+	pattern = ExpandDot((char *)pattern.c_str(), buffer, sizeof(buffer), true);
 
 	// When there's no wildcard and target is a directory then search files
 	// inside the directory.
@@ -3554,7 +3585,7 @@ void DOS_Shell::CMD_ATTRIB(char *args){
 	} while (*args);
 
 	char buffer[CROSS_LEN];
-	args = ExpandDot(sfull,buffer, CROSS_LEN);
+	args = ExpandDot(sfull,buffer, CROSS_LEN, false);
 	StripSpaces(args);
 	RealPt save_dta=dos.dta();
 	dos.dta(dos.tables.tempdta);
