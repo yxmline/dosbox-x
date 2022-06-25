@@ -43,10 +43,9 @@ typedef wchar_t host_cnv_char_t;
 typedef char host_cnv_char_t;
 #endif
 extern std::string prefix_local;
-extern bool isKanji1(uint8_t chr);
 extern bool gbk, hidenonrep, ignorespecial;
 extern char *CodePageHostToGuest(const host_cnv_char_t *s);
-bool CodePageHostToGuestUTF16(char *d/*CROSS_LEN*/,const uint16_t *s/*CROSS_LEN*/);
+bool isKanji1(uint8_t chr), CodePageHostToGuestUTF16(char *d/*CROSS_LEN*/,const uint16_t *s/*CROSS_LEN*/);
 
 #if defined HAVE_SYS_TYPES_H && defined HAVE_PWD_H
 #include <sys/types.h>
