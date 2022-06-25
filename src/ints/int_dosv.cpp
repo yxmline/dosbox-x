@@ -139,6 +139,15 @@ bool isKanji1(uint8_t chr) {
         return (chr >= 0x81 && chr <= 0x9f) || (chr >= 0xe0 && chr <= 0xfc);
 }
 
+bool isKanji1_gbk(uint8_t chr) {
+    if (dos.loaded_codepage != 936) return isKanji1(chr);
+    bool kk = gbk, ret = false;
+    gbk = true;
+    ret = isKanji1(chr);
+    gbk = kk;
+    return ret;
+}
+
 bool isKanji2(uint8_t chr) {
 #if defined(USE_TTF)
     if (dos.loaded_codepage == 936 || dos.loaded_codepage == 949 || dos.loaded_codepage == 950 || dos.loaded_codepage == 951 || ((IS_DOSV || ttf_dosv) && !IS_JDOSV))
@@ -657,7 +666,7 @@ uint8_t *GetDbcsFont(Bitu code)
 	if ((IS_JDOSV || dos.loaded_codepage == 932) && del_flag && (code & 0xFF) == 0x7F) code++;
 	if(jfont_cache_dbcs_16[code] == 0) {
         if (fontdata16 && fontsize16) {
-            if (dos.loaded_codepage == 936 && !(fontsize16%16) && (code/0x100)>0xa0 && (code/0x100)<0xff && (code%0x100)>0xa0) {
+            if (dos.loaded_codepage == 936 && !(fontsize16%16) && (code/0x100)>0xa0 && (code/0x100)<0xff && (code%0x100)>0xa0 && (code%0x100)<0xfe) {
                 int offset = (94 * (unsigned int)((code/0x100) - 0xa0 - 1) + ((code%0x100) - 0xa0 - 1)) * 32;
                 if (offset + 32 <= fontsize16) {
                     memcpy(&jfont_dbcs_16[code * 32], fontdata16+offset, 32);
@@ -725,7 +734,7 @@ uint8_t *GetDbcs14Font(Bitu code, bool &is14)
     if ((IS_JDOSV || dos.loaded_codepage == 932) && del_flag && (code & 0xFF) == 0x7F) code++;
     if(jfont_cache_dbcs_14[code] == 0) {
         if (fontdata14 && fontsize14) {
-            if (dos.loaded_codepage == 936 && !(fontsize14%14) && (code/0x100)>0xa0 && (code/0x100)<0xff && (code%0x100)>0xa0) {
+            if (dos.loaded_codepage == 936 && !(fontsize14%14) && (code/0x100)>0xa0 && (code/0x100)<0xff && (code%0x100)>0xa0 && (code%0x100)<0xfe) {
                 int offset = (94 * (unsigned int)((code/0x100) - 0xa0 - 1) + ((code%0x100) - 0xa0 - 1)) * 28;
                 if (offset + 28 <= fontsize14) {
                     memcpy(&jfont_dbcs_14[code * 28], fontdata14+offset, 28);
@@ -804,7 +813,7 @@ uint8_t *GetDbcs24Font(Bitu code)
 	if ((IS_JDOSV || dos.loaded_codepage == 932) && del_flag && (code & 0xFF) == 0x7F) code++;
 	if(jfont_cache_dbcs_24[code] == 0) {
         if (fontdata24 && fontsize24) {
-            if (dos.loaded_codepage == 936 && !(fontsize24%24) && (code/0x100)>0xa0 && (code/0x100)<0xff && (code%0x100)>0xa0) {
+            if (dos.loaded_codepage == 936 && !(fontsize24%24) && (code/0x100)>0xa0 && (code/0x100)<0xff && (code%0x100)>0xa0 && (code%0x100)<0xfe) {
                 int offset = (94 * (unsigned int)((code/0x100) - 0xa0 - 1) + ((code%0x100) - 0xa0 - 1)) * 72;
                 if (offset + 72 <= fontsize24) {
                     memcpy(&jfont_dbcs_24[code * 72], fontdata24+offset, 72);
