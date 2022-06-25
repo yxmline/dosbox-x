@@ -45,7 +45,7 @@ typedef char host_cnv_char_t;
 extern std::string prefix_local;
 extern bool gbk, hidenonrep, ignorespecial;
 extern char *CodePageHostToGuest(const host_cnv_char_t *s);
-bool isKanji1(uint8_t chr), CodePageHostToGuestUTF16(char *d/*CROSS_LEN*/,const uint16_t *s/*CROSS_LEN*/);
+bool isKanji1_gbk(uint8_t chr), CodePageHostToGuestUTF16(char *d/*CROSS_LEN*/,const uint16_t *s/*CROSS_LEN*/);
 
 #if defined HAVE_SYS_TYPES_H && defined HAVE_PWD_H
 #include <sys/types.h>
@@ -242,13 +242,7 @@ static bool isDBCSlead(const wchar_t fchar) {
 	text[0]=0;
 	text[1]=0;
 	text[2]=0;
-	if (CodePageHostToGuestUTF16(text,uname)) {
-		bool ret = false, gk = gbk;
-		gbk = true;
-		ret = isKanji1(text[0] & 0xFF);
-		gbk = gk;
-		return ret;
-	}
+	if (CodePageHostToGuestUTF16(text,uname)) return isKanji1_gbk(text[0] & 0xFF);
 	else return false;
 }
 

@@ -22,6 +22,8 @@
     "system" and "version". (Wengier)
   - Fix creation of disk images with spaces using the
     "Create blank disk image..." menu option. (Wengier)
+  - Fix DOS 8.3 filename generation when there are
+    special characters in the filename. (Wengier)
   - Fix IMGMAKE to provide executable code in MS-DOS
     partition or floppy disk boot sector following
     the BPB, that prints "This is not a bootable disk"

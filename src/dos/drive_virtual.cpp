@@ -29,7 +29,7 @@
 #include "cross.h"
 #include "regs.h"
 
-extern bool gbk, isDBCSCP(), isKanji1(uint8_t chr), shiftjis_lead_byte(int c);
+extern bool gbk, isDBCSCP(), isKanji1_gbk(uint8_t chr), shiftjis_lead_byte(int c);
 
 struct VFILE_Block {
 	const char * name;
@@ -72,7 +72,7 @@ void GenerateSFN(char *lfn, unsigned int k, unsigned int &i, unsigned int &t) {
                 lead = false;
                 continue;
             }
-            if (!lead && ((IS_PC98_ARCH && shiftjis_lead_byte(*n & 0xFF)) || (isDBCSCP() && isKanji1(*n & 0xFF)))) {
+            if (!lead && ((IS_PC98_ARCH && shiftjis_lead_byte(*n & 0xFF)) || (isDBCSCP() && isKanji1_gbk(*n & 0xFF)))) {
                 if (i==m-1) break;
                 sfn[i++]=*(n++);
                 lead = true;
@@ -132,7 +132,7 @@ void GenerateSFN(char *lfn, unsigned int k, unsigned int &i, unsigned int &t) {
                     lead = false;
                     continue;
                 }
-                if (!lead && ((IS_PC98_ARCH && shiftjis_lead_byte(*n & 0xFF)) || (isDBCSCP() && isKanji1(*n & 0xFF)))) {
+                if (!lead && ((IS_PC98_ARCH && shiftjis_lead_byte(*n & 0xFF)) || (isDBCSCP() && isKanji1_gbk(*n & 0xFF)))) {
                     if (j==3) break;
                     sfn[i++]=*(n++);
                     lead = true;

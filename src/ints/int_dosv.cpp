@@ -139,6 +139,15 @@ bool isKanji1(uint8_t chr) {
         return (chr >= 0x81 && chr <= 0x9f) || (chr >= 0xe0 && chr <= 0xfc);
 }
 
+bool isKanji1_gbk(uint8_t chr) {
+    if (dos.loaded_codepage != 936) return isKanji1(chr);
+    bool kk = gbk, ret = false;
+    gbk = true;
+    ret = isKanji1(chr);
+    gbk = kk;
+    return ret;
+}
+
 bool isKanji2(uint8_t chr) {
 #if defined(USE_TTF)
     if (dos.loaded_codepage == 936 || dos.loaded_codepage == 949 || dos.loaded_codepage == 950 || dos.loaded_codepage == 951 || ((IS_DOSV || ttf_dosv) && !IS_JDOSV))
