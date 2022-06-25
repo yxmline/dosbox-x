@@ -646,7 +646,16 @@ void DOS_Drive_Cache::CreateShortName(CFileInfo* curDir, CFileInfo* info) {
         // Copy first letters
         Bits tocopy = 0;
         size_t buflen = strlen(buffer);
-        if ((size_t)len+buflen+1u>8u) tocopy = (Bits)(8u - buflen - 1u);
+        if ((size_t)len+buflen+1u>8u) {
+            tocopy = (Bits)(8u - buflen - 1u);
+            bool lead = false;
+            if (IS_PC98_ARCH || isDBCSCP())
+                for (int i=0; i<tocopy; i++) {
+                    if (lead) lead = false;
+                    else if ((IS_PC98_ARCH && shiftjis_lead_byte(tmpName[i]&0xFF)) || (isDBCSCP() && isKanji1_gbk(tmpName[i]&0xFF))) lead = true;
+                }
+            if (lead) tocopy--;
+        }
         else                          tocopy = len;
         safe_strncpy(info->shortname,tmpName,tocopy+1);
         // Copy number
