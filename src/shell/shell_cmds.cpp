@@ -1940,10 +1940,8 @@ void DOS_Shell::CMD_DIR(char * args) {
 	const char *valid[] = {"4","W","P","-W","-P","WP","PW","Z","-Z","S","-S","B","-B",
 	"A","-A","AD","A:D","A-D","A:-D","AS","A:S","A-S","A:-S","AH","A:H","A-H","A:-H","AR","A:R","A-R","A:-R","AA","A:A","A-A","A:-A",
 	"O","-O","ON","O:N","O-N","O:-N","OD","O:D","O-D","O:-D","OE","O:E","O-E","O:-E","OS","O:S","O-S","O:-S","OG","O:G","O-G","O:-G",
-	"OGN","O:GN","O-GN","O:-GN","OG-N","O:G-N","O-G-N","O:-G-N",
-	"OGD","O:GD","O-GD","O:-GD","OG-D","O:G-D","O-G-D","O:-G-D",
-	"OGE","O:GE","O-GE","O:-GE","OG-E","O:G-E","O-G-E","O:-G-E",
-	"OGS","O:GS","O-GS","O:-GS","OG-S","O:G-S","O-G-S","O:-G-S",
+	"OGN","O:GN","O-GN","O:-GN","OG-N","O:G-N","O-G-N","O:-G-N","OGD","O:GD","O-GD","O:-GD","OG-D","O:G-D","O-G-D","O:-G-D",
+	"OGE","O:GE","O-GE","O:-GE","OG-E","O:G-E","O-G-E","O:-G-E","OGS","O:GS","O-GS","O:-GS","OG-S","O:G-S","O-G-S","O:-G-S",
 	NULL};
 	if (args && strlen(args)>1) for (int i=0; valid[i] && *args && strchr(args,'/'); i++) while (ScanCMDBool(args,valid[i]));
 	char * rem=ScanCMDRemain(args);

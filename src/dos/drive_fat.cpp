@@ -192,7 +192,7 @@ bool filename_not_strict_8x3(const char *n) {
 }
 
 void GenerateSFN(char *lfn, unsigned int k, unsigned int &i, unsigned int &t);
-/* Generate 8.3 names from LFNs, with tilde usage (from ~1 to ~9999). */
+/* Generate 8.3 names from LFNs, with tilde usage (from ~1 to ~999999). */
 char* fatDrive::Generate_SFN(const char *path, const char *name) {
         if (!filename_not_8x3(name)) {
                 strcpy(sfn, name);
@@ -209,8 +209,8 @@ char* fatDrive::Generate_SFN(const char *path, const char *name) {
         if (!strlen(lfn)) return NULL;
         direntry fileEntry = {};
         uint32_t dirClust, subEntry;
-        unsigned int k=1, i, t=10000;
-        while (k<10000) {
+        unsigned int k=1, i, t=1000000;
+        while (k<1000000) {
                 GenerateSFN(lfn, k, i, t);
                 strcpy(fullname, path);
                 strcat(fullname, sfn);
