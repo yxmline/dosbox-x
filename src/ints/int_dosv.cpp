@@ -657,7 +657,7 @@ uint8_t *GetDbcsFont(Bitu code)
 	if ((IS_JDOSV || dos.loaded_codepage == 932) && del_flag && (code & 0xFF) == 0x7F) code++;
 	if(jfont_cache_dbcs_16[code] == 0) {
         if (fontdata16 && fontsize16) {
-            if (dos.loaded_codepage == 936 && !(fontsize16%16) && (code/0x100)>0xa0 && (code/0x100)<0xff) {
+            if (dos.loaded_codepage == 936 && !(fontsize16%16) && (code/0x100)>0xa0 && (code/0x100)<0xff && (code%0x100)>0xa0 && (code%0x100)<0xfe) {
                 int offset = (94 * (unsigned int)((code/0x100) - 0xa0 - 1) + ((code%0x100) - 0xa0 - 1)) * 32;
                 if (offset + 32 <= fontsize16) {
                     memcpy(&jfont_dbcs_16[code * 32], fontdata16+offset, 32);
@@ -725,7 +725,7 @@ uint8_t *GetDbcs14Font(Bitu code, bool &is14)
     if ((IS_JDOSV || dos.loaded_codepage == 932) && del_flag && (code & 0xFF) == 0x7F) code++;
     if(jfont_cache_dbcs_14[code] == 0) {
         if (fontdata14 && fontsize14) {
-            if (dos.loaded_codepage == 936 && !(fontsize14%14) && (code/0x100)>0xa0 && (code/0x100)<0xff) {
+            if (dos.loaded_codepage == 936 && !(fontsize14%14) && (code/0x100)>0xa0 && (code/0x100)<0xff && (code%0x100)>0xa0 && (code%0x100)<0xfe) {
                 int offset = (94 * (unsigned int)((code/0x100) - 0xa0 - 1) + ((code%0x100) - 0xa0 - 1)) * 28;
                 if (offset + 28 <= fontsize14) {
                     memcpy(&jfont_dbcs_14[code * 28], fontdata14+offset, 28);
@@ -804,7 +804,7 @@ uint8_t *GetDbcs24Font(Bitu code)
 	if ((IS_JDOSV || dos.loaded_codepage == 932) && del_flag && (code & 0xFF) == 0x7F) code++;
 	if(jfont_cache_dbcs_24[code] == 0) {
         if (fontdata24 && fontsize24) {
-            if (dos.loaded_codepage == 936 && !(fontsize24%24) && (code/0x100)>0xa0 && (code/0x100)<0xff) {
+            if (dos.loaded_codepage == 936 && !(fontsize24%24) && (code/0x100)>0xa0 && (code/0x100)<0xff && (code%0x100)>0xa0 && (code%0x100)<0xfe) {
                 int offset = (94 * (unsigned int)((code/0x100) - 0xa0 - 1) + ((code%0x100) - 0xa0 - 1)) * 72;
                 if (offset + 72 <= fontsize24) {
                     memcpy(&jfont_dbcs_24[code * 72], fontdata24+offset, 72);
