@@ -3,6 +3,8 @@
     1.0.1, adding API calls such as DOSBox-X's version
     number and platform, and some DOS-related status
     such as DOS version number. (Wengier)
+  - Improve the HX-DOS build package, including the
+    TTF output support and accessory files. (Wengier)
   - Use long double for internal event scheduling
     if available, to improve accuracy (joncampbell123).
   - Fix remaining SDL2 Windows problems by adding
