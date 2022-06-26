@@ -1715,8 +1715,10 @@ void DOSBOX_SetupConfigSections(void) {
     Pint = secprop->Add_int("acpi reserved size", Property::Changeable::WhenIdle,0);
     Pint->Set_help("Amount of memory at top to reserve for ACPI structures and tables. Set to 0 for automatic assignment.");
 
-#if defined(C_EMSCRIPTEN) || defined(HX_DOS)
+#if defined(C_EMSCRIPTEN)
     Pint = secprop->Add_int("memsize", Property::Changeable::OnlyAtStart,4);
+#elif defined(HX_DOS)
+    Pint = secprop->Add_int("memsize", Property::Changeable::OnlyAtStart,8);
 #else
     Pint = secprop->Add_int("memsize", Property::Changeable::OnlyAtStart,16);
 #endif

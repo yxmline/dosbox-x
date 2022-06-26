@@ -44,14 +44,14 @@ jobs:
         shell: bash
         run: |
           top=`pwd`
-          strip --strip-all $top/src/dosbox-x.exe
+          strip -s $top/src/dosbox-x.exe
           $top/build-scripts/mingw/hxdos/PESTUB.EXE -n $top/src/dosbox-x.exe
           $top/vs/tool/upx.exe --lzma -9 $top/src/dosbox-x.exe
           cp $top/src/dosbox-x.exe $top/package/dosbox-x.exe
           cp $top/CHANGELOG $top/package/CHANGELOG.txt
           cp $top/dosbox-x.reference.conf $top/package/dosbox-x.ref
           cp $top/dosbox-x.reference.full.conf $top/package/dosbox-x.ref.full
-          cp $top/contrib/windows/installer/inpout32.dll $top/package/
+          cp $top/contrib/windows/installer/inpout32.dll $top/package/INPOUT32.DLL
           cp $top/contrib/fonts/FREECG98.BMP $top/package/
           cp $top/contrib/fonts/Nouveau_IBM.ttf $top/package/
           cp $top/contrib/fonts/SarasaGothicFixed.ttf $top/package/

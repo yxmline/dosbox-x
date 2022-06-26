@@ -33,7 +33,7 @@ jobs:
           top=`pwd`
           ln -s $top/build-scripts/mingw/bin/make.exe /usr/bin/make.exe
           ./build-mingw
-          strip --strip-all $top/src/dosbox-x.exe
+          strip -s $top/src/dosbox-x.exe
       - name: Package MinGW64 SDL1
         run: |
           top=`pwd`
@@ -61,7 +61,7 @@ jobs:
         run: |
           top=`pwd`
           ./build-mingw-sdl2
-          strip --strip-all $top/src/dosbox-x.exe
+          strip -s $top/src/dosbox-x.exe
       - name: Package MinGW64 SDL2
         run: |
           top=`pwd`

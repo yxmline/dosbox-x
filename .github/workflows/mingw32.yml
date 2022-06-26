@@ -33,7 +33,7 @@ jobs:
           top=`pwd`
           ln -s $top/build-scripts/mingw/bin/make.exe /usr/bin/make.exe
           ./build-mingw
-          strip --strip-all $top/src/dosbox-x.exe
+          strip -s $top/src/dosbox-x.exe
       - name: Package MinGW32 SDL1
         run: |
           top=`pwd`
@@ -61,7 +61,7 @@ jobs:
         run: |
           top=`pwd`
           ./build-mingw-sdl2
-          strip --strip-all $top/src/dosbox-x.exe
+          strip -s $top/src/dosbox-x.exe
       - name: Package MinGW32 SDL2
         run: |
           top=`pwd`
@@ -131,7 +131,7 @@ jobs:
       - name: Package MinGW32 lowend SDL2
         run: |
           top=`pwd`
-          strip --strip-all $top/src/dosbox-x.exe
+          strip -s $top/src/dosbox-x.exe
           mkdir -p $top/package/mingw-build/mingw-lowend-sdl2/drivez
           mkdir -p $top/package/mingw-build/mingw-lowend-sdl2/scripts
           mkdir -p $top/package/mingw-build/mingw-lowend-sdl2/shaders
@@ -164,7 +164,7 @@ jobs:
       - name: Package MinGW32 lowend SDL1
         run: |
           top=`pwd`
-          strip --strip-all $top/src/dosbox-x.exe
+          strip -s $top/src/dosbox-x.exe
           mkdir -p $top/package/mingw-build/mingw-lowend/drivez
           mkdir -p $top/package/mingw-build/mingw-lowend/scripts
           mkdir -p $top/package/mingw-build/mingw-lowend/shaders
