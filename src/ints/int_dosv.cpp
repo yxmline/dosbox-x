@@ -32,7 +32,7 @@
 #define INCJFONT 1
 #include "jfont.h"
 #include <limits.h>
-#if C_X11
+#if defined(LINUX) && C_X11
 #include <X11/Xlib.h>
 #include <X11/Xlocale.h>
 #include <X11/Xutil.h>
