@@ -31,13 +31,11 @@
 #include "dos_inc.h"
 #define INCJFONT 1
 #include "jfont.h"
-#if defined(LINUX)
 #include <limits.h>
 #if C_X11
 #include <X11/Xlib.h>
 #include <X11/Xlocale.h>
 #include <X11/Xutil.h>
-#endif
 #endif
 
 #define ID_LEN 6
@@ -121,6 +119,7 @@ bool del_flag = true;
 bool yen_flag = false;
 bool jfont_init = false;
 bool getsysfont = true;
+bool getbdf = false;
 uint8_t TrueVideoMode;
 void ResolvePath(std::string& in);
 void SetIMPosition();
@@ -157,6 +156,133 @@ bool isKanji2(uint8_t chr) {
         return chr >= (dos.loaded_codepage == 936 && !gbk? 0xa1 : 0x40) && chr <= 0xfe;
     else
         return (chr >= 0x40 && chr <= 0x7e) || (del_flag && chr == 0x7f) || (chr >= 0x80 && chr <= 0xfc);
+}
+
+static inline int Hex2Int(const char *p)
+{
+    if (*p <= '9')
+        return *p - '0';
+    else if (*p <= 'F')
+        return *p - 'A' + 10;
+    else
+        return *p - 'a' + 10;
+}
+
+bool readBDF(FILE *file)
+{
+    char linebuf[1024], *s, *p;
+    int fontboundingbox_width, fontboundingbox_height, fontboundingbox_xoff, fontboundingbox_yoff;
+    int chars, i, j, n, scanline, encoding, bbx, bby, bbw, bbh, width;
+    unsigned *width_table, *encoding_table;
+    unsigned char *bitmap;
+    fontboundingbox_width = fontboundingbox_height = fontboundingbox_xoff = fontboundingbox_yoff = chars = 0;
+    for (;;) {
+        if (!fgets(linebuf, sizeof(linebuf), file) || !(s = strtok(linebuf, " \t\n\r")))
+            break;
+        if (!strcasecmp(s, "FONTBOUNDINGBOX")) {
+            p = strtok(NULL, " \t\n\r");
+            fontboundingbox_width = atoi(p);
+            p = strtok(NULL, " \t\n\r");
+            fontboundingbox_height = atoi(p);
+            p = strtok(NULL, " \t\n\r");
+            fontboundingbox_xoff = atoi(p);
+            p = strtok(NULL, " \t\n\r");
+            fontboundingbox_yoff = atoi(p);
+        } else if (!strcasecmp(s, "CHARS")) {
+            p = strtok(NULL, " \t\n\r");
+            chars = atoi(p);
+            break;
+        }
+    }
+    if (fontboundingbox_width <= 0 || fontboundingbox_height <= 0 || chars <= 0) return false;
+    width_table = (unsigned *)malloc(chars * sizeof(*width_table));
+    encoding_table = (unsigned *)malloc(chars * sizeof(*encoding_table));
+    bitmap = (unsigned char *)malloc(((fontboundingbox_width + 7) / 8) * fontboundingbox_height);
+    if (!width_table || !encoding_table || !bitmap) return false;
+    scanline = encoding = -1;
+    n = bbx = bby = bbw = bbh = 0;
+    width = INT_MIN;
+    while (fgets(linebuf, sizeof(linebuf), file) && (s = strtok(linebuf, " \t\n\r"))) {
+        if (!strcasecmp(s, "STARTCHAR")) {
+            p = strtok(NULL, " \t\n\r");
+        } else if (!strcasecmp(s, "ENCODING")) {
+            p = strtok(NULL, " \t\n\r");
+            encoding = atoi(p);
+        } else if (!strcasecmp(s, "DWIDTH")) {
+            p = strtok(NULL, " \t\n\r");
+            width = atoi(p);
+        } else if (!strcasecmp(s, "BBX")) {
+            p = strtok(NULL, " \t\n\r");
+            bbw = atoi(p);
+            p = strtok(NULL, " \t\n\r");
+            bbh = atoi(p);
+            p = strtok(NULL, " \t\n\r");
+            bbx = atoi(p);
+            p = strtok(NULL, " \t\n\r");
+            bby = atoi(p);
+        } else if (!strcasecmp(s, "BITMAP")) {
+            if (width == INT_MIN) return false;
+            if (bbx < 0) {
+                width -= bbx;
+                bbx = 0;
+            }
+            if (bbx + bbw > width) width = bbx + bbw;
+            width_table[n] = width;
+            encoding_table[n] = encoding;
+            ++n;
+            scanline = 0;
+            memset(bitmap, 0,
+            ((fontboundingbox_width + 7) / 8) * fontboundingbox_height);
+        } else if (!strcasecmp(s, "ENDCHAR")) {
+            if (bbx && !(bbx < 0 || bbx > 7)) {
+                int x, y, c, o;
+                for (y = 0; y < fontboundingbox_height; ++y) {
+                    o = 0;
+                    for (x = 0; x < fontboundingbox_width; x += 8) {
+                        c = bitmap[y * ((fontboundingbox_width + 7) / 8) + x / 8];
+                        bitmap[y * ((fontboundingbox_width + 7) / 8) + x / 8] = c >> bbx | o;
+                        o = c << (8 - bbx);
+                    }
+                }
+            }
+            if (width == 16 && encoding >= 0x100 && encoding <= 0xffff) {
+                char text[10];
+                uint16_t uname[4];
+                uname[0]=encoding;
+                uname[1]=0;
+                text[0] = 0;
+                text[1] = 0;
+                text[2] = 0;
+                if (CodePageHostToGuestUTF16(text,uname)) {
+                    Bitu code = (text[0] & 0xff) * 0x100 + (text[1] & 0xff);
+                    if (jfont_cache_dbcs_16[code] == 0) {
+                        memcpy(&jfont_dbcs_16[code * 32], bitmap, 32);
+                        jfont_cache_dbcs_16[code] = 1;
+                    }
+                }
+            }
+            scanline = -1;
+            width = INT_MIN;
+        } else if (scanline >= 0) {
+            p = s;
+            j = 0;
+            while (*p) {
+                i = Hex2Int(p);
+                ++p;
+                if (*p)
+                    i = Hex2Int(p) | i * 16;
+                else {
+                    bitmap[j + scanline * ((fontboundingbox_width + 7) / 8)] = i;
+                    break;
+                }
+                bitmap[j + scanline * ((fontboundingbox_width + 7) / 8)] = i;
+                ++j;
+                ++p;
+            }
+            ++scanline;
+        }
+    }
+    return true;
 }
 
 Bitu getfontx2header(FILE *fp, fontx_h *header)
@@ -242,6 +368,9 @@ static bool LoadFontxFile(const char *fname, int height, bool dbcs) {
                 fclose(mfile);
                 return true;
             }
+        } else if (height==16 && isDBCSCP() && readBDF(mfile)) {
+            fclose(mfile);
+            return true;
 		} else if (dos.loaded_codepage == 936 || dos.loaded_codepage == 950 || dos.loaded_codepage == 951) {
             fseek(mfile, 0L, SEEK_END);
             long int sz = ftell(mfile);
@@ -673,7 +802,8 @@ uint8_t *GetDbcsFont(Bitu code)
                     jfont_cache_dbcs_16[code] = 1;
                     return &jfont_dbcs_16[code * 32];
                 }
-            } if (((dos.loaded_codepage == 936 && gbk) || dos.loaded_codepage == 950 || dos.loaded_codepage == 951) && !(fontsize16%15) && isKanji1(code/0x100)) {
+            }
+            if (((dos.loaded_codepage == 936 && gbk) || dos.loaded_codepage == 950 || dos.loaded_codepage == 951) && !(fontsize16%15) && isKanji1(code/0x100)) {
                 Bitu c = code;
                 if (dos.loaded_codepage == 936) code = GetConvertedCode(code, 950);
                 int offset = -1, ser = (code/0x100 - 161) * 157 + ((code%0x100) - ((code%0x100)>160?161:64)) + ((code%0x100)>160?64:1);
@@ -700,8 +830,25 @@ uint8_t *GetDbcsFont(Bitu code)
 			jfont_cache_dbcs_16[code] = 1;
 		} else {
 			if (!IS_JDOSV && (dos.loaded_codepage == 936 || dos.loaded_codepage == 949 || dos.loaded_codepage == 950 || dos.loaded_codepage == 951)) {
+				Bitu oldcode = code;
 				code = GetConvertedCode(code, 932);
-				if (!code) return jfont_dbcs;
+				if (!code) {
+                    if (!getbdf) {
+                        std::string config_path, GetDOSBoxXPath(bool withexe=false), exepath=GetDOSBoxXPath(), fname="wqy-ubit.bdf";
+                        Cross::GetPlatformConfigDir(config_path);
+                        FILE * mfile=fopen(fname.c_str(),"rb");
+                        if (!mfile && exepath.size()) mfile=fopen((exepath + fname).c_str(),"rb");
+                        if (!mfile && config_path.size()) mfile=fopen((config_path + fname).c_str(),"rb");
+                        if (!mfile) return jfont_dbcs;
+                        if (readBDF(mfile)) {
+                           fclose(mfile);
+                           getbdf=true;
+                           if (jfont_cache_dbcs_16[oldcode] != 0) return &jfont_dbcs_16[oldcode * 32];
+                        } else
+                           fclose(mfile);
+                    }
+                    return jfont_dbcs;
+                }
 			}
 			int p = NAME_LEN+ID_LEN+3;
 			uint8_t size = JPNZN16X[p++];
@@ -775,8 +922,12 @@ uint8_t *GetDbcs14Font(Bitu code, bool &is14)
             return jfont_dbcs;
         } else {
             if (!IS_JDOSV && (dos.loaded_codepage == 936 || dos.loaded_codepage == 949 || dos.loaded_codepage == 950 || dos.loaded_codepage == 951)) {
+                Bitu oldcode = code;
                 code = GetConvertedCode(code, 932);
-                if (!code) return jfont_dbcs;
+                if (!code) {
+                    is14 = false;
+                    return GetDbcsFont(oldcode);
+                }
             }
             int p = NAME_LEN+ID_LEN+3;
             uint8_t size = SHMZN14X[p++];
