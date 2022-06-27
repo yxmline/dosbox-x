@@ -168,7 +168,7 @@ static inline int Hex2Int(const char *p)
         return *p - 'a' + 10;
 }
 
-bool readBDF(FILE *file)
+bool readBDF(FILE *file, int height)
 {
     char linebuf[1024], *s, *p;
     int fontboundingbox_width, fontboundingbox_height, fontboundingbox_xoff, fontboundingbox_yoff;
@@ -176,9 +176,7 @@ bool readBDF(FILE *file)
     unsigned *width_table, *encoding_table;
     unsigned char *bitmap;
     fontboundingbox_width = fontboundingbox_height = fontboundingbox_xoff = fontboundingbox_yoff = chars = 0;
-    for (;;) {
-        if (!fgets(linebuf, sizeof(linebuf), file) || !(s = strtok(linebuf, " \t\n\r")))
-            break;
+    while (fgets(linebuf, sizeof(linebuf), file) && (s = strtok(linebuf, " \t\n\r"))) {
         if (!strcasecmp(s, "FONTBOUNDINGBOX")) {
             p = strtok(NULL, " \t\n\r");
             fontboundingbox_width = atoi(p);
@@ -245,7 +243,7 @@ bool readBDF(FILE *file)
                     }
                 }
             }
-            if (width == 16 && encoding >= 0x100 && encoding <= 0xffff) {
+            if ((width == height || width == 15) && encoding >= 0x100 && encoding <= 0xffff) {
                 char text[10];
                 uint16_t uname[4];
                 uname[0]=encoding;
@@ -255,8 +253,12 @@ bool readBDF(FILE *file)
                 text[2] = 0;
                 if (CodePageHostToGuestUTF16(text,uname)) {
                     Bitu code = (text[0] & 0xff) * 0x100 + (text[1] & 0xff);
-                    if (jfont_cache_dbcs_16[code] == 0) {
-                        memcpy(&jfont_dbcs_16[code * 32], bitmap, 32);
+                    if (height == 14 && jfont_cache_dbcs_14[code] == 0) {
+                        memcpy(&jfont_dbcs_14[code * 28], bitmap, 28);
+                        jfont_cache_dbcs_14[code] = 1;
+                    }
+                    if (height == 16 && jfont_cache_dbcs_16[code] == 0) {
+                        memcpy(&jfont_dbcs_16[code * 32], bitmap, height == 15?30:32);
                         jfont_cache_dbcs_16[code] = 1;
                     }
                 }
@@ -368,7 +370,7 @@ static bool LoadFontxFile(const char *fname, int height, bool dbcs) {
                 fclose(mfile);
                 return true;
             }
-        } else if (height==16 && isDBCSCP() && readBDF(mfile)) {
+        } else if ((height==14||height==16) && isDBCSCP() && readBDF(mfile, height)) {
             fclose(mfile);
             return true;
 		} else if (dos.loaded_codepage == 936 || dos.loaded_codepage == 950 || dos.loaded_codepage == 951) {
@@ -840,7 +842,7 @@ uint8_t *GetDbcsFont(Bitu code)
                         if (!mfile && exepath.size()) mfile=fopen((exepath + fname).c_str(),"rb");
                         if (!mfile && config_path.size()) mfile=fopen((config_path + fname).c_str(),"rb");
                         if (!mfile) return jfont_dbcs;
-                        if (readBDF(mfile)) {
+                        if (readBDF(mfile, 16)) {
                            fclose(mfile);
                            getbdf=true;
                            if (jfont_cache_dbcs_16[oldcode] != 0) return &jfont_dbcs_16[oldcode * 32];
