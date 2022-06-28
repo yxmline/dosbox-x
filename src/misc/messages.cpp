@@ -329,16 +329,17 @@ void LoadMessageFile(const char * fname) {
     menu_update_dynamic();
     menu_update_autocycle();
     update_bindbutton_text();
-    dos.loaded_codepage=cp;
+    if (cp) dos.loaded_codepage=cp;
     if (control->opt_langcp && msgcodepage>0 && isSupportedCP(msgcodepage) && msgcodepage != dos.loaded_codepage) {
         ShutFontHandle();
         if (msgcodepage == 932 || msgcodepage == 936 || msgcodepage == 949 || msgcodepage == 950 || msgcodepage == 951) {
             dos.loaded_codepage = msgcodepage;
             InitFontHandle();
             JFONT_Init();
-            dos.loaded_codepage = cp;
+            if (cp) dos.loaded_codepage=cp;
         }
     }
+    if (!cp) dos.loaded_codepage = cp;
 
     LOG_MSG("Loaded language file: %s",fname);
 	loadlang=true;
