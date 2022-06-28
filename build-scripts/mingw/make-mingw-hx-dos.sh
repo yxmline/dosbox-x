@@ -67,8 +67,8 @@ cp CHANGELOG CHANGELOG.txt || exit 1
 cp dosbox-x.reference.conf dosbox-x.ref || exit 1
 cp dosbox-x.reference.full.conf dosbox-x.ref.full || exit 1
 cp contrib/windows/installer/inpout32.dll INPOUT32.DLL || exit 1
-cp contrib/fonts/wqy-unibit.pcf WQY-UBIT.PCF || exit 1
 cp contrib/fonts/FREECG98.BMP . || exit 1
+cp contrib/fonts/wqy_12pt.bdf . || exit 1
 cp contrib/fonts/Nouveau_IBM.ttf . || exit 1
 cp $hxdir/DPMILD32.EXE . || exit 1
 cp $hxdir/HDPMI32.EXE . || exit 1
@@ -84,7 +84,7 @@ for i in `ls contrib/translations/` ; do cp contrib/translations/$i/*.lng langua
 cd "$top/$hxdosdir" || exit 1
 echo "Packing up now..."
 
-$tooldir/zip.exe -r -9 ../"$name" {CHANGELOG.txt,dosbox-x.exe,dosbox-x.ref,dosbox-x.ref.full,FREECG98.BMP,WQY-UBIT.PCF,Nouveau_IBM.ttf,DPMILD32.EXE,HDPMI32.EXE,HXGUIHLP.INI,README.TXT,WINSPOOL.DRV,*.DLL,drivez/*,language/*} || exit 1
+$tooldir/zip.exe -r -9 ../"$name" {CHANGELOG.txt,dosbox-x.exe,dosbox-x.ref,dosbox-x.ref.full,FREECG98.BMP,wqy_12pt.bdf,Nouveau_IBM.ttf,DPMILD32.EXE,HDPMI32.EXE,HXGUIHLP.INI,README.TXT,WINSPOOL.DRV,*.DLL,drivez/*,language/*} || exit 1
 cd ..
 
 exit 0

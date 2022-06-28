@@ -85,8 +85,8 @@
     (joncampbell123).
   - DIR command supports more sorting methods including
     "DIR /OGD", "DIR /OGE", and "DIR /OGS". (Wengier)
-  - Support for PCF and BDF bitmap fonts for DOS/V
-    functions, such as the free WenQuanYi Unibit font
+  - Support for BDF and PCF bitmap fonts for DOS/V
+    functions, such as the free WenQuanYi bitmap font
     (bundled for displaying CJK characters). (Wengier)
   - EGA: Add machine type to emulate 200-line (CGA
     compatible) EGA display mode, machine=ega200.

@@ -198,8 +198,7 @@ union sv {
   int32_t v;
 };
 
-struct metric_t
-{
+struct metric_t {
   int16_t leftSideBearing;  // leftmost coordinate of the gryph
   int16_t rightSideBearing; // rightmost coordinate of the gryph
   int16_t characterWidth;   // offset to next gryph
@@ -227,31 +226,27 @@ struct table_t {
 long read_bytes;
 format32 format;
 
-uint8_t *read_byte8s(FILE *file, uint8_t *mem, size_t size)
-{
+uint8_t *read_byte8s(FILE *file, uint8_t *mem, size_t size) {
   size_t read_size =  fread(mem, 1, size, file);
   if (read_size != size) return NULL;
   read_bytes += size;
   return mem;
 }
 
-char read8(FILE *file)
-{
+char read8(FILE *file) {
   int a = fgetc(file);
   read_bytes ++;
   return (char)a;
 }
 
-int make_int16(int a, int b)
-{
+int make_int16(int a, int b) {
   int value;
   value  = (a & 0xff) << 8;
   value |= (b & 0xff);
   return value;
 }
 
-int read_int16(FILE *file)
-{
+int read_int16(FILE *file) {
   int a = read8(file);
   int b = read8(file);
   if (format.is_little_endian())
@@ -260,8 +255,7 @@ int read_int16(FILE *file)
     return make_int16(a, b);
 }
 
-int32_t make_int32(int a, int b, int c, int d)
-{
+int32_t make_int32(int a, int b, int c, int d) {
   int32_t value;
   value  = (int32_t)(a & 0xff) << 24;
   value |= (int32_t)(b & 0xff) << 16;
@@ -270,8 +264,7 @@ int32_t make_int32(int a, int b, int c, int d)
   return value;
 }
 
-int32_t read_int32_big(FILE *file)
-{
+int32_t read_int32_big(FILE *file) {
   int a = read8(file);
   int b = read8(file);
   int c = read8(file);
@@ -279,8 +272,7 @@ int32_t read_int32_big(FILE *file)
   return make_int32(a, b, c, d);
 }
 
-int32_t read_int32_little(FILE *file)
-{
+int32_t read_int32_little(FILE *file) {
   int a = read8(file);
   int b = read8(file);
   int c = read8(file);
@@ -288,13 +280,11 @@ int32_t read_int32_little(FILE *file)
   return make_int32(d, c, b, a);
 }
 
-int32_t read_int32(FILE *file)
-{
+int32_t read_int32(FILE *file) {
   return format.is_little_endian() ? read_int32_little(file) : read_int32_big(file);
 }
 
-format32 read_format32_little(FILE *file)
-{
+format32 read_format32_little(FILE *file) {
   int32_t v = read_int32_little(file);
   format32 f;
   f.id     = v >> 8;
@@ -306,15 +296,13 @@ format32 read_format32_little(FILE *file)
   return f;
 }
 
-void bit_order_invert(uint8_t *data, int size)
-{
+void bit_order_invert(uint8_t *data, int size) {
   static const uint8_t invert[16] = { 0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15 };
   for (int i = 0; i < size; i++)
     data[i] = (invert[data[i] & 15] << 4) | invert[(data[i] >> 4) & 15];
 }
 
-void two_byte_swap(uint8_t *data, int size)
-{
+void two_byte_swap(uint8_t *data, int size) {
   size &= ~1;
   for (int i = 0; i < size; i += 2)
   {
@@ -324,8 +312,7 @@ void two_byte_swap(uint8_t *data, int size)
   }
 }
 
-void four_byte_swap(uint8_t *data, int size)
-{
+void four_byte_swap(uint8_t *data, int size) {
   size &= ~3;
   for (int i = 0; i < size; i += 4)
   {
@@ -338,8 +325,7 @@ void four_byte_swap(uint8_t *data, int size)
   }
 }
 
-bool seek(FILE *file, type32 type)
-{
+bool seek(FILE *file, type32 type) {
   for (int i = 0; i < nTables; i++)
     if (tables[i].type == type)
     {
@@ -352,8 +338,7 @@ bool seek(FILE *file, type32 type)
   return false;
 }
 
-void read_metric(FILE *file, metric_t *m, bool compressed)
-{
+void read_metric(FILE *file, metric_t *m, bool compressed) {
   m->leftSideBearing  = compressed ? (int16_t)((uint8_t)read8(file) - 0x80) : read_int16(file);
   m->rightSideBearing = compressed ? (int16_t)((uint8_t)read8(file) - 0x80) : read_int16(file);
   m->characterWidth   = compressed ? (int16_t)((uint8_t)read8(file) - 0x80) : read_int16(file);
@@ -362,8 +347,7 @@ void read_metric(FILE *file, metric_t *m, bool compressed)
   m->attributes       = compressed ? 0 : read_int16(file);
 }
 
-bool readPCF(FILE *file, int height)
-{
+bool readPCF(FILE *file, int height) {
   if (file) rewind(file);
   else return false;
   read_bytes = 0;
@@ -449,6 +433,11 @@ bool readPCF(FILE *file, int height)
     format = read_format32_little(file);
     if (!(format.id == PCF_DEFAULT_FORMAT)) {delete[] bitmaps;return false;}
   }
+  bool apply14 = false;
+  if (height == 16) {
+      Prop_path* pathprop = static_cast<Section_prop *>(control->GetSection("dosv"))->Get_path("fontxdbcs14");
+      if(pathprop && !pathprop->realpath.size()) apply14 = true;
+  }
   for (i = 0; i < nEncodings; i++) {
     if (encodings[i] == 0xffff) continue;
     int col = i % (lastCol - firstCol + 1) + firstCol;
@@ -479,7 +468,7 @@ bool readPCF(FILE *file, int height)
         text[2] = 0;
         if (CodePageHostToGuestUTF16(text,uname)) {
             Bitu code = (text[0] & 0xff) * 0x100 + (text[1] & 0xff);
-            if (height == 14 && jfont_cache_dbcs_14[code] == 0) {
+            if ((height == 14 || (height == 16 && m.height() == 15 && apply14)) && jfont_cache_dbcs_14[code] == 0) {
                 memcpy(&jfont_dbcs_14[code * 28], bitmap, 28);
                 jfont_cache_dbcs_14[code] = 1;
             }
@@ -497,7 +486,7 @@ bool readPCF(FILE *file, int height)
 bool readBDF(FILE *file, int height) {
     if (file) rewind(file);
     else return false;
-   char linebuf[1024], *s, *p;
+    char linebuf[1024], *s, *p;
     int fontboundingbox_width, fontboundingbox_height, fontboundingbox_xoff, fontboundingbox_yoff;
     int chars, i, j, n, scanline, encoding, bbx, bby, bbw, bbh, width;
     unsigned *width_table, *encoding_table;
@@ -527,6 +516,11 @@ bool readBDF(FILE *file, int height) {
     scanline = encoding = -1;
     n = bbx = bby = bbw = bbh = 0;
     width = INT_MIN;
+    bool apply14 = false;
+    if (height == 16) {
+        Prop_path* pathprop = static_cast<Section_prop *>(control->GetSection("dosv"))->Get_path("fontxdbcs14");
+        if(pathprop && !pathprop->realpath.size()) apply14 = true;
+    }
     while (fgets(linebuf, sizeof(linebuf), file) && (s = strtok(linebuf, " \t\n\r"))) {
         if (!strcasecmp(s, "STARTCHAR")) {
             p = strtok(NULL, " \t\n\r");
@@ -579,7 +573,7 @@ bool readBDF(FILE *file, int height) {
                 text[2] = 0;
                 if (CodePageHostToGuestUTF16(text,uname)) {
                     Bitu code = (text[0] & 0xff) * 0x100 + (text[1] & 0xff);
-                    if (height == 14 && jfont_cache_dbcs_14[code] == 0) {
+                    if ((height == 14 || (height == 16 && width == 15 && apply14)) && jfont_cache_dbcs_14[code] == 0) {
                         memcpy(&jfont_dbcs_14[code * 28], bitmap, 28);
                         jfont_cache_dbcs_14[code] = 1;
                     }
@@ -693,7 +687,7 @@ static bool LoadFontxFile(const char *fname, int height, bool dbcs) {
                 fclose(mfile);
                 return true;
             }
-        } else if ((height==14||height==16) && isDBCSCP() && (readPCF(mfile, height) || readBDF(mfile, height))) {
+        } else if ((height==14||height==16) && isDBCSCP() && (readBDF(mfile, height) || readPCF(mfile, height))) {
             fclose(mfile);
             return true;
         } else if (dos.loaded_codepage == 936 || dos.loaded_codepage == 950 || dos.loaded_codepage == 951) {
@@ -1179,25 +1173,17 @@ uint8_t *GetDbcsFont(Bitu code)
 				if (!code) {
                     if (!getunibit) {
                         getunibit=true;
-                        std::string config_path, GetDOSBoxXPath(bool withexe=false), exepath=GetDOSBoxXPath(), fname="wqy-unibit.pcf";
+                        std::string config_path, GetDOSBoxXPath(bool withexe=false), exepath=GetDOSBoxXPath(), fname="wqy_12pt.bdf";
                         Cross::GetPlatformConfigDir(config_path);
                         FILE * mfile=fopen(fname.c_str(),"rb");
                         if (!mfile && exepath.size()) mfile=fopen((exepath + fname).c_str(),"rb");
                         if (!mfile && config_path.size()) mfile=fopen((config_path + fname).c_str(),"rb");
-                        fname="wqy-ubit.pcf";
-                        if (!mfile) mfile=fopen(fname.c_str(),"rb");
-                        if (!mfile && exepath.size()) mfile=fopen((exepath + fname).c_str(),"rb");
-                        if (!mfile && config_path.size()) mfile=fopen((config_path + fname).c_str(),"rb");
-                        fname="wqy-unibit.bdf";
-                        if (!mfile) mfile=fopen(fname.c_str(),"rb");
-                        if (!mfile && exepath.size()) mfile=fopen((exepath + fname).c_str(),"rb");
-                        if (!mfile && config_path.size()) mfile=fopen((config_path + fname).c_str(),"rb");
-                        fname="wqy-ubit.bdf";
+                        fname="wqy_12pt.pcf";
                         if (!mfile) mfile=fopen(fname.c_str(),"rb");
                         if (!mfile && exepath.size()) mfile=fopen((exepath + fname).c_str(),"rb");
                         if (!mfile && config_path.size()) mfile=fopen((config_path + fname).c_str(),"rb");
                         if (!mfile) return jfont_dbcs;
-                        if (readPCF(mfile, 16)) {
+                        if (readBDF(mfile, 16) || readPCF(mfile, 16)) {
                            fclose(mfile);
                            if (jfont_cache_dbcs_16[oldcode] != 0) return &jfont_dbcs_16[oldcode * 32];
                         } else
