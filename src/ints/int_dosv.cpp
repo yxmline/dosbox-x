@@ -306,8 +306,7 @@ void bit_order_invert(uint8_t *data, int size) {
 
 void two_byte_swap(uint8_t *data, int size) {
   size &= ~1;
-  for (int i = 0; i < size; i += 2)
-  {
+  for (int i = 0; i < size; i += 2) {
     uint8_t tmp = data[i];
     data[i] = data[i + 1];
     data[i + 1] = tmp;
@@ -316,8 +315,7 @@ void two_byte_swap(uint8_t *data, int size) {
 
 void four_byte_swap(uint8_t *data, int size) {
   size &= ~3;
-  for (int i = 0; i < size; i += 4)
-  {
+  for (int i = 0; i < size; i += 4) {
     uint8_t tmp = data[i];
     data[i] = data[i + 3];
     data[i + 3] = tmp;
@@ -329,8 +327,7 @@ void four_byte_swap(uint8_t *data, int size) {
 
 bool seek(FILE *file, type32 type) {
   for (int i = 0; i < nTables; i++)
-    if (tables[i].type == type)
-    {
+    if (tables[i].type == type) {
       int s = tables[i].offset - read_bytes;
       if (s < 0)
           return false;
