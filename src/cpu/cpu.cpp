@@ -68,6 +68,7 @@ public:
 # endif
 
 bool lmsw_allow_clear_pe_bit = false;
+bool mask_stack_ptr_on_enter = false;
 
 bool enable_weitek = false;
 
@@ -2160,24 +2161,30 @@ void CPU_RET(bool use32,Bitu bytes,uint32_t oldeip) {
 
 	if (!cpu.pmode || (reg_flags & FLAG_VM)) {
 		try {
-		uint32_t new_ip;
-        uint16_t new_cs;
-		if (!use32) {
-			new_ip=CPU_Pop16();
-			new_cs=CPU_Pop16();
-		} else {
-			new_ip=CPU_Pop32();
-			new_cs=CPU_Pop32() & 0xffff;
-		}
-		reg_esp+=(uint32_t)bytes;
-		SegSet16(cs,new_cs);
-		reg_eip=new_ip;
-		if (!cpu_allow_big16) cpu.code.big=false;
-		return;
+			uint32_t new_ip;
+			uint16_t new_cs;
+			if (!use32) {
+				new_ip=CPU_Pop16();
+				new_cs=CPU_Pop16();
+			} else {
+				new_ip=CPU_Pop32();
+				new_cs=CPU_Pop32() & 0xffff;
+			}
+
+			/* NTS: It is very important not to modify the full 32 bits in real mode.
+			 *      Finster by Mad Scientists (1996) likes to execute "RETF FFFEh" but
+			 *      will break if the upper 16 bits of ESP are made nonzero. I'm guessing
+			 *      the RETF used in that way is an elaborate way of adding 2 to the stack
+			 *      pointer instead of subtracting. --Jonathan C. */
+			reg_esp=(reg_esp&cpu.stack.notmask)|((reg_esp+(uint32_t)bytes)&cpu.stack.mask);
+			SegSet16(cs,new_cs);
+			reg_eip=new_ip;
+			if (!cpu_allow_big16) cpu.code.big=false;
+			return;
 		}
 		catch (const GuestPageFaultException &pf) {
-            (void)pf;//UNUSED
-            LOG_MSG("CPU_RET() interrupted real/vm86");
+			(void)pf;//UNUSED
+			LOG_MSG("CPU_RET() interrupted real/vm86");
 			reg_esp = orig_esp;
 			throw;
 		}
@@ -3124,8 +3131,12 @@ void CPU_ENTER(bool use32,Bitu bytes,Bitu level) {
 	} else {
 		sp_index-=4;
 		mem_writed(SegPhys(ss)+sp_index,reg_ebp);
-		// FIXME: Does ENTER behave this way on real hardware? 16-bit stack or real mode masks EBP by 0xFFFF? This is untested.
-		reg_ebp=(reg_esp-4)&cpu.stack.mask; /* If 16-bit real mode or stack is 16-bit, even with 66h prefix, mask EBP by 0xFFFF (Fix for Finster by Mad Scientists, 1996) */
+
+		/* If 16-bit real mode or stack is 16-bit, even with 66h prefix, mask EBP by 0xFFFF (Fix for Finster by Mad Scientists, 1996).
+		 * This is not how Intel processors work, as verified on real 486 hardware. Unsurprisingly, Finster does not appear to run
+		 * properly on real hardware either, though I can't get the game to get that far. --Jonathan C. */
+		reg_ebp=(reg_esp-4)&(mask_stack_ptr_on_enter?cpu.stack.mask:0xFFFFFFFF);
+
 		if (level) {
 			for (Bitu i=1;i<level;i++) {	
 				sp_index-=4;bp_index-=4;
@@ -3979,6 +3990,18 @@ public:
             LOG_MSG("CPU change requires guest system reboot");
             throw int(3);
         }
+
+		const char *mask_stack_ptr_enter_leave = section->Get_string("mask stack pointer for enter leave instructions");
+		if (!strcmp(mask_stack_ptr_enter_leave,"true") || !strcmp(mask_stack_ptr_enter_leave,"1")) {
+			mask_stack_ptr_on_enter = true;
+		}
+		else if (!strcmp(mask_stack_ptr_enter_leave,"false") || !strcmp(mask_stack_ptr_enter_leave,"0")) {
+			mask_stack_ptr_on_enter = false;
+		}
+		else {
+			/* auto, which is currently off */
+			mask_stack_ptr_on_enter = false;
+		}
 
 		const char *lmsw_allow_pe_clear = section->Get_string("allow lmsw to exit protected mode");
 		if (!strcmp(lmsw_allow_pe_clear,"true") || !strcmp(lmsw_allow_pe_clear,"1")) {
