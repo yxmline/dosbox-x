@@ -9,12 +9,12 @@ There are two ways to run DOSBox-X in macOS, either from the Finder or from the 
 
 * From the Finder, go to the directory where the macOS zip package is downloaded, you will see a folder name which is the same as the file name of the downloaded zip package. Inside this folder you will see "dosbox-x" (SDL1) and "dosbox-x-sdl2" (SDL2). Go to either one and click the program "dosbox-x" to start DOSBox-X. If you see a dialog asking you to select a folder, please select one which will then become your DOSBox-X working directory. You can choose to save this folder after you select one so that the folder selection dialog will no show up again next time, or let DOSBox-X show the folder selection dialog every time you run it from the Finder.
 
-* From the Terminal, go to the directory where the macOS zip package is downloaded, you will see a folder name which is the same as the file name of the downloaded zip package. Starting from this folder, use "cd" command to go to the directory where the DOSBox-X executable is located. For SDL1 build, type "cd dosbox-x/dosbox-x.app/Contents/MacOS", and for SDL2 build, type "cd dosbox-x-sdl2/dosbox-x.app/Contents/MacOS". Run DOSBox-X with "./DosBox" and you will see the DOSBox-X window.
+* From the Terminal, go to the directory where the macOS zip package is downloaded, you will see a folder name which is the same as the file name of the downloaded zip package. Starting from this folder, use "cd" command to go to the directory where the DOSBox-X executable is located. For SDL1 build, type "cd dosbox-x/dosbox-x.app/Contents/MacOS", and for SDL2 build, type "cd dosbox-x-sdl2/dosbox-x.app/Contents/MacOS". Run DOSBox-X with "./dosbox-x" and you will see the DOSBox-X window.
 
 In case the DOSBox-X binary does not run on your macOS system, you can try execute the following commands from the Terminal *once* in the directory that the zip package is extracted (where you see two directories named "dosbox-x" and "dosbox-x-sdl2"):
 
 xattr -cr dosbox-x/dosbox-x.app dosbox-x-sdl2/dosbox-x.app
-chmod +x dosbox-x/dosbox-x.app/Contents/MacOS/DosBox dosbox-x-sdl2/dosbox-x.app/Contents/MacOS/DosBox
+chmod +x dosbox-x/dosbox-x.app/Contents/MacOS/dosbox-x dosbox-x-sdl2/dosbox-x.app/Contents/MacOS/dosbox-x
 
 Further Information
 ===================

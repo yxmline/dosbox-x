@@ -9,11 +9,11 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>English</string>
     <key>CFBundleExecutable</key>
-    <string>DosBox</string>
+    <string>dosbox-x</string>
     <key>CFBundleGetInfoString</key>
     <string>@PACKAGE_VERSION@, Copyright 2022 DOSBox-X</string>
     <key>CFBundleIconFile</key>
-    <string>DosBox.icns</string>
+    <string>dosbox-x.icns</string>
     <key>CFBundleIdentifier</key>
     <string>com.dosbox-x</string>
     <key>CFBundleDocumentTypes</key>
