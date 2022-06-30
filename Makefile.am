@@ -14,6 +14,7 @@ dosbox-x.app: src/dosbox-x contrib/macos/dosbox.icns src/tool/mach-o-matic
 	mkdir dosbox-x.app/Contents/Resources/drivez
 	mkdir dosbox-x.app/Contents/Resources/glshaders
 	mkdir dosbox-x.app/Contents/Resources/languages
+	cp -v contrib/macos/readme.txt dosbox-x.app/README.txt
 	cp -v contrib/macos/dosbox-x.plist dosbox-x.app/Contents/Info.plist
 	cp -v contrib/macos/dosbox-x.pkginfo dosbox-x.app/Contents/PkgInfo
 	cp -v contrib/macos/dosbox.icns dosbox-x.app/Contents/Resources/DosBox.icns

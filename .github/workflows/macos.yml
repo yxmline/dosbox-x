@@ -40,6 +40,7 @@ jobs:
           ./build-macosx-sdl2
           strip $top/src/dosbox-x
           make dosbox-x.app
+          rm dosbox-x.app/Contents/MacOS/libSDL2-2*.dylib
           mv dosbox-x.app $top/src/bin/dosbox-x-sdl2
           cp $top/CHANGELOG $top/src/bin/dosbox-x-sdl2/CHANGELOG.txt
       - name: Unit testing
