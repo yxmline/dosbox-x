@@ -48,8 +48,7 @@ struct VFILE_Block {
 #define MAX_VFILES 500
 unsigned int vfpos=1, lfn_id[256];
 bool internal_program = false, skipintprog = false;
-char ondirs[MAX_VFILES][CROSS_LEN],sfn[DOS_NAMELENGTH_ASCII];
-char vfnames[MAX_VFILES][CROSS_LEN],vfsnames[MAX_VFILES][DOS_NAMELENGTH_ASCII];
+char sfn[DOS_NAMELENGTH_ASCII],vfnames[MAX_VFILES][CROSS_LEN],vfsnames[MAX_VFILES][DOS_NAMELENGTH_ASCII];
 static VFILE_Block * first_file, * lfn_search[256], * parent_dir = NULL;
 
 extern int lfn_filefind_handle;
