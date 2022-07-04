@@ -34,7 +34,8 @@
 #endif
 
 extern int bootdrive;
-extern bool int13_disk_change_detect_enable, skipintprog;
+extern unsigned long freec;
+extern bool int13_disk_change_detect_enable, skipintprog, rsize;
 extern bool int13_extensions_enable, bootguest, bootvm, use_quick_reboot;
 
 #define STATIC_ASSERTM(A,B) static_assertion_##A##_##B
@@ -301,7 +302,7 @@ struct fatFromDOSDrive
 			if (df) { df->Close(); delete df; }
 	}
 
-	fatFromDOSDrive(DOS_Drive* drv, uint32_t freeSpaceMB = 0, const char* inSavePath = NULL) : drive(drv)
+	fatFromDOSDrive(DOS_Drive* drv) : drive(drv)
 	{
 		cacheSectorNumber[0] = 1; // must not state that sector 0 is already cached
 		memset(&cacheSectorNumber[1], 0, sizeof(cacheSectorNumber) - sizeof(cacheSectorNumber[0]));
@@ -529,10 +530,17 @@ struct fatFromDOSDrive
 			}
 		};
 
-		Iter::SumInfo sum = { 0, NULL }; uint16_t drv_bytes_sector; uint8_t drv_sectors_cluster;  uint16_t drv_total_clusters, drv_free_clusters;
-		drv->AllocationInfo(&drv_bytes_sector, &drv_sectors_cluster, &drv_total_clusters, &drv_free_clusters);
+		Iter::SumInfo sum = { 0, NULL };
+		Bitu free_clusters = 0, freeSpaceMB = 0;
+        uint16_t drv_bytes_sector; uint8_t drv_sectors_cluster;  uint16_t drv_total_clusters, drv_free_clusters;
+        rsize=true;
+        freec=0;
+        drv->AllocationInfo(&drv_bytes_sector, &drv_sectors_cluster, &drv_total_clusters, &drv_free_clusters);
+        free_clusters=freec?freec:drv_free_clusters;
+        freeSpaceMB=(Bitu)drv_bytes_sector * (Bitu)drv_sectors_cluster * (Bitu)(freec?freec:free_clusters) / (1024*1024);
+        rsize=false;
 		DriveFileIterator(drv, Iter::SumFileSize, (Bitu)&sum);
-		readOnly = (drv_free_clusters == 0);
+		readOnly = (free_clusters == 0);
 
 		const uint32_t addFreeMB = (readOnly ? 0 : freeSpaceMB), totalMB = (uint32_t)(sum.used_bytes / (1024*1024)) + addFreeMB + 1;
 		if      (totalMB >= 3072) { isFAT32 = true;  sectorsPerCluster = 64; } // 32 kb clusters ( 98304 ~        FAT entries)
@@ -619,8 +627,16 @@ struct fatFromDOSDrive
 		memset(&mbr, 0, sizeof(mbr));
 		var_write((uint32_t *)&mbr.booter[440], serial); //4 byte disk serial number
 		var_write(&mbr.pentry[0].bootflag, 0x80); //Active bootable
-		chs_write(mbr.pentry[0].beginchs, SECT_BOOT, SECTORSPERTRACK, HEADCOUNT);
-		chs_write(mbr.pentry[0].endchs, sect_disk_end - 1, SECTORSPERTRACK, HEADCOUNT);
+		if ((sect_disk_end - 1) / (HEADCOUNT * SECTORSPERTRACK) > 0x3FF)
+		{
+			mbr.pentry[0].beginchs[0] = mbr.pentry[0].beginchs[1] = mbr.pentry[0].beginchs[2] = 0;
+			mbr.pentry[0].endchs[0] = mbr.pentry[0].endchs[1] = mbr.pentry[0].endchs[2] = 0;
+		}
+		else
+		{
+			chs_write(mbr.pentry[0].beginchs, SECT_BOOT);
+			chs_write(mbr.pentry[0].endchs, sect_disk_end - 1);
+		}
 		var_write(&mbr.pentry[0].absSectStart, SECT_BOOT);
 		var_write(&mbr.pentry[0].partSize, partSize);
 		mbr.magic1 = 0x55; mbr.magic2 = 0xaa;
@@ -672,11 +688,11 @@ struct fatFromDOSDrive
 		}
 	}
 
-	static void chs_write(uint8_t* chs, uint32_t lba, uint16_t sectorspertrack, uint16_t headcount)
+	static void chs_write(uint8_t* chs, uint32_t lba)
 	{
-		uint32_t cylinder = lba / (headcount * sectorspertrack);
-		uint32_t head = (lba / sectorspertrack) % headcount;
-		uint32_t sector = (lba % sectorspertrack) + 1;
+		uint32_t cylinder = lba / (HEADCOUNT * SECTORSPERTRACK);
+		uint32_t head = (lba / SECTORSPERTRACK) % HEADCOUNT;
+		uint32_t sector = (lba % SECTORSPERTRACK) + 1;
 		if (head > 0xFF || sector > 0x3F || cylinder > 0x3FF)
             LOG_MSG("Warning: Invalid CHS data - %X, %X, %X\n", head, sector, cylinder);
 		chs[0] = (uint8_t)(head & 0xFF);
@@ -1461,9 +1477,9 @@ imageDisk::imageDisk(FILE* imgFile, const char* imgName, uint32_t imgSizeK, bool
     }
 }
 
-imageDisk::imageDisk(class DOS_Drive *useDrive, uint32_t freeSpaceMB)
+imageDisk::imageDisk(class DOS_Drive *useDrive)
 {
-	ffdd = new fatFromDOSDrive(useDrive, freeSpaceMB);
+	ffdd = new fatFromDOSDrive(useDrive);
 	diskimg = NULL;
 	diskname[0] = '\0';
 	hardDrive = true;
