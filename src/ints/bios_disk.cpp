@@ -271,7 +271,7 @@ struct fatFromDOSDrive
 	bootstrap  bootsec;
 	uint8_t      fsinfosec[BYTESPERSECTOR];
 	uint32_t     sectorsPerCluster;
-	bool       isFAT32, readOnly;
+	bool       isFAT32, readOnly, tomany = false;
 
 	struct ffddFile { char path[DOS_PATHLENGTH+1]; uint32_t firstSect; };
 	std::vector<direntry> root, dirs;
@@ -346,6 +346,7 @@ struct fatFromDOSDrive
 
 			static void ParseDir(fatFromDOSDrive& ffdd, char* dir, const StringToPointerHashMap<void>* filter, int dirlen = 0, uint16_t parentFirstCluster = 0)
 			{
+				if (ffdd.tomany) return;
 				const bool useFAT16Root = (!dirlen && !ffdd.isFAT32), readOnly = ffdd.readOnly;
 				const size_t firstidx = (!useFAT16Root ? ffdd.dirs.size() : 0);
 				const uint32_t sectorsPerCluster = ffdd.sectorsPerCluster, bytesPerCluster = sectorsPerCluster * BYTESPERSECTOR, entriesPerCluster = bytesPerCluster / sizeof(direntry);
@@ -440,7 +441,13 @@ struct fatFromDOSDrive
 						ffdd.files.push_back(f);
 
 						uint32_t numSects = (dta_size + bytesPerCluster - 1) / bytesPerCluster * sectorsPerCluster;
-						for (uint32_t i = 0; i != numSects; i++) ffdd.fileAtSector.push_back(fileIdx);
+                        try {
+                            ffdd.fileAtSector.resize(ffdd.fileAtSector.size() + numSects, fileIdx);
+                        } catch (...) {
+                            LOG_MSG("Too many sectors needed, will discard remaining files");
+                            ffdd.tomany = true;
+                            break;
+                        }
 					}
 				}
 				skipintprog = false;
@@ -541,6 +548,7 @@ struct fatFromDOSDrive
         rsize=false;
 		DriveFileIterator(drv, Iter::SumFileSize, (Bitu)&sum);
 		readOnly = (free_clusters == 0);
+		tomany = false;
 
 		const uint32_t addFreeMB = (readOnly ? 0 : freeSpaceMB), totalMB = (uint32_t)(sum.used_bytes / (1024*1024)) + addFreeMB + 1;
 		if      (totalMB >= 3072) { isFAT32 = true;  sectorsPerCluster = 64; } // 32 kb clusters ( 98304 ~        FAT entries)
