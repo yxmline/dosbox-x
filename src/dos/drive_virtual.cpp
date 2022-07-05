@@ -657,21 +657,6 @@ bool Virtual_Drive::Rename(const char * oldname,const char * newname) {
 	return false;
 }
 
-bool Virtual_Drive::GetLongName(const char* ident, char* lfindName) {
-	if (*ident == 0)
-		return false;
-	const VFILE_Block* cur_file = first_file;
-	while (cur_file) {
-		unsigned int onpos=cur_file->onpos;
-		if (strcasecmp(ident,(std::string(onpos?vfsnames[onpos]+std::string(1, '\\'):"")+cur_file->name).c_str())==0) {
-			strcpy(lfindName, cur_file->lname);
-			return true;
-		}
-		cur_file=cur_file->next;
-	}
-	return false;
-}
-
 bool Virtual_Drive::AllocationInfo(uint16_t * _bytes_sector,uint8_t * _sectors_cluster,uint16_t * _total_clusters,uint16_t * _free_clusters) {
 	*_bytes_sector=512;
 	*_sectors_cluster=32;

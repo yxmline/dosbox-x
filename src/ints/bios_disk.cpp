@@ -377,12 +377,11 @@ struct fatFromDOSDrive
 					memcpy(f.path + dirlen, dta_name, fend - dta_name + 1);
 					if (filter && filter->Get(f.path)) continue;
 
-					char longname[256];
-					const bool isLongFileName = (!dot && !dotdot && !(dta_attr & DOS_ATTR_VOLUME) && ffdd.drive->GetLongName(f.path, longname));
+					const bool isLongFileName = (!dot && !dotdot && !(dta_attr & DOS_ATTR_VOLUME));
 					if (isLongFileName)
 					{
-						size_t lfnlen = strlen(longname);
-						const char *lfn_end = longname + lfnlen;
+						size_t lfnlen = strlen(lname);
+						const char *lfn_end = lname + lfnlen;
 						for (size_t i = 0, lfnblocks = (lfnlen + 12) / 13; i != lfnblocks; i++)
 						{
 							lfndirentry* le = (lfndirentry*)AddDirEntry(ffdd, useFAT16Root, diridx);
@@ -390,7 +389,7 @@ struct fatFromDOSDrive
 							le->attrib = DOS_ATTR_LONG_NAME;
 							le->type = 0;
 							le->loFirstClust = 0;
-							const char* plfn = longname + (lfnblocks - i - 1) * 13;
+							const char* plfn = lname + (lfnblocks - i - 1) * 13;
 							for (int j = 0; j != 13; j++, plfn++)
 							{
 								char* p = le->Name(j);
@@ -444,8 +443,8 @@ struct fatFromDOSDrive
                         try {
                             ffdd.fileAtSector.resize(ffdd.fileAtSector.size() + numSects, fileIdx);
                         } catch (...) {
-                            LOG_MSG("Too many sectors needed, will discard remaining files");
-                            ffdd.tomany = true;
+                            LOG_MSG("Too many sectors needed, will discard remaining files (from %s)", lname);
+                            ffdd.tomany = ffdd.readOnly = true;
                             break;
                         }
 					}
