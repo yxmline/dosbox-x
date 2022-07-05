@@ -445,6 +445,7 @@ struct fatFromDOSDrive
                         } catch (...) {
                             LOG_MSG("Too many sectors needed, will discard remaining files (from %s)", lname);
                             ffdd.tomany = ffdd.readOnly = true;
+                            var_write((uint32_t *const)&ffdd.fsinfosec[488], (const uint32_t)0x0);
                             break;
                         }
 					}
@@ -537,13 +538,15 @@ struct fatFromDOSDrive
 		};
 
 		Iter::SumInfo sum = { 0, NULL };
-		Bitu free_clusters = 0, freeSpaceMB = 0;
+		Bitu freeSpace = 0, freeSpaceMB = 0;
+        uint32_t free_clusters = 0;
         uint16_t drv_bytes_sector; uint8_t drv_sectors_cluster;  uint16_t drv_total_clusters, drv_free_clusters;
         rsize=true;
         freec=0;
         drv->AllocationInfo(&drv_bytes_sector, &drv_sectors_cluster, &drv_total_clusters, &drv_free_clusters);
-        free_clusters=freec?freec:drv_free_clusters;
-        freeSpaceMB=(Bitu)drv_bytes_sector * (Bitu)drv_sectors_cluster * (Bitu)(freec?freec:free_clusters) / (1024*1024);
+        free_clusters = freec?freec:drv_free_clusters;
+        freeSpace = (Bitu)drv_bytes_sector * (Bitu)drv_sectors_cluster * (Bitu)(freec?freec:free_clusters);
+        freeSpaceMB = freeSpace / (1024*1024);
         rsize=false;
 		DriveFileIterator(drv, Iter::SumFileSize, (Bitu)&sum);
 		readOnly = (free_clusters == 0);
@@ -689,7 +692,8 @@ struct fatFromDOSDrive
 			memset(fsinfosec, 0, sizeof(fsinfosec));
 			var_write((uint32_t *const)&fsinfosec[0], (const uint32_t)0x41615252); //lead signature
 			var_write((uint32_t *const)&fsinfosec[484], (const uint32_t)0x61417272); //Another signature
-			var_write((uint32_t *const)&fsinfosec[488], (const uint32_t)0xFFFFFFFF); //last known free cluster count (all FF is unknown)
+			Bitu freeclusters = (Bitu)freeSpace / (BYTESPERSECTOR * sectorsPerCluster);
+			var_write((uint32_t *const)&fsinfosec[488], (const uint32_t)(readOnly ? 0x0 : (freeclusters < 0xFFFFFFFF && (dos.version.major > 7 || (dos.version.major == 7 && dos.version.minor >= 10)) ? freeclusters : 0xFFFFFFFF))); //last known free cluster count (all FF is unknown)
 			var_write((uint32_t *const)&fsinfosec[492], (const uint32_t)0xFFFFFFFF); //the cluster number at which the driver should start looking for free clusters (all FF is unknown)
 			var_write((uint32_t *const)&fsinfosec[508], (const uint32_t)0xAA550000); //ending signature
 		}
