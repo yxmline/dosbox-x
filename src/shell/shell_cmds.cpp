@@ -1534,8 +1534,8 @@ char *FormatTime(Bitu hour, Bitu min, Bitu sec, Bitu msec)	{
 	return retBuf;
 	}
 
-
-uint32_t byte_count,file_count,dir_count;
+uint64_t byte_count;
+uint32_t file_count,dir_count;
 Bitu p_count;
 std::vector<std::string> dirs, adirs;
 static bool dirPaused(DOS_Shell * shell, Bitu w_size, bool optP, bool optW, bool show=true) {
@@ -1581,7 +1581,8 @@ static bool doDir(DOS_Shell * shell, char * args, DOS_DTA dta, char * numformat,
 	}
     if (*(sargs+strlen(sargs)-1) != '\\') strcat(sargs,"\\");
 
-	uint32_t cbyte_count=0,cfile_count=0,w_count=0;
+	uint64_t cbyte_count=0;
+	uint32_t cfile_count=0,w_count=0;
 	int fbak=lfn_filefind_handle;
 	lfn_filefind_handle=uselfn&&!optZ?LFN_FILEFIND_INTERNAL:LFN_FILEFIND_NONE;
 	bool ret=DOS_FindFirst(args,0xffff & ~DOS_ATTR_VOLUME), found=true, first=true;

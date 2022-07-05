@@ -2500,7 +2500,7 @@ public:
 
             char msg[512] = {0};
             const uint8_t page=real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
-            if ((convimg == 1 || (convertimg && convimg == -1)) && !IS_PC98_ARCH) { // PC-98 image not supported yet
+            if ((convimg == 1 || (convertimg && convimg == -1 && !IS_PC98_ARCH))) { // PC-98 image not supported yet
                 unsigned int drv = 2, nextdrv = 2;
                 for (unsigned int d=2;d<DOS_DRIVES+2;d++) {
                     if (d==DOS_DRIVES) drv=0;
