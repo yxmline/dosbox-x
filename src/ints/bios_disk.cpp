@@ -693,7 +693,7 @@ struct fatFromDOSDrive
 			var_write((uint32_t *const)&fsinfosec[0], (const uint32_t)0x41615252); //lead signature
 			var_write((uint32_t *const)&fsinfosec[484], (const uint32_t)0x61417272); //Another signature
 			Bitu freeclusters = (Bitu)freeSpace / (BYTESPERSECTOR * sectorsPerCluster);
-			var_write((uint32_t *const)&fsinfosec[488], (const uint32_t)(readOnly ? 0x0 : (freeclusters < 0xFFFFFFFF && (dos.version.major > 7 || (dos.version.major == 7 && dos.version.minor >= 10)) ? freeclusters : 0xFFFFFFFF))); //last known free cluster count (all FF is unknown)
+			var_write((uint32_t *const)&fsinfosec[488], (const uint32_t)(readOnly ? 0x0 : (freeclusters < 0xFFFFFFFF ? freeclusters : 0xFFFFFFFF))); //last known free cluster count (all FF is unknown)
 			var_write((uint32_t *const)&fsinfosec[492], (const uint32_t)0xFFFFFFFF); //the cluster number at which the driver should start looking for free clusters (all FF is unknown)
 			var_write((uint32_t *const)&fsinfosec[508], (const uint32_t)0xAA550000); //ending signature
 		}
