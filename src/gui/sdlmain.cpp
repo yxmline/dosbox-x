@@ -9196,7 +9196,7 @@ fresh_boot:
             /* shutdown the programs */
             PROGRAMS_Shutdown();        /* FIXME: Is this safe? Or will this cause use-after-free bug? */
 
-            Add_VFiles(false);
+            Add_VFiles(true);
 
             /* remove environment variables for some components */
             DOS_UninstallMisc();
