@@ -1119,7 +1119,13 @@ again:
 	find_hsize=(uint32_t) (stat_block.st_size / 0x100000000);
 	find_size=(uint32_t) (stat_block.st_size % 0x100000000);
 	struct tm *time;
-	if((time=localtime(&stat_block.st_mtime))!=0){
+	if((time=
+#if defined(__MINGW32__) && !defined(HX_DOS)
+    _localtime64
+#else
+    localtime
+#endif
+    (&stat_block.st_mtime))!=0){
 		find_date=DOS_PackDate((uint16_t)(time->tm_year+1900),(uint16_t)(time->tm_mon+1),(uint16_t)time->tm_mday);
 		find_time=DOS_PackTime((uint16_t)time->tm_hour,(uint16_t)time->tm_min,(uint16_t)time->tm_sec);
 	} else {
@@ -2064,7 +2070,13 @@ bool Overlay_Drive::FileStat(const char* name, FileStat_Block * const stat_block
 	
 	/* Convert the stat to a FileStat */
 	struct tm *time;
-	if((time=localtime(&temp_stat.st_mtime))!=0) {
+	if((time=
+#if defined(__MINGW32__) && !defined(HX_DOS)
+    _localtime64
+#else
+    localtime
+#endif
+    (&temp_stat.st_mtime))!=0) {
 		stat_block->time=DOS_PackTime((uint16_t)time->tm_hour,(uint16_t)time->tm_min,(uint16_t)time->tm_sec);
 		stat_block->date=DOS_PackDate((uint16_t)(time->tm_year+1900),(uint16_t)(time->tm_mon+1),(uint16_t)time->tm_mday);
 	} else {

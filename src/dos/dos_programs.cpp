@@ -64,13 +64,6 @@
 #include "../libs/tinyfiledialogs/tinyfiledialogs.c"
 #endif
 #if defined(WIN32)
-# if defined(__MINGW32__)
-#  define ht_stat_t struct _stat
-#  define ht_stat(x,y) _wstat(x,y)
-# else
-#  define ht_stat_t struct _stat64
-#  define ht_stat(x,y) _wstat64(x,y)
-# endif
 #ifndef C_ICONV
 # define C_ICONV
 # include "../misc/winiconv.c"
