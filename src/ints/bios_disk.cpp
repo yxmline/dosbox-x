@@ -41,9 +41,7 @@ extern bool int13_extensions_enable, bootguest, bootvm, use_quick_reboot;
 extern bool isDBCSCP(), isKanji1_gbk(uint8_t chr), shiftjis_lead_byte(int c);
 extern bool CodePageGuestToHostUTF16(uint16_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/);
 
-uint32_t starttick;
-
-#define TOFAT_TIMEOUT 3000
+#define TOFAT_TIMEOUT 5000
 #define STATIC_ASSERTM(A,B) static_assertion_##A##_##B
 #define STATIC_ASSERTN(A,B) STATIC_ASSERTM(A,B)
 #define STATIC_ASSERT(cond) typedef char STATIC_ASSERTN(__LINE__,__COUNTER__)[(cond)?1:-1]
@@ -60,9 +58,10 @@ uint32_t DriveCalculateCRC32(const uint8_t *ptr, size_t len, uint32_t crc)
 bool DriveFileIterator(DOS_Drive* drv, void(*func)(const char* path, bool is_dir, uint32_t size, uint16_t date, uint16_t time, uint8_t attr, Bitu data), Bitu data)
 {
 	if (!drv) return true;
+	uint32_t starttick = GetTicks();
 	struct Iter
 	{
-		static bool ParseDir(DOS_Drive* drv, const std::string& dir, std::vector<std::string>& dirs, void(*func)(const char* path, bool is_dir, uint32_t size, uint16_t date, uint16_t time, uint8_t attr, Bitu data), Bitu data)
+		static bool ParseDir(DOS_Drive* drv, uint32_t startticks, const std::string& dir, std::vector<std::string>& dirs, void(*func)(const char* path, bool is_dir, uint32_t size, uint16_t date, uint16_t time, uint8_t attr, Bitu data), Bitu data)
 		{
 			size_t dirlen = dir.length();
 			if (dirlen + DOS_NAMELENGTH >= DOS_PATHLENGTH) return true;
@@ -80,13 +79,13 @@ bool DriveFileIterator(DOS_Drive* drv, void(*func)(const char* path, bool is_dir
 			dta.SetupSearch(255, (uint8_t)(0xffff & ~DOS_ATTR_VOLUME), (char*)"*.*");
 			for (bool more = drv->FindFirst((char*)dir.c_str(), dta); more; more = drv->FindNext(dta))
 			{
-				char dta_name[DOS_NAMELENGTH_ASCII], lname[LFN_NAMELENGTH+1]; uint32_t dta_size; uint16_t dta_date, dta_time; uint8_t dta_attr;
-				dta.GetResult(dta_name, lname, dta_size, dta_date, dta_time, dta_attr);
-                if (starttick && GetTicks()-starttick > TOFAT_TIMEOUT) {
+                if (startticks && GetTicks()-startticks > TOFAT_TIMEOUT) {
                     LOG_MSG("Timeout iterating directories");
                     dos.dta(save_dta);
                     return false;
                 }
+				char dta_name[DOS_NAMELENGTH_ASCII], lname[LFN_NAMELENGTH+1]; uint32_t dta_size, dta_hsize; uint16_t dta_date, dta_time; uint8_t dta_attr;
+				dta.GetResult(dta_name, lname, dta_size, dta_hsize, dta_date, dta_time, dta_attr);
 				strcpy(full_path + dirlen, dta_name);
 				bool is_dir = !!(dta_attr & DOS_ATTR_DIRECTORY);
 				//if (is_dir) printf("[%s] [%s] %s (size: %u - date: %u - time: %u - attr: %u)\n", (const char*)data, (dta_attr == 8 ? "V" : (is_dir ? "D" : "F")), full_path, dta_size, dta_date, dta_time, dta_attr);
@@ -105,7 +104,7 @@ bool DriveFileIterator(DOS_Drive* drv, void(*func)(const char* path, bool is_dir
 	{
 		std::swap(dirs.back(), dir);
 		dirs.pop_back();
-		if (!Iter::ParseDir(drv, dir.c_str(), dirs, func, data)) return false;
+		if (!Iter::ParseDir(drv, starttick, dir.c_str(), dirs, func, data)) return false;
 	}
 	return true;
 }
@@ -379,8 +378,8 @@ struct fatFromDOSDrive
 				skipintprog = true;
 				for (bool more = ffdd.drive->FindFirst(finddir, dta); more; more = ffdd.drive->FindNext(dta))
 				{
-					char dta_name[DOS_NAMELENGTH_ASCII], lname[LFN_NAMELENGTH+1]; uint32_t dta_size; uint16_t dta_date, dta_time; uint8_t dta_attr;
-					dta.GetResult(dta_name, lname, dta_size, dta_date, dta_time, dta_attr);
+					char dta_name[DOS_NAMELENGTH_ASCII], lname[LFN_NAMELENGTH+1]; uint32_t dta_size, dta_hsize; uint16_t dta_date, dta_time; uint8_t dta_attr;
+					dta.GetResult(dta_name, lname, dta_size, dta_hsize, dta_date, dta_time, dta_attr);
                     //LOG_MSG("dta_name %s lname %s\n", dta_name, lname);
 					const char *fend = dta_name + strlen(dta_name);
 					const bool dot = (dta_name[0] == '.' && dta_name[1] == '\0'), dotdot = (dta_name[0] == '.' && dta_name[1] == '.' && dta_name[2] == '\0');
@@ -405,6 +404,7 @@ struct fatFromDOSDrive
                                 uint16_t uname[4];
                                 text[0]=lname[i-1]&0xFF;
                                 text[1]=lname[i]&0xFF;
+                                text[2]=0;
                                 uname[0]=0;
                                 uname[1]=0;
                                 if (CodePageGuestToHostUTF16(uname,text)&&uname[0]!=0&&uname[1]==0)
@@ -538,18 +538,19 @@ struct fatFromDOSDrive
 
 		drv->EmptyCache();
 		Iter::SumInfo sum = { 0, NULL };
-		Bitu freeSpace = 0, freeSpaceMB = 0;
+		uint64_t freeSpace = 0, freeSpaceMB = 0;
         uint32_t free_clusters = 0;
         uint16_t drv_bytes_sector; uint8_t drv_sectors_cluster;  uint16_t drv_total_clusters, drv_free_clusters;
         rsize=true;
         freec=0;
         drv->AllocationInfo(&drv_bytes_sector, &drv_sectors_cluster, &drv_total_clusters, &drv_free_clusters);
         free_clusters = freec?freec:drv_free_clusters;
-        freeSpace = (Bitu)drv_bytes_sector * (Bitu)drv_sectors_cluster * (Bitu)(freec?freec:free_clusters);
+        freeSpace = (uint64_t)drv_bytes_sector * drv_sectors_cluster * (freec?freec:free_clusters);
         freeSpaceMB = freeSpace / (1024*1024);
         rsize=false;
         tomany=false;
-        readOnly = !DriveFileIterator(drv, Iter::SumFileSize, (Bitu)&sum) || free_clusters == 0;
+        readOnly = (free_clusters == 0);
+        if (!DriveFileIterator(drv, Iter::SumFileSize, (Bitu)&sum)) return;
 
 		const uint32_t addFreeMB = (readOnly ? 0 : freeSpaceMB), totalMB = (uint32_t)(sum.used_bytes / (1024*1024)) + addFreeMB + 1;
 		if      (totalMB >= 3072) { isFAT32 = true;  sectorsPerCluster = 64; } // 32 kb clusters ( 98304 ~        FAT entries)
@@ -820,7 +821,6 @@ struct fatFromDOSDrive
                 if (!res && codepage && codepage != dos.loaded_codepage) {
                     uint16_t cp = dos.loaded_codepage;
                     dos.loaded_codepage = codepage;
-                    drive->EmptyCache();
                     res = drive->FileOpen(&df, f.path, OPEN_READ);
                     dos.loaded_codepage = cp;
                 }
@@ -1500,9 +1500,7 @@ imageDisk::imageDisk(FILE* imgFile, const char* imgName, uint32_t imgSizeK, bool
 
 imageDisk::imageDisk(class DOS_Drive *useDrive)
 {
-	starttick = GetTicks();
 	ffdd = new fatFromDOSDrive(useDrive);
-	starttick = 0;
 	if (!ffdd->success) {
 		LOG_MSG("FAT conversion failed");
 		delete ffdd;

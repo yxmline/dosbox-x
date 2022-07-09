@@ -429,9 +429,9 @@ void DOS_DTA::SetupSearch(uint8_t _sdrive,uint8_t _sattr,char * pattern) {
 	}
 }
 
-void DOS_DTA::SetResult(const char * _name, const char * _lname, uint32_t _size,uint16_t _date,uint16_t _time,uint8_t _attr) {
-	fd.hsize=0;
+void DOS_DTA::SetResult(const char * _name, const char * _lname, uint32_t _size,uint32_t _hsize,uint16_t _date,uint16_t _time,uint8_t _attr) {
 	fd.size=_size;
+	fd.hsize=_hsize;
 	fd.mdate=_date;
 	fd.mtime=_time;
 	fd.attr=_attr;
@@ -448,11 +448,12 @@ void DOS_DTA::SetResult(const char * _name, const char * _lname, uint32_t _size,
 }
 
 
-void DOS_DTA::GetResult(char * _name, char * _lname,uint32_t & _size,uint16_t & _date,uint16_t & _time,uint8_t & _attr) {
+void DOS_DTA::GetResult(char * _name, char * _lname,uint32_t & _size,uint32_t & _hsize,uint16_t & _date,uint16_t & _time,uint8_t & _attr) {
 	strcpy(_lname,fd.lname);
 	if (fd.sname[0]!=0) strcpy(_name,fd.sname);
 	else if (strlen(fd.lname)<DOS_NAMELENGTH_ASCII) strcpy(_name,fd.lname);
 	_size = fd.size;
+	_hsize = fd.hsize;
 	_date = fd.mdate;
 	_time = fd.mtime;
 	_attr = fd.attr;
