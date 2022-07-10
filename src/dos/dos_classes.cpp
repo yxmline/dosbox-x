@@ -471,7 +471,10 @@ int DOS_DTA::GetFindData(int fmt, char * fdstr, int *c) {
 		sprintf(fdstr,"%-1s%-19s%-2s%-2s%-4s%-4s%-4s%-8s%-260s%-14s",(char*)&fd.attr,(char*)&fd.fres1,(char*)&fd.mtime,(char*)&fd.mdate,(char*)&fd.mtime,(char*)&fd.hsize,(char*)&fd.size,(char*)&fd.fres2,(char*)&fd.lname,(char*)&fd.sname);
 	else
 		sprintf(fdstr,"%-1s%-19s%-4s%-4s%-4s%-4s%-8s%-260s%-14s",(char*)&fd.attr,(char*)&fd.fres1,(char*)&fd.mtime,(char*)&fd.mdate,(char*)&fd.hsize,(char*)&fd.size,(char*)&fd.fres2,(char*)&fd.lname,(char*)&fd.sname);
-	for (int i=0;i<4;i++) fdstr[28+i]=0;
+    fdstr[28]=(char)fd.hsize%256;
+    fdstr[29]=(char)((fd.hsize%65536)/256);
+    fdstr[30]=(char)((fd.hsize%16777216)/65536);
+    fdstr[31]=(char)(fd.hsize/16777216);
     fdstr[32]=(char)fd.size%256;
     fdstr[33]=(char)((fd.size%65536)/256);
     fdstr[34]=(char)((fd.size%16777216)/65536);
