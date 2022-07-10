@@ -656,23 +656,7 @@ uint16_t GetDefaultCP() {
     else if (IS_KDOSV) return 949;
     else if (IS_PDOSV) return 936;
     else if (IS_TDOSV) return 950;
-    uint16_t cp = 437;
-#if defined(WIN32)
-    Section_prop *section = static_cast<Section_prop *>(control->GetSection("config"));
-    if (section!=NULL&&!control->opt_langcp) {
-        const char *countrystr = !control->opt_noconfig ? "" : (char *)section->Get_string("country"), *r=strchr(countrystr, ',');
-        if (r==NULL || !*(r+1)) {
-            cp = GetACP();
-#if defined(USE_TTF)
-            if (!isSupportedCP(cp))
-#else
-            if (cp!=932&&cp!=936&&cp!=949&&cp!=950&&cp!=951)
-#endif
-            cp = 437;
-        }
-    }
-#endif
-    return cp;
+    return 437;
 }
 
 uint16_t keyboard_layout::extract_codepage(const char* keyboard_file_name) {
