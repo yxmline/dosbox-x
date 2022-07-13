@@ -2487,7 +2487,7 @@ nextfile:
                 text[0] = text[1] = text[2] = 0;
                 lchar = (uint16_t)(dlfn->LDIR_Name1[i]);
                 if (lchar < 0x100 || lchar == 0xFFFF)
-                    lname[len++] = CodePageHostToGuestUTF16(text,&lchar) && text[0] && !text[1] ? text[0] : (char)(lchar & 0xFF);
+                    lname[len++] = lchar != 0xFFFF && CodePageHostToGuestUTF16(text,&lchar) && text[0] && !text[1] ? text[0] : (char)(lchar & 0xFF);
                 else {
                     uname[0]=lchar;
                     uname[1]=0;
@@ -2502,7 +2502,7 @@ nextfile:
                 text[0] = text[1] = text[2] = 0;
                 lchar = (uint16_t)(dlfn->LDIR_Name2[i]);
                 if (lchar < 0x100 || lchar == 0xFFFF)
-                    lname[len++] = CodePageHostToGuestUTF16(text,&lchar) && text[0] && !text[1] ? text[0] : (char)(lchar & 0xFF);
+                    lname[len++] = lchar != 0xFFFF && CodePageHostToGuestUTF16(text,&lchar) && text[0] && !text[1] ? text[0] : (char)(lchar & 0xFF);
                 else {
                     char text[10];
                     uint16_t uname[4];
@@ -2522,7 +2522,7 @@ nextfile:
                 text[0] = text[1] = text[2] = 0;
                 lchar = (uint16_t)(dlfn->LDIR_Name3[i]);
                 if (lchar < 0x100 || lchar == 0xFFFF)
-                    lname[len++] = CodePageHostToGuestUTF16(text,&lchar) && text[0] && !text[1] ? text[0] : (char)(lchar & 0xFF);
+                    lname[len++] = lchar != 0xFFFF && CodePageHostToGuestUTF16(text,&lchar) && text[0] && !text[1] ? text[0] : (char)(lchar & 0xFF);
                 else {
                     char text[10];
                     uint16_t uname[4];
