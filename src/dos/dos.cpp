@@ -4404,6 +4404,9 @@ public:
         mainMenu.get_item("enable_a20gate").enable(true).refresh_item(mainMenu);
         mainMenu.get_item("quick_reboot").check(use_quick_reboot).refresh_item(mainMenu);
         mainMenu.get_item("shell_config_commands").check(enable_config_as_shell_commands).enable(true).refresh_item(mainMenu);
+        mainMenu.get_item("limit_hdd_rate").check(::disk_data_rate).enable(true).refresh_item(mainMenu);
+        mainMenu.get_item("limit_floppy_rate").check(::floppy_data_rate).enable(true).refresh_item(mainMenu);
+        mainMenu.get_item("shell_config_commands").check(::disk_data_rate).enable(true).refresh_item(mainMenu);
 #if defined(WIN32) && !defined(HX_DOS)
         mainMenu.get_item("dos_win_autorun").check(winautorun).enable(true).refresh_item(mainMenu);
 #endif
