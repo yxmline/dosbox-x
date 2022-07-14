@@ -137,6 +137,10 @@ static const char *def_menu_main[] =
 {
     "mapper_gui",
     "mapper_mapper",
+    "--",
+#if !defined(HX_DOS)
+    "mapper_quickrun",
+#endif
     "mapper_loadmap",
     "--",
     "MainSendKey",
@@ -555,17 +559,15 @@ static const char *def_menu_video[] =
 /* DOS menu ("DOSMenu") */
 static const char *def_menu_dos[] =
 {
-#if !defined(HX_DOS)
-    "mapper_quickrun",
-#endif
     "DOSVerMenu",
     "DOSLFNMenu",
-    "--",
-    "DOSMouseMenu",
-    "DOSEMSMenu",
 #if defined(WIN32) && !defined(HX_DOS) || defined(LINUX) || defined(MACOSX)
     "DOSWinMenu",
 #endif
+    "--",
+    "DOSMouseMenu",
+    "DOSEMSMenu",
+    "DOSDiskRateMenu",
     "--",
     "enable_a20gate",
     "quick_reboot",
@@ -628,6 +630,14 @@ static const char *def_menu_dos_ems[] =
     "dos_ems_board",
     "dos_ems_emm386",
     "dos_ems_false",
+    NULL
+};
+
+/* DOS disk rate menu ("DOSDiskRateMenu") */
+static const char *def_menu_dos_diskrate[] =
+{
+    "limit_hdd_rate",
+    "limit_floppy_rate",
     NULL
 };
 
@@ -1647,6 +1657,9 @@ void ConstructMenu(void) {
 
     /* DOS EMS menu */
     ConstructSubMenu(mainMenu.get_item("DOSEMSMenu").get_master_id(), def_menu_dos_ems);
+
+    /* DOS disk rate menu */
+    ConstructSubMenu(mainMenu.get_item("DOSDiskRateMenu").get_master_id(), def_menu_dos_diskrate);
 
 #if defined(WIN32) && !defined(HX_DOS) || defined(LINUX) || defined(MACOSX)
     /* DOS WIN menu */
