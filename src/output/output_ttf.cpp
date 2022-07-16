@@ -495,9 +495,10 @@ void CheckTTFLimit() {
     }
 }
 
-int setTTFMap(int cp) {
+int setTTFMap(bool changecp) {
     char text[2];
     uint16_t uname[4], wcTest[256];
+    int cp = dos.loaded_codepage;
     for (int i = 0; i < 256; i++) {
         text[0]=i;
         text[1]=0;
@@ -515,7 +516,7 @@ int setTTFMap(int cp) {
     }
     uint16_t unimap;
     int notMapped = 0;
-    for (int y = ((customcp&&dos.loaded_codepage==customcp)||(altcp&&dos.loaded_codepage==altcp)?0:8); y < 16; y++)
+    for (int y = ((customcp&&(dos.loaded_codepage==customcp||changecp))||(altcp&&(dos.loaded_codepage==altcp||changecp))?0:8); y < 16; y++)
         for (int x = 0; x < 16; x++) {
             if (y<8 && (wcTest[y*16+x] == y*16+x || wcTest[y*16+x] == cp437_to_unicode[y*16+x])) unimap = cpMap_copy[y*16+x];
             else unimap = wcTest[y*16+x];
@@ -546,7 +547,7 @@ int setTTFCodePage() {
 
     if (cp) {
         LOG_MSG("Loaded system codepage: %d\n", cp);
-        int notMapped = setTTFMap(cp);
+        int notMapped = setTTFMap(true);
         if (strcmp(RunningProgram, "LOADLIN") && !dos_kernel_disabled)
             initcodepagefont();
 #if defined(WIN32) && !defined(HX_DOS)

@@ -622,7 +622,7 @@ begin
             begin
               linetmp := Trim(Copy(line, 1, Pos('=', line)));
               if (PageLang.Values[1]) then
-                FileLines[i] := linetmp+' 33,858';
+                FileLines[i] := linetmp+' 33,859';
               if (PageLang.Values[2]) then
                 FileLines[i] := linetmp+' 81,932';
               if (PageLang.Values[3]) then

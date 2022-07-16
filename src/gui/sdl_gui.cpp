@@ -475,7 +475,7 @@ static GUI::ScreenSDL *UI_Startup(GUI::ScreenSDL *screen) {
             DOSBoxMenu::item &item = guiMenu.get_item("ExitGUI");
             item.set_text(MSG_Get("CONFIG_TOOL_EXIT"));
         }
-# if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
+# if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU || DOSBOXMENU_TYPE == DOSBOXMENU_NSMENU
         if (loadlang) guiMenu.unbuild();
 # endif
     }
@@ -2883,7 +2883,7 @@ protected:
     GUI::Input *name;
 public:
     ShowHelpIntro(GUI::Screen *parent, int x, int y, const char *title) :
-        ToplevelWindow(parent, x, y, 600, 190, title) {
+        ToplevelWindow(parent, x, y, 610, 190, title) {
             std::istringstream in(MSG_Get("INTRO_MESSAGE"));
             int r=0;
             if (in)	for (std::string line; std::getline(in, line); ) {
