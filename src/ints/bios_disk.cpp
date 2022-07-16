@@ -315,7 +315,7 @@ struct fatFromDOSDrive
 			if (df) { df->Close(); delete df; }
 	}
 
-	fatFromDOSDrive(DOS_Drive* drv, bool ro) : drive(drv)
+	fatFromDOSDrive(DOS_Drive* drv, int freeMB) : drive(drv)
 	{
 		cacheSectorNumber[0] = 1; // must not state that sector 0 is already cached
 		memset(&cacheSectorNumber[1], 0, sizeof(cacheSectorNumber) - sizeof(cacheSectorNumber[0]));
@@ -566,9 +566,10 @@ struct fatFromDOSDrive
         free_clusters = freec?freec:drv_free_clusters;
         freeSpace = (uint64_t)drv_bytes_sector * drv_sectors_cluster * (freec?freec:free_clusters);
         freeSpaceMB = freeSpace / (1024*1024);
+        if (freeMB > -1 && freeMB < freeSpaceMB) freeSpaceMB = freeMB;
         rsize=false;
         tomany=false;
-        readOnly = ro || free_clusters == 0;
+        readOnly = free_clusters == 0 || freeSpaceMB == 0;
         if (!DriveFileIterator(drv, Iter::SumFileSize, (Bitu)&sum)) return;
 
 		const uint32_t addFreeMB = (readOnly ? 0 : freeSpaceMB), totalMB = (uint32_t)(sum.used_bytes / (1024*1024)) + (addFreeMB ? (1 + addFreeMB) : 0);
@@ -1525,9 +1526,9 @@ imageDisk::imageDisk(FILE* imgFile, const char* imgName, uint32_t imgSizeK, bool
     }
 }
 
-imageDisk::imageDisk(class DOS_Drive *useDrive, bool readonly)
+imageDisk::imageDisk(class DOS_Drive *useDrive, int freeMB)
 {
-	ffdd = new fatFromDOSDrive(useDrive, readonly);
+	ffdd = new fatFromDOSDrive(useDrive, freeMB);
 	if (!ffdd->success) {
 		LOG_MSG("FAT conversion failed");
 		delete ffdd;
