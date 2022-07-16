@@ -201,7 +201,7 @@ void DetachFromBios(imageDisk* image) {
 void SwitchLanguage(int oldcp, int newcp, bool confirm) {
     auto iterold = langcp_map.find(oldcp), iternew = langcp_map.find(newcp);
     std::string langold = iterold != langcp_map.end() ? iterold->second : "", langnew = iternew != langcp_map.end() ? iternew->second : "";
-    if (loadlang && (oldcp == lastmsgcp || (oldcp == 951 && lastmsgcp == 950)) && oldcp != newcp && newcp == dos.loaded_codepage && langnew.size() && !(langold.size() && langold == langnew)) {
+    if (loadlang && (oldcp == lastmsgcp || (oldcp == 951 && lastmsgcp == 950) || (oldcp == 950 && lastmsgcp == 951) || !confirm) && oldcp != newcp && newcp == dos.loaded_codepage && langnew.size() && !(langold.size() && langold == langnew)) {
         FILE *file = testLoadLangFile(langnew.c_str());
         if (file) {
             fclose(file);
@@ -2538,6 +2538,7 @@ public:
             const uint8_t page=real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
             if (!dos_kernel_disabled && (convimg == 1 || (convertimg && convimg == -1 && !IS_PC98_ARCH))) { // PC-98 image not supported yet
                 unsigned int drv = 2, nextdrv = 2;
+                int freeMB = static_cast<Section_prop *>(control->GetSection("dosbox"))->Get_int("convert fat free space");
                 for (unsigned int d=2;d<DOS_DRIVES+2;d++) {
                     if (d==DOS_DRIVES) drv=0;
                     else if (d==DOS_DRIVES+1) drv=1;
@@ -2564,7 +2565,7 @@ public:
                             }
                         }
                         Overlay_Drive *od = dynamic_cast<Overlay_Drive*>(Drives[drv]);
-                        imageDisk *imagedrv = new imageDisk(Drives[drv], convertro || Drives[drv]->readonly || (od && od->ovlreadonly));
+                        imageDisk *imagedrv = new imageDisk(Drives[drv], (convertro || Drives[drv]->readonly || (od && od->ovlreadonly)) ? 0 : freeMB);
                         if (imagedrv && imagedrv->ffdd) {
                             imageDiskList[nextdrv] = imagedrv;
                             bool ide_slave = false;
