@@ -12,12 +12,15 @@
     free space (in MB; 0 means read-only) and whether
     to also convert virtual drive Z:. Much of the code
     is imported from DOSBox Pure. (Wengier)
-  - Added code pages 856 (Hebrew) and 859 (Latin 9) for
-    the guest-to-host code page conversions. (Wengier)
+  - Added menu option "Save to disk image" (under drive
+    letter in "Drive" menu) to save a mounted non-FAT
+    drive to selected disk image. (Wengier)
   - Added the "Limit disk transfer speed" menu group
     (under "DOS") to toggle the hard & floppy disk data
     rate function. Also moved "Quick launch program..."
     menu from "DOS" menu to "Main" menu. (Wengier)
+  - Added code pages 856 (Hebrew) and 859 (Latin 9) for
+    the guest-to-host code page conversions. (Wengier)
   - Added config option to allow create of temporary
     devices for piping operations when a temporary DOS
     path is not available. (Wengier)
@@ -37,6 +40,8 @@
     file..." to "Load language file..." for loading
     language files without rebooting DOSBox-X, unless
     a guest system is currently running. (Wengier)
+  - Imported the more recent MBR code from FreeDOS to
+    avoid the "boot menu" as in older code. (Wengier)
   - When changing TTF font, DOSBox-X will try to show
     the number of missing characters in the new TTF
     font (if any). (Wengier)

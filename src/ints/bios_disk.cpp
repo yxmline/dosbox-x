@@ -36,6 +36,7 @@
 
 extern int bootdrive;
 extern unsigned long freec;
+extern const uint8_t freedos_mbr[];
 extern bool int13_disk_change_detect_enable, skipintprog, rsize, tryconvertcp;
 extern bool int13_extensions_enable, bootguest, bootvm, use_quick_reboot;
 extern bool isDBCSCP(), isKanji1_gbk(uint8_t chr), shiftjis_lead_byte(int c);
@@ -255,6 +256,7 @@ struct lfndirentry {
 #ifdef _MSC_VER
 #pragma pack ()
 #endif
+
 STATIC_ASSERT(sizeof(direntry) == sizeof(lfndirentry));
 enum
 {
@@ -270,7 +272,7 @@ struct fatFromDOSDrive
 	enum ffddDefs : uint32_t
 	{
 		BYTESPERSECTOR    = 512,
-		HEADCOUNT         = 240, // needs to be >128 to fit 4GB into CHS
+		HEADCOUNT         = 255, // needs to be >128 to fit 4GB into CHS
 		SECTORSPERTRACK   = 63,
 		SECT_MBR          = 0,
 		SECT_BOOT         = 32,
@@ -658,6 +660,7 @@ struct fatFromDOSDrive
 		}
 
 		memset(&mbr, 0, sizeof(mbr));
+		//memcpy(&mbr,freedos_mbr,512);
 		var_write((uint32_t *)&mbr.booter[440], serial); //4 byte disk serial number
 		var_write(&mbr.pentry[0].bootflag, 0x80); //Active bootable
 		if ((sect_disk_end - 1) / (HEADCOUNT * SECTORSPERTRACK) > 0x3FF)
@@ -723,6 +726,7 @@ struct fatFromDOSDrive
 			var_write((uint32_t *const)&fsinfosec[492], (const uint32_t)(ver71 ? (sect_files_end / sectorsPerCluster): 0xFFFFFFFF)); //the cluster number at which the driver should start looking for free clusters (all FF is unknown)
 			var_write((uint32_t *const)&fsinfosec[508], (const uint32_t)0xAA550000); //ending signature
 		}
+
 		codepage = dos.loaded_codepage;
 		tryconvcp = tryconvertcp;
 		success = true;
@@ -914,7 +918,29 @@ struct fatFromDOSDrive
 		if (src != cachedata) memcpy(cachedata, data, BYTESPERSECTOR);
 		return 0;
 	}
+
+    bool SaveImage(const char *name)
+    {
+        FILE* f = fopen_wrap(name, "wb");
+        if (f) {
+            uint8_t filebuf[BYTESPERSECTOR];
+            for (int i = 0; i < sect_disk_end; i++) {
+                ReadSector(i, filebuf);
+                if (fwrite(filebuf, 1, BYTESPERSECTOR, f) != BYTESPERSECTOR) {
+                    fclose(f);
+                    return false;
+                }
+            }
+            fclose(f);
+            return true;
+        } else
+            return false;
+    }
 };
+
+bool saveDiskImage(imageDisk *image, const char *name) {
+    return image && image->ffdd && image->ffdd->SaveImage(name);
+}
 
 diskGeo DiskGeometryList[] = {
     { 160,  8, 1, 40, 0, 512,  64, 1, 0xFE},      // IBM PC double density 5.25" single-sided 160KB
@@ -1526,7 +1552,7 @@ imageDisk::imageDisk(FILE* imgFile, const char* imgName, uint32_t imgSizeK, bool
     }
 }
 
-imageDisk::imageDisk(class DOS_Drive *useDrive, int freeMB)
+imageDisk::imageDisk(class DOS_Drive *useDrive, unsigned int letter, int freeMB)
 {
 	ffdd = new fatFromDOSDrive(useDrive, freeMB);
 	if (!ffdd->success) {
@@ -1535,6 +1561,7 @@ imageDisk::imageDisk(class DOS_Drive *useDrive, int freeMB)
 		ffdd = NULL;
 		return;
 	}
+	drvnum = letter;
 	diskimg = NULL;
 	diskname[0] = '\0';
 	hardDrive = true;
