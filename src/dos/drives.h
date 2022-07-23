@@ -997,6 +997,35 @@ struct UDFFileIdentifierDescriptor { /* ECMA-167 4/14.4 */
 
 ////////////////////////////////////
 
+struct UDFextent {
+	struct UDFextent_ad ex;
+
+	UDFextent();
+	UDFextent(const struct UDFextent_ad &s);
+};
+
+struct UDFextents {
+	std::vector<struct UDFextent> xl;
+
+	// extents stored within extent area
+	bool is_indata = false;
+	std::vector<uint8_t> indata;
+
+	// current position
+	uint32_t		relofs = 0;	// offset within extent
+	uint64_t		extofs = 0;	// base offset of extent
+	size_t			extent = 0;	// which extent
+	uint64_t		filesz = 0;	// file size
+
+	std::vector<uint8_t>	sector_buffer;
+	uint32_t		sector_buffer_n = 0xFFFFFFFFu;
+
+				UDFextents();
+				UDFextents(const struct UDFextent_ad &s);
+};
+
+////////////////////////////////////
+
 class isoDrive : public DOS_Drive {
 public:
 	isoDrive(char driveLetter, const char* fileName, uint8_t mediaid, int &error, std::vector<std::string>& options);
@@ -1035,23 +1064,15 @@ public:
 	virtual void Activate(void);
 private:
     int  readDirEntry(isoDirEntry* de, const uint8_t* data, unsigned int direntindex);
-	bool lookupSingle(isoDirEntry *de, const char *name, uint32_t sectorStart, uint32_t length);
 	bool lookup(isoDirEntry *de, const char *path);
+	bool lookup(UDFFileIdentifierDescriptor &fid, UDFFileEntry &fe, const char *path);
 	int  UpdateMscdex(char driveLetter, const char* path, uint8_t& subUnit);
 	int  GetDirIterator(const isoDirEntry* de);
+	int  GetDirIterator(const UDFFileEntry &fe);
 	bool GetNextDirEntry(const int dirIteratorHandle, isoDirEntry* de);
 	void FreeDirIterator(const int dirIterator);
 	bool ReadCachedSector(uint8_t** buffer, const uint32_t sector);
-	
-	struct DirIterator {
-		bool valid;
-		bool root;
-		uint32_t currentSector;
-		uint32_t endSector;
-		uint32_t index;
-		uint32_t pos;
-	} dirIterators[MAX_OPENDIRS];
-	
+
 	int nextFreeDirIterator;
 	
 	struct SectorHashEntry {
@@ -1075,12 +1096,12 @@ private:
     uint8_t subUnit = 0;
     char driveLetter = '\0';
 	char discLabel[32];
-private:
+public:
 	UDFextent_ad convertToUDFextent_ad(const UDFshort_ad &s,const uint32_t partition_ref_id=0xFFFFFFFFu) const;
 	UDFextent_ad convertToUDFextent_ad(const UDFextent_ad &s) const;
 	UDFextent_ad convertToUDFextent_ad(const UDFlong_ad &s) const;
 	UDFextent_ad convertToUDFextent_ad(const UDFext_ad &s) const;
-private:
+public:
 	bool convertToUDFextent_ad(UDFextent_ad &d,const UDFshort_ad &s,const uint32_t partition_ref_id=0xFFFFFFFFu) const;
 	bool convertToUDFextent_ad(UDFextent_ad &d,const UDFextent_ad &s) const;
 	bool convertToUDFextent_ad(UDFextent_ad &d,const UDFlong_ad &s) const;
@@ -1090,6 +1111,24 @@ private:
 	UDFPrimaryVolumeDescriptor					pvold;
 	UDFFileSetDescriptor						fsetd;
 	UDFPartitionDescriptor						partd;
+public:
+	void UDFextent_rewind(struct UDFextents &ex);
+	void UDFFileEntryToExtents(UDFextents &ex,UDFFileEntry &fe);
+	uint64_t UDFextent_seek(struct UDFextents &ex,uint64_t ofs);
+	int UDFextent_read(struct UDFextents &ex,unsigned char *buf,size_t count);
+	uint64_t UDFtotalsize(struct UDFextents &ex) const;
+private:
+	struct DirIterator {
+		bool valid;
+		bool root;
+		uint32_t currentSector;
+		uint32_t endSector;
+		uint32_t index;
+		uint32_t pos;
+		UDFextents udfdirext;
+	} dirIterators[MAX_OPENDIRS];
+private:
+	bool GetNextDirEntry(const int dirIteratorHandle, UDFFileIdentifierDescriptor &fid, UDFFileEntry &fe, UDFextents &dirext, char fname[LFN_NAMELENGTH],unsigned int dirIteratorIndex);
 };
 
 struct VFILE_Block;
