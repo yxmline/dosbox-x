@@ -190,6 +190,505 @@ UDFAnchorVolumeDescriptorPointer::UDFAnchorVolumeDescriptorPointer() {
 
 ////////////////////////////////////
 
+UDFextent_ad isoDrive::convertToUDFextent_ad(const UDFshort_ad &s,const uint32_t partition_ref_id) const {
+	UDFextent_ad r;
+
+	if (!convertToUDFextent_ad(r,s,partition_ref_id))
+		r.ExtentLocation = r.ExtentLength = 0;
+
+	return r;
+}
+
+UDFextent_ad isoDrive::convertToUDFextent_ad(const UDFlong_ad &s) const {
+	UDFextent_ad r;
+
+	if (!convertToUDFextent_ad(r,s))
+		r.ExtentLocation = r.ExtentLength = 0;
+
+	return r;
+}
+
+UDFextent_ad isoDrive::convertToUDFextent_ad(const UDFext_ad &s) const {
+	UDFextent_ad r;
+
+	if (!convertToUDFextent_ad(r,s))
+		r.ExtentLocation = r.ExtentLength = 0;
+
+	return r;
+}
+
+bool isoDrive::convertToUDFextent_ad(UDFextent_ad &d,const UDFextent_ad &s) const {
+	d = s;
+	return true;
+}
+
+bool isoDrive::convertToUDFextent_ad(UDFextent_ad &d,const UDFshort_ad &s,const uint32_t partition_ref_id) const {
+	if (partd.DescriptorTag.TagIdentifier != 0 && (partition_ref_id == partd.PartitionNumber || partition_ref_id == 0xFFFFFFFFu)) {
+		d.ExtentLocation = s.ExtentPosition + partd.PartitionStartingLocation;
+		d.ExtentLength = s.ExtentLength;
+		return true;
+	}
+
+	return false;
+}
+
+bool isoDrive::convertToUDFextent_ad(UDFextent_ad &d,const UDFlong_ad &s) const {
+	if (partd.DescriptorTag.TagIdentifier != 0 && s.ExtentLocation.PartitionReferenceNumber == partd.PartitionNumber) {
+		d.ExtentLocation = s.ExtentLocation.LogicalBlockNumber + partd.PartitionStartingLocation;
+		d.ExtentLength = s.ExtentLength;
+		return true;
+	}
+
+	return false;
+}
+
+bool isoDrive::convertToUDFextent_ad(UDFextent_ad &d,const UDFext_ad &s) const {
+	if (partd.DescriptorTag.TagIdentifier != 0 && s.ExtentLocation.PartitionReferenceNumber == partd.PartitionNumber) {
+		d.ExtentLocation = s.ExtentLocation.LogicalBlockNumber + partd.PartitionStartingLocation;
+		d.ExtentLength = s.ExtentLength;
+		return true;
+	}
+
+	return false;
+}
+
+////////////////////////////////////
+
+void UDFPrimaryVolumeDescriptor::get(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	if (sz >= 490) {
+		DescriptorTag = tag;
+		VolumeDescriptorSequenceNumber = le32toh( *((uint32_t*)(&b[16])) );
+		PrimaryVolumeDescriptorNumber = le32toh( *((uint32_t*)(&b[20])) );
+		VolumeIdentifier.get(32,b+24);
+		VolumeSequenceNumber = le16toh( *((uint16_t*)(&b[56])) );
+		MaximumVolumeSequenceNumber = le16toh( *((uint16_t*)(&b[58])) );
+		InterchangeLevel = le16toh( *((uint16_t*)(&b[60])) );
+		MaximumInterchangeLevel = le16toh( *((uint16_t*)(&b[62])) );
+		CharacterSetList = le32toh( *((uint32_t*)(&b[64])) );
+		MaximumCharacterSetList = le32toh( *((uint32_t*)(&b[68])) );
+		VolumeSetIdentifier.get(128,b+72);
+		DescriptorCharacterSet.get(64,b+200);
+		ExplanatoryCharacterSet.get(64,b+264);
+		VolumeAbstract.get(8,b+328);
+		VolumeCopyrightNotice.get(8,b+336);
+		ApplicationIdentifier.get(32,b+344);
+		RecordingDateAndTime.get(12,b+376);
+		ImplementationIdentifier.get(32,b+388);
+
+		static_assert(sizeof(ImplementationUse) == 64,"sizeof err");
+		memcpy(&ImplementationUse,b+420,64);
+
+		PredecessorVolumeDescriptorSequenceLocation = le32toh( *((uint32_t*)(&b[484])) );
+		Flags = le16toh( *((uint16_t*)(&b[488])) );
+	}
+}
+
+UDFPrimaryVolumeDescriptor::UDFPrimaryVolumeDescriptor(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	get(tag,sz,b);
+}
+
+UDFPrimaryVolumeDescriptor::UDFPrimaryVolumeDescriptor() {
+}
+
+////////////////////////////////////////////////
+
+void UDFFileSetDescriptor::get(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	if (sz >= 480) {
+		DescriptorTag = tag;
+		RecordingDateAndType.get(12,b+16);
+		InterchangeLevel = le16toh( *((uint16_t*)(&b[28])) );
+		MaximumInterchangeLevel = le16toh( *((uint16_t*)(&b[30])) );
+		CharacterSetList = le32toh( *((uint32_t*)(&b[32])) );
+		MaximumCharacterSetList = le32toh( *((uint32_t*)(&b[36])) );
+		FileSetNumber = le32toh( *((uint32_t*)(&b[40])) );
+		FileSetDescriptorNumber = le32toh( *((uint32_t*)(&b[44])) );
+		LogicalVolumeIdentifierCharacterSet.get(64,b+48);
+		LogicalVolumeIdentifier.get(128,b+112);
+		FileSetCharacterSet.get(64,b+240);
+		FileSetIdentifier.get(32,b+304);
+		CopyrightFileIdentifier.get(32,b+336);
+		AbstractFileIdentifier.get(32,b+368);
+		RootDirectoryICB.get(16,b+400);
+		DomainIdentifier.get(32,b+416);
+		NextExtent.get(16,b+448);
+		SystemStreamDirectoryICB.get(16,b+464);
+	}
+}
+
+UDFFileSetDescriptor::UDFFileSetDescriptor(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	get(tag,sz,b);
+}
+
+UDFFileSetDescriptor::UDFFileSetDescriptor() {
+}
+
+////////////////////////////////////////////////////////
+
+void UDFext_ad::get(const unsigned int sz,const unsigned char *b) {
+	if (sz >= 20) {
+		ExtentLength = le32toh( *((uint32_t*)(&b[0])) );
+		RecordedLength = le32toh( *((uint32_t*)(&b[4])) );
+		InformationLength = le32toh( *((uint32_t*)(&b[8])) );
+		ExtentLocation.get(6,b+12);
+
+		static_assert(sizeof(ImplementationUse) == 2,"sizeof err");
+		memcpy(ImplementationUse,b+18,2);
+	}
+}
+
+UDFext_ad::UDFext_ad(const unsigned int sz,const unsigned char *b) {
+	get(sz,b);
+}
+
+UDFext_ad::UDFext_ad() {
+}
+
+////////////////////////////////////////////////////////
+
+uint8_t UDFicbtag::AllocationDescriptorType(void) const {
+	return (uint8_t)(Flags & 7u);
+}
+
+void UDFicbtag::get(const unsigned int sz,const unsigned char *b) {
+	if (sz >= 20) {
+		PriorRecordedNumberOfDirectEntries = le32toh( *((uint32_t*)(&b[0])) );
+		StrategyType = le16toh( *((uint16_t*)(&b[4])) );
+
+		static_assert(sizeof(StrategyParameter) == 2,"sizeof err");
+		memcpy(StrategyParameter,b+6,2);
+
+		MaximumNumberOfEntries = le16toh( *((uint16_t*)(&b[8])) );
+		Reserved = b[10];
+		FileType = b[11];
+		ParentICBLocation.get(6,b+12);
+		Flags = le16toh( *((uint16_t*)(&b[18])) );
+	}
+}
+
+UDFicbtag::UDFicbtag(const unsigned int sz,const unsigned char *b) {
+	get(sz,b);
+}
+
+UDFicbtag::UDFicbtag() {
+}
+
+////////////////////////////////////////////////////////
+
+void UDFFileEntry::get(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	if (sz >= 176) {
+		DescriptorTag = tag;
+		ICBTag.get(20,b+16);
+		Uid = le32toh( *((uint32_t*)(&b[36])) );
+		Gid = le32toh( *((uint32_t*)(&b[40])) );
+		Permissions = le32toh( *((uint32_t*)(&b[44])) );
+		FileLinkCount = le16toh( *((uint16_t*)(&b[48])) );
+		RecordFormat = b[50];
+		RecordDisplayAttributes = b[51];
+		RecordLength = le32toh( *((uint32_t*)(&b[52])) );
+		InformationLength = le64toh( *((uint64_t*)(&b[56])) );
+		LogicalBlocksRecorded = le64toh( *((uint64_t*)(&b[64])) );
+		AccessDateAndTime.get(12,b+72);
+		ModificationDateAndTime.get(12,b+84);
+		AttributeDateAndTime.get(12,b+96);
+		Checkpoint = le32toh( *((uint32_t*)(&b[108])) );
+		ExtendedAttributeICB.get(16,b+112);
+		ImplementationIdentifier.get(32,b+128);
+		UniqueId = le64toh( *((uint64_t*)(&b[160])) );
+		LengthOfExtendedAttributes = le32toh( *((uint32_t*)(&b[168])) );
+		LengthOfAllocationDescriptors = le32toh( *((uint32_t*)(&b[172])) );
+
+		const size_t allo = 176u + LengthOfExtendedAttributes;
+
+		switch (ICBTag.AllocationDescriptorType()) {
+			case 0: // short_ad
+				for (unsigned int i=0;(i+8u) <= LengthOfAllocationDescriptors;i += 8) {
+					const size_t si = i + allo;
+					UDFshort_ad sad;
+
+					if ((si+8u) > sz) break;
+
+					sad.get(8,&b[si]);
+					AllocationDescriptors_short_ad.push_back(sad);
+				}
+				break;
+			case 1: // long_ad
+				for (unsigned int i=0;(i+16u) <= LengthOfAllocationDescriptors;i += 16) {
+					const size_t si = i + allo;
+					UDFlong_ad sad;
+
+					if ((si+16u) > sz) break;
+
+					sad.get(16,&b[si]);
+					AllocationDescriptors_long_ad.push_back(sad);
+				}
+				break;
+			case 2: // ext_ad
+				for (unsigned int i=0;(i+20u) <= LengthOfAllocationDescriptors;i += 20) {
+					const size_t si = i + allo;
+					UDFext_ad sad;
+
+					if ((si+20u) > sz) break;
+
+					sad.get(20,&b[si]);
+					AllocationDescriptors_ext_ad.push_back(sad);
+				}
+				break;
+			case 3: // The file itself resides in the allocation descriptor region
+				if (allo < sz) {
+					size_t cpy = std::min(sz - allo,(size_t)LengthOfAllocationDescriptors);
+					if (cpy != 0) {
+						assert((allo+cpy) <= sz);
+						AllocationDescriptors_file.resize(cpy);
+						memcpy(&AllocationDescriptors_file[0],&b[allo],cpy);
+					}
+				}
+				break;
+		}
+	}
+}
+
+UDFFileEntry::UDFFileEntry(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	get(tag,sz,b);
+}
+
+UDFFileEntry::UDFFileEntry() {
+}
+
+////////////////////////////////////////////////////////
+
+void UDFFileIdentifierDescriptor::get(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	if (sz >= 38) {
+		DescriptorTag = tag;
+		FileVersionNumber = le16toh( *((uint16_t*)(&b[16])) );
+		FileCharacteristics = b[18];
+		LengthOfFileIdentifier = b[19];
+		ICB.get(16,b+20);
+		LengthOfImplementationUse = le16toh( *((uint16_t*)(&b[36])) );
+
+		size_t ofs = 38;
+
+		if ((ofs+LengthOfImplementationUse) <= sz && LengthOfImplementationUse != 0) {
+			ImplementationUse.resize(LengthOfImplementationUse);
+			memcpy(&ImplementationUse[0],&b[ofs],LengthOfImplementationUse);
+			ofs += LengthOfImplementationUse;
+		}
+		if ((ofs+LengthOfFileIdentifier) <= sz && LengthOfFileIdentifier != 0) {
+			FileIdentifier.resize(LengthOfFileIdentifier);
+			memcpy(&FileIdentifier[0],&b[ofs],LengthOfFileIdentifier);
+			ofs += LengthOfFileIdentifier;
+		}
+	}
+}
+
+UDFFileIdentifierDescriptor::UDFFileIdentifierDescriptor(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	get(tag,sz,b);
+}
+
+UDFFileIdentifierDescriptor::UDFFileIdentifierDescriptor() {
+}
+
+////////////////////////////////////
+
+void UDFPartitionDescriptor::get(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	if (sz >= 356) {
+		DescriptorTag = tag;
+		VolumeDescriptorSequenceNumber = le32toh( *((uint32_t*)(&b[16])) );
+		PartitionFlags = le16toh( *((uint16_t*)(&b[20])) );
+		PartitionNumber = le16toh( *((uint16_t*)(&b[22])) );
+		PartitionContents.get(32,b+24);
+
+		static_assert(sizeof(PartitionContentsUse) == 128,"sizeof err");
+		memcpy(PartitionContentsUse,b+56,128);
+
+		AccessType = le32toh( *((uint32_t*)(&b[184])) );
+		PartitionStartingLocation = le32toh( *((uint32_t*)(&b[188])) );
+		PartitionLength = le32toh( *((uint32_t*)(&b[192])) );
+		ImplementationIdentifier.get(32,b+196);
+
+		static_assert(sizeof(ImplementationUse) == 128,"sizeof err");
+		memcpy(ImplementationUse,b+228,128);
+	}
+}
+
+UDFPartitionDescriptor::UDFPartitionDescriptor(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	get(tag,sz,b);
+}
+
+UDFPartitionDescriptor::UDFPartitionDescriptor() {
+}
+
+////////////////////////////////////////////////////////
+
+void UDFLogicalVolumeDescriptor::get(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	if (sz >= 440) {
+		DescriptorTag = tag;
+		VolumeDescriptorSequenceNumber = le32toh( *((uint32_t*)(&b[16])) );
+		DescriptorCharacterSet.get(64,b+20);
+		LogicalVolumeIdentifier.get(128,b+84);
+		LogicalBlockSize = le32toh( *((uint32_t*)(&b[212])) );
+		DomainIdentifier.get(32,b+216);
+
+		static_assert(sizeof(LogicalVolumeContentsUse) == 16,"sizeof err");
+		memcpy(LogicalVolumeContentsUse,b+248,16);
+
+		MapTableLength = le32toh( *((uint32_t*)(&b[264])) );
+		NumberOfPartitionMaps = le32toh( *((uint32_t*)(&b[268])) );
+		ImplementationIdentifier.get(32,b+272);
+
+		static_assert(sizeof(ImplementationUse) == 128,"sizeof err");
+		memcpy(ImplementationUse,b+304,128);
+		IntegritySequenceExtent.get(8,b+432);
+
+		if (MapTableLength != 0 && (440+MapTableLength) <= sz) {
+			PartitionMaps.resize(MapTableLength);
+			memcpy(&PartitionMaps[0],&b[440],MapTableLength);
+		}
+	}
+}
+
+UDFLogicalVolumeDescriptor::UDFLogicalVolumeDescriptor(UDFTagId &tag/*already parsed, why parse again?*/,const unsigned int sz,const unsigned char *b) {
+	get(tag,sz,b);
+}
+
+UDFLogicalVolumeDescriptor::UDFLogicalVolumeDescriptor() {
+}
+
+////////////////////////////////////
+
+// FIXME: Why do the "strings" start with a control code like \x08?
+void UDFdstring::get(const unsigned int sz,const unsigned char *b) {
+	/* the LAST byte is the string length (?) */
+	if (sz >= 2) {
+		unsigned int maxsz = sz-1u;
+		uint8_t len = b[maxsz];
+
+		if (len > maxsz) len = maxsz;
+
+		resize(len);
+		if (len != 0) memcpy(&(operator[](0)),b,len);
+	}
+}
+
+UDFdstring::UDFdstring(const unsigned int sz,const unsigned char *b) {
+	get(sz,b);
+}
+
+UDFdstring::UDFdstring() {
+}
+
+////////////////////////////////////
+
+void UDFtimestamp::get(const unsigned int sz,const unsigned char *b) {
+	if (sz >= 12u) {
+		TypeAndTimeZone = le16toh( *((uint16_t*)(&b[0])) );
+		Year = (int16_t)le16toh( *((uint16_t*)(&b[2])) );
+		Month = b[4];
+		Day = b[5];
+		Hour = b[6];
+		Minute = b[7];
+		Second = b[8];
+		Centiseconds = b[9];
+		HundredsOfMicroseconds = b[10];
+		Microseconds = b[11];
+	}
+}
+
+UDFtimestamp::UDFtimestamp(const unsigned int sz,const unsigned char *b) {
+	get(sz,b);
+}
+
+UDFtimestamp::UDFtimestamp() {
+}
+
+////////////////////////////////////////////////////////
+
+void UDFregid::get(const unsigned int sz,const unsigned char *b) {
+	if (sz >= 32u) {
+		Flags = b[0];
+		memcpy(Identifier,b+1,23);
+		memcpy(IdentifierSuffix,b+24,8);
+	}
+}
+
+UDFregid::UDFregid(const unsigned int sz,const unsigned char *b) {
+	get(sz,b);
+}
+
+UDFregid::UDFregid() {
+}
+
+////////////////////////////////////////////////////////
+
+void UDFcharspec::get(const unsigned int sz,const unsigned char *b) {
+	if (sz >= 64u) {
+		CharacterSetType = b[0];
+		memcpy(CharacterSetInformation,b+1,63);
+	}
+}
+
+UDFcharspec::UDFcharspec(const unsigned int sz,const unsigned char *b) {
+	get(sz,b);
+}
+
+UDFcharspec::UDFcharspec() {
+}
+
+////////////////////////////////////////////////////////
+
+void UDFlb_addr::get(const unsigned int sz,const unsigned char *b) {
+	if (sz >= 6u) {
+		LogicalBlockNumber = le32toh( *((uint32_t*)(&b[0])) );
+		PartitionReferenceNumber = le16toh( *((uint16_t*)(&b[4])) );
+	}
+}
+
+UDFlb_addr::UDFlb_addr(const unsigned int sz,const unsigned char *b) {
+	get(sz,b);
+}
+
+UDFlb_addr::UDFlb_addr() {
+}
+
+////////////////////////////////////////////////////////
+
+void UDFshort_ad::get(const unsigned int sz,const unsigned char *b) {
+	if (sz >= 8u) {
+		ExtentLength = le32toh( *((uint32_t*)(&b[0])) );
+		ExtentPosition = le32toh( *((uint32_t*)(&b[4])) );
+	}
+}
+
+UDFshort_ad::UDFshort_ad(const unsigned int sz,const unsigned char *b) {
+	get(sz,b);
+}
+
+UDFshort_ad::UDFshort_ad() {
+}
+
+////////////////////////////////////////////////////////
+
+void UDFlong_ad::get(const unsigned int sz,const unsigned char *b) {
+	if (sz >= 16) {
+		ExtentLength = le32toh( *((uint32_t*)(&b[0])) );
+		ExtentLocation.get(6,b+4);
+
+		static_assert(sizeof(ImplementationUse) == 6,"sizeof err");
+		memcpy(ImplementationUse,b+10,6);
+	}
+	else {
+		ExtentLength = 0;
+	}
+}
+
+UDFlong_ad::UDFlong_ad(const unsigned int sz,const unsigned char *b) {
+	get(sz,b);
+}
+
+UDFlong_ad::UDFlong_ad() {
+}
+
+////////////////////////////////////
+
 class isoFile : public DOS_File {
 public:
     isoFile(isoDrive* drive, const char* name, const FileStat_Block* stat, uint32_t offset);
@@ -413,20 +912,27 @@ bool isoDrive::FileOpen(DOS_File **file, const char *name, uint32_t flags) {
 		DOS_SetError(DOSERR_ACCESS_DENIED);
 		return false;
 	}
-	
-	isoDirEntry de;
-	bool success = lookup(&de, name) && !IS_DIR(FLAGS1);
 
-	if (success) {
-		FileStat_Block file_stat;
-		file_stat.size = DATA_LENGTH(de);
-		file_stat.attr = DOS_ATTR_ARCHIVE | DOS_ATTR_READ_ONLY;
-		file_stat.date = DOS_PackDate(1900 + de.dateYear, de.dateMonth, de.dateDay);
-		file_stat.time = DOS_PackTime(de.timeHour, de.timeMin, de.timeSec);
-		*file = new isoFile(this, name, &file_stat, EXTENT_LOCATION(de) * ISO_FRAMESIZE);
-		(*file)->flags = flags;
+	if (is_udf) {
+		// TODO
+		return false;
 	}
-	return success;
+	else {
+		isoDirEntry de;
+		bool success = lookup(&de, name) && !IS_DIR(FLAGS1);
+
+		if (success) {
+			FileStat_Block file_stat;
+			file_stat.size = DATA_LENGTH(de);
+			file_stat.attr = DOS_ATTR_ARCHIVE | DOS_ATTR_READ_ONLY;
+			file_stat.date = DOS_PackDate(1900 + de.dateYear, de.dateMonth, de.dateDay);
+			file_stat.time = DOS_PackTime(de.timeHour, de.timeMin, de.timeSec);
+			*file = new isoFile(this, name, &file_stat, EXTENT_LOCATION(de) * ISO_FRAMESIZE);
+			(*file)->flags = flags;
+		}
+
+		return success;
+	}
 }
 
 bool isoDrive::FileCreate(DOS_File** /*file*/, const char* /*name*/, uint16_t /*attributes*/) {
@@ -450,77 +956,95 @@ bool isoDrive::MakeDir(const char* /*dir*/) {
 }
 
 bool isoDrive::TestDir(const char *dir) {
-	isoDirEntry de;	
-	return (lookup(&de, dir) && IS_DIR(FLAGS1));
+	if (is_udf) {
+		// TODO
+		return false;
+	}
+	else {
+		isoDirEntry de;	
+		return (lookup(&de, dir) && IS_DIR(FLAGS1));
+	}
 }
 
 bool isoDrive::FindFirst(const char *dir, DOS_DTA &dta, bool fcb_findfirst) {
-	isoDirEntry de;
-	if (!lookup(&de, dir)) {
-		DOS_SetError(DOSERR_PATH_NOT_FOUND);
+	if (is_udf) {
+		// TODO
 		return false;
 	}
-	
-	// get a directory iterator and save its id in the dta
-	int dirIterator = GetDirIterator(&de);
-	bool isRoot = (*dir == 0);
-	dirIterators[dirIterator].root = isRoot;
-	if (lfn_filefind_handle>=LFN_FILEFIND_MAX)
-		dta.SetDirID((uint16_t)dirIterator);
-	else
-		sdid[lfn_filefind_handle]=dirIterator;
+	else {
+		isoDirEntry de;
+		if (!lookup(&de, dir)) {
+			DOS_SetError(DOSERR_PATH_NOT_FOUND);
+			return false;
+		}
 
-	uint8_t attr;
-	char pattern[CROSS_LEN];
-    dta.GetSearchParams(attr, pattern, false);
-   
-	if (attr == DOS_ATTR_VOLUME) {
-		dta.SetResult(discLabel, discLabel, 0, 0, 0, 0, DOS_ATTR_VOLUME);
-		return true;
-	} else if ((attr & DOS_ATTR_VOLUME) && isRoot && !fcb_findfirst) {
-		if (WildFileCmp(discLabel,pattern)) {
-			// Get Volume Label (DOS_ATTR_VOLUME) and only in basedir and if it matches the searchstring
+		// get a directory iterator and save its id in the dta
+		int dirIterator = GetDirIterator(&de);
+		bool isRoot = (*dir == 0);
+		dirIterators[dirIterator].root = isRoot;
+		if (lfn_filefind_handle>=LFN_FILEFIND_MAX)
+			dta.SetDirID((uint16_t)dirIterator);
+		else
+			sdid[lfn_filefind_handle]=dirIterator;
+
+		uint8_t attr;
+		char pattern[CROSS_LEN];
+		dta.GetSearchParams(attr, pattern, false);
+
+		if (attr == DOS_ATTR_VOLUME) {
 			dta.SetResult(discLabel, discLabel, 0, 0, 0, 0, DOS_ATTR_VOLUME);
 			return true;
+		} else if ((attr & DOS_ATTR_VOLUME) && isRoot && !fcb_findfirst) {
+			if (WildFileCmp(discLabel,pattern)) {
+				// Get Volume Label (DOS_ATTR_VOLUME) and only in basedir and if it matches the searchstring
+				dta.SetResult(discLabel, discLabel, 0, 0, 0, 0, DOS_ATTR_VOLUME);
+				return true;
+			}
 		}
-	}
 
-	return FindNext(dta);
+		return FindNext(dta);
+	}
 }
 
 bool isoDrive::FindNext(DOS_DTA &dta) {
 	uint8_t attr;
 	char pattern[CROSS_LEN], findName[DOS_NAMELENGTH_ASCII], lfindName[ISO_MAXPATHNAME];
-    dta.GetSearchParams(attr, pattern, false);
-	
+	dta.GetSearchParams(attr, pattern, false);
+
 	int dirIterator = lfn_filefind_handle>=LFN_FILEFIND_MAX?dta.GetDirID():sdid[lfn_filefind_handle];
 	bool isRoot = dirIterators[dirIterator].root;
-	
-    isoDirEntry de = {};
-	while (GetNextDirEntry(dirIterator, &de)) {
-		uint8_t findAttr = DOS_ATTR_ARCHIVE | DOS_ATTR_READ_ONLY;
-		if (IS_DIR(FLAGS1)) findAttr |= DOS_ATTR_DIRECTORY;
-		if (IS_HIDDEN(FLAGS1)) findAttr |= DOS_ATTR_HIDDEN;
-		strcpy(lfindName,fullname);
-        if (!IS_ASSOC(FLAGS1) && !(isRoot && de.ident[0]=='.') && (WildFileCmp((char*)de.ident, pattern) || LWildFileCmp(lfindName, pattern))
-			&& !(~attr & findAttr & (DOS_ATTR_DIRECTORY | DOS_ATTR_HIDDEN | DOS_ATTR_SYSTEM))) {
-			
-			/* file is okay, setup everything to be copied in DTA Block */
-			findName[0] = 0;
-			if(strlen((char*)de.ident) < DOS_NAMELENGTH_ASCII) {
-				strcpy(findName, (char*)de.ident);
-				upcase(findName);
+
+	if (is_udf) {
+		// TODO
+	}
+	else {
+		isoDirEntry de = {};
+		while (GetNextDirEntry(dirIterator, &de)) {
+			uint8_t findAttr = DOS_ATTR_ARCHIVE | DOS_ATTR_READ_ONLY;
+			if (IS_DIR(FLAGS1)) findAttr |= DOS_ATTR_DIRECTORY;
+			if (IS_HIDDEN(FLAGS1)) findAttr |= DOS_ATTR_HIDDEN;
+			strcpy(lfindName,fullname);
+			if (!IS_ASSOC(FLAGS1) && !(isRoot && de.ident[0]=='.') && (WildFileCmp((char*)de.ident, pattern) || LWildFileCmp(lfindName, pattern))
+					&& !(~attr & findAttr & (DOS_ATTR_DIRECTORY | DOS_ATTR_HIDDEN | DOS_ATTR_SYSTEM))) {
+
+				/* file is okay, setup everything to be copied in DTA Block */
+				findName[0] = 0;
+				if(strlen((char*)de.ident) < DOS_NAMELENGTH_ASCII) {
+					strcpy(findName, (char*)de.ident);
+					upcase(findName);
+				}
+				uint32_t findSize = DATA_LENGTH(de);
+				uint16_t findDate = DOS_PackDate(1900 + de.dateYear, de.dateMonth, de.dateDay);
+				uint16_t findTime = DOS_PackTime(de.timeHour, de.timeMin, de.timeSec);
+				dta.SetResult(findName, lfindName, findSize, 0, findDate, findTime, findAttr);
+				return true;
 			}
-			uint32_t findSize = DATA_LENGTH(de);
-			uint16_t findDate = DOS_PackDate(1900 + de.dateYear, de.dateMonth, de.dateDay);
-			uint16_t findTime = DOS_PackTime(de.timeHour, de.timeMin, de.timeSec);
-            dta.SetResult(findName, lfindName, findSize, 0, findDate, findTime, findAttr);
-			return true;
 		}
 	}
+
 	// after searching the directory, free the iterator
 	FreeDirIterator(dirIterator);
-	
+
 	DOS_SetError(DOSERR_NO_MORE_FILES);
 	return false;
 }
@@ -531,38 +1055,52 @@ bool isoDrive::Rename(const char* /*oldname*/, const char* /*newname*/) {
 }
 
 bool isoDrive::SetFileAttr(const char * name,uint16_t attr) {
-    (void)attr;
-	isoDirEntry de;
-	DOS_SetError(lookup(&de, name) ? DOSERR_ACCESS_DENIED : DOSERR_FILE_NOT_FOUND);
-	return false;
+	(void)attr;
+
+	if (is_udf) {
+		// TODO
+		return false;
+	}
+	else {
+		isoDirEntry de;
+		DOS_SetError(lookup(&de, name) ? DOSERR_ACCESS_DENIED : DOSERR_FILE_NOT_FOUND);
+		return false;
+	}
 }
 
 bool isoDrive::GetFileAttr(const char *name, uint16_t *attr) {
 	*attr = 0;
-	isoDirEntry de;
-	bool success = lookup(&de, name);
-	if (success) {
-		*attr = DOS_ATTR_ARCHIVE | DOS_ATTR_READ_ONLY;
-		if (IS_HIDDEN(FLAGS1)) *attr |= DOS_ATTR_HIDDEN;
-		if (IS_DIR(FLAGS1)) *attr |= DOS_ATTR_DIRECTORY;
+
+	if (is_udf) {
+		// TODO
+		return false;
 	}
-	return success;
+	else {
+		isoDirEntry de;
+		bool success = lookup(&de, name);
+		if (success) {
+			*attr = DOS_ATTR_ARCHIVE | DOS_ATTR_READ_ONLY;
+			if (IS_HIDDEN(FLAGS1)) *attr |= DOS_ATTR_HIDDEN;
+			if (IS_DIR(FLAGS1)) *attr |= DOS_ATTR_DIRECTORY;
+		}
+		return success;
+	}
 }
 
 bool isoDrive::GetFileAttrEx(char* name, struct stat *status) {
-    (void)name;
-    (void)status;
+	(void)name;
+	(void)status;
 	return false;
 }
 
 unsigned long isoDrive::GetCompressedSize(char* name) {
-    (void)name;
+	(void)name;
 	return 0;
 }
 
 #if defined (WIN32)
 HANDLE isoDrive::CreateOpenFile(const char* name) {
-    (void)name;
+	(void)name;
 	DOS_SetError(1);
 	return INVALID_HANDLE_VALUE;
 }
@@ -577,23 +1115,35 @@ bool isoDrive::AllocationInfo(uint16_t *bytes_sector, uint8_t *sectors_cluster, 
 }
 
 bool isoDrive::FileExists(const char *name) {
-	isoDirEntry de;
-	return (lookup(&de, name) && !IS_DIR(FLAGS1));
+	if (is_udf) {
+		// TODO
+		return false;
+	}
+	else {
+		isoDirEntry de;
+		return (lookup(&de, name) && !IS_DIR(FLAGS1));
+	}
 }
 
 bool isoDrive::FileStat(const char *name, FileStat_Block *const stat_block) {
-	isoDirEntry de;
-	bool success = lookup(&de, name);
-	
-	if (success) {
-		stat_block->date = DOS_PackDate(1900 + de.dateYear, de.dateMonth, de.dateDay);
-		stat_block->time = DOS_PackTime(de.timeHour, de.timeMin, de.timeSec);
-		stat_block->size = DATA_LENGTH(de);
-		stat_block->attr = DOS_ATTR_ARCHIVE | DOS_ATTR_READ_ONLY;
-		if (IS_DIR(FLAGS1)) stat_block->attr |= DOS_ATTR_DIRECTORY;
+	if (is_udf) {
+		// TODO
+		return false;
 	}
-	
-	return success;
+	else {
+		isoDirEntry de;
+		bool success = lookup(&de, name);
+
+		if (success) {
+			stat_block->date = DOS_PackDate(1900 + de.dateYear, de.dateMonth, de.dateDay);
+			stat_block->time = DOS_PackTime(de.timeHour, de.timeMin, de.timeSec);
+			stat_block->size = DATA_LENGTH(de);
+			stat_block->attr = DOS_ATTR_ARCHIVE | DOS_ATTR_READ_ONLY;
+			if (IS_DIR(FLAGS1)) stat_block->attr |= DOS_ATTR_DIRECTORY;
+		}
+
+		return success;
+	}
 }
 
 uint8_t isoDrive::GetMediaByte(void) {
@@ -617,15 +1167,18 @@ Bits isoDrive::UnMount(void) {
 }
 
 int isoDrive::GetDirIterator(const isoDirEntry* de) {
+	// Not for UDF filesystem use!
+	if (is_udf) return 0;
+
 	int dirIterator = nextFreeDirIterator;
-	
+
 	// get start and end sector of the directory entry (pad end sector if necessary)
 	dirIterators[dirIterator].currentSector = EXTENT_LOCATION(*de);
 	dirIterators[dirIterator].endSector =
 		EXTENT_LOCATION(*de) + DATA_LENGTH(*de) / ISO_FRAMESIZE - 1;
 	if (DATA_LENGTH(*de) % ISO_FRAMESIZE != 0)
 		dirIterators[dirIterator].endSector++;
-	
+
 	// reset position and mark as valid
 	dirIterators[dirIterator].pos = 0;
 	dirIterators[dirIterator].index = 0;
@@ -633,39 +1186,43 @@ int isoDrive::GetDirIterator(const isoDirEntry* de) {
 
 	// advance to next directory iterator (wrap around if necessary)
 	nextFreeDirIterator = (nextFreeDirIterator + 1) % MAX_OPENDIRS;
-	
+
 	return dirIterator;
 }
 
 bool isoDrive::GetNextDirEntry(const int dirIteratorHandle, isoDirEntry* de) {
+	// Not for UDF filesystem use!
+	if (is_udf) return 0;
+
 	bool result = false;
 	uint8_t* buffer = NULL;
 	DirIterator& dirIterator = dirIterators[dirIteratorHandle];
-	
+
 	// check if the directory entry is valid
 	if (dirIterator.valid && ReadCachedSector(&buffer, dirIterator.currentSector)) {
 		// check if the next sector has to be read
 		if ((dirIterator.pos >= ISO_FRAMESIZE)
-		 || (buffer[dirIterator.pos] == 0)
-		 || (dirIterator.pos + buffer[dirIterator.pos] > ISO_FRAMESIZE)) {
-		 	
+			|| (buffer[dirIterator.pos] == 0)
+			|| (dirIterator.pos + buffer[dirIterator.pos] > ISO_FRAMESIZE)) {
+
 			// check if there is another sector available
-		 	if (dirIterator.currentSector < dirIterator.endSector) {
-			 	dirIterator.pos = 0;
-			 	dirIterator.currentSector++;
-			 	if (!ReadCachedSector(&buffer, dirIterator.currentSector)) {
-			 		return false;
-			 	}
-		 	} else {
-		 		return false;
-		 	}
-		 }
-		 // read sector and advance sector pointer
-		 ++dirIterator.index;
-		 int length = readDirEntry(de, &buffer[dirIterator.pos], dirIterator.index);
-		 result = length >= 0;
-         if (length > 0) dirIterator.pos += (unsigned int)length;
+			if (dirIterator.currentSector < dirIterator.endSector) {
+				dirIterator.pos = 0;
+				dirIterator.currentSector++;
+				if (!ReadCachedSector(&buffer, dirIterator.currentSector)) {
+					return false;
+				}
+			} else {
+				return false;
+			}
+		}
+		// read sector and advance sector pointer
+		++dirIterator.index;
+		int length = readDirEntry(de, &buffer[dirIterator.pos], dirIterator.index);
+		result = length >= 0;
+		if (length > 0) dirIterator.pos += (unsigned int)length;
 	}
+
 	return result;
 }
 
@@ -705,6 +1262,9 @@ inline bool isoDrive :: readSector(uint8_t *buffer, uint32_t sector) {
 }
 
 int isoDrive::readDirEntry(isoDirEntry* de, const uint8_t* data,unsigned int dirIteratorIndex) {
+	// This code is NOT for UDF filesystem access!
+	if (is_udf) return -1;
+
 	// copy data into isoDirEntry struct, data[0] = length of DirEntry
 //	if (data[0] > sizeof(isoDirEntry)) return -1;//check disabled as isoDirentry is currently 258 bytes large. So it always fits
 	memcpy(de, data, data[0]);//Perharps care about a zero at the end.
@@ -931,19 +1491,38 @@ static bool escape_is_joliet(const unsigned char *esc) {
 	return false;
 }
 
+bool isoDrive :: loadImageUDFAnchorVolumePointer(UDFAnchorVolumeDescriptorPointer &avdp,uint8_t pvd[COOKED_SECTOR_SIZE],uint32_t sector) {
+	UDFTagId aid;
+
+	if (!aid.get(COOKED_SECTOR_SIZE,pvd)) return false;
+	if (aid.TagIdentifier != 2/*Anchor volume descriptor*/ || aid.TagLocation != sector) return false;
+	avdp.get(aid,COOKED_SECTOR_SIZE,pvd);
+	return true;
+}
+
 bool isoDrive :: loadImageUDF() {
 	uint8_t pvd[COOKED_SECTOR_SIZE];
 	UDFextent_ad avdex;
 
+	lvold.DescriptorTag = UDFTagId();
+	pvold.DescriptorTag = UDFTagId();
+	fsetd.DescriptorTag = UDFTagId();
+	partd.DescriptorTag = UDFTagId();
+
 	/* look for the anchor volume descriptor */
 	{
 		UDFAnchorVolumeDescriptorPointer avdp;
-		UDFTagId aid;
+
+		// Try 1: Read the anchor descriptor at sector 256
 		memset(pvd,0,16);
 		readSector(pvd,256);
-		if (!aid.get(COOKED_SECTOR_SIZE,pvd)) return false;
-		if (aid.TagIdentifier != 2/*Anchor volume descriptor*/ || aid.TagLocation != 256) return false;
-		avdp.get(aid,COOKED_SECTOR_SIZE,pvd);
+		if (!loadImageUDFAnchorVolumePointer(avdp,pvd,256)) {
+			// TODO: If there is another one at sector N - 256.
+			//       Figure out how to determine the number of
+			//       sectors in the ISO.
+			return false;
+		}
+
 		avdex = avdp.MainVolumeDescriptorSequenceExtent;
 		if (avdex.ExtentLocation == 0 || avdex.ExtentLength == 0) return false;
 	}
@@ -951,7 +1530,74 @@ bool isoDrive :: loadImageUDF() {
 	LOG(LOG_MISC,LOG_DEBUG)("UDF Anchor Volume Descriptor points to location=%lu len=%lu",
 		(unsigned long)avdex.ExtentLocation,
 		(unsigned long)avdex.ExtentLength);
-	return false;
+
+	/* within the AVD look for other descriptors */
+	for (uint32_t rsec=0u;rsec < size_t(avdex.ExtentLength/COOKED_SECTOR_SIZE);rsec++) {
+		uint32_t asec = rsec + avdex.ExtentLocation;
+		UDFTagId ctag;
+
+		memset(pvd,0,16);
+		readSector(pvd,asec);
+		if (!ctag.get(COOKED_SECTOR_SIZE,pvd)) continue;
+		if (ctag.TagLocation != asec) continue;
+
+		if (ctag.TagIdentifier == 0x01/*Primary Volume Descriptor*/) {
+			pvold.get(ctag,COOKED_SECTOR_SIZE,pvd);
+		}
+		else if (ctag.TagIdentifier == 0x05/*Partition Descriptor*/) {
+			UDFPartitionDescriptor tpartd;
+
+			tpartd.get(ctag,COOKED_SECTOR_SIZE,pvd);
+
+                        /* We're looking for +NSR02 or +NSR03 as per ECMA-167 */
+                        if (    !strcmp((const char*)tpartd.PartitionContents.Identifier,"+NSR02") ||
+                                !strcmp((const char*)tpartd.PartitionContents.Identifier,"+NSR03")) {
+                                if (partd.DescriptorTag.TagIdentifier == 0)
+                                        partd = tpartd;
+                        }
+		}
+		else if (ctag.TagIdentifier == 0x06/*Logical Volume Descriptor*/) {
+			lvold.get(ctag,COOKED_SECTOR_SIZE,pvd);
+		}
+		else if (ctag.TagIdentifier == 0x08/*Terminating Descriptor*/) {
+			break;
+		}
+	}
+
+	if (partd.DescriptorTag.TagIdentifier = 0) {
+		LOG(LOG_MISC,LOG_DEBUG)("UDF: Failed to find partition descriptor");
+		return false;
+	}
+
+	// NTS: Someday if DOSBox-X is expected to read UDF 2.50 type discs (like Blu-ray, lol), this code
+	//      will need to search the logical volume descriptor for partition maps that point to a "metadata partition"
+	//      which then magically defines a new partition ID and location, within which Blu-ray likes to put the
+	//      root directory. Yes, really XD. Then you scan THAT partition for the root directory and all extents of
+	//      the root directory referring to other folders are relative to that metadata partition.
+
+	// DOSBox-X is unlikely to ever read Blu-ray discs, so a simple scan of the main partition is sufficient.
+	// NTS: UDF descriptor tags in the partition have sector numbers relative to the partition!
+	for (uint32_t rsec=0;rsec < 256;rsec++) {
+		uint32_t asec = rsec + partd.PartitionStartingLocation;
+		UDFTagId ctag;
+
+		memset(pvd,0,16);
+		readSector(pvd,asec);
+		if (!ctag.get(COOKED_SECTOR_SIZE,pvd)) continue;
+		if (ctag.TagLocation != rsec) continue; // "Tag Location" is relative to partition now!
+
+		if (ctag.TagIdentifier == 0x08/*Terminator Descriptor*/) {
+			break;
+		}
+		else if (ctag.TagIdentifier == 0x100/*FileSetDescriptor*/) {
+			fsetd.get(ctag,COOKED_SECTOR_SIZE,pvd); /* This FSD points at the root directory */
+		}
+	}
+
+	if (fsetd.DescriptorTag.TagIdentifier == 0) {
+		LOG(LOG_MISC,LOG_DEBUG)("UDF: Did not find root directory FileSetDescriptor");
+		return false;
+	}
 
 	return true;
 }
@@ -1096,27 +1742,29 @@ bool isoDrive :: loadImage() {
 }
 
 bool isoDrive :: lookup(isoDirEntry *de, const char *path) {
+	// This code is not for UDF
+	if (is_udf) return false;
+
 	if (!dataCD) return false;
 	*de = this->rootEntry;
 	if (!strcmp(path, "")) return true;
-	
+
 	char isoPath[ISO_MAXPATHNAME];
 	safe_strncpy(isoPath, path, ISO_MAXPATHNAME);
 	strreplace_dbcs(isoPath, '\\', '/');
 	
 	// iterate over all path elements (name), and search each of them in the current de
 	for(char* name = strtok(isoPath, "/"); NULL != name; name = strtok(NULL, "/")) {
+		bool found = false;
 
-		bool found = false;	
 		// current entry must be a directory, abort otherwise
 		if (IS_DIR(FLAGS2)) {
-			
 			// remove the trailing dot if present
 			size_t nameLength = strlen(name);
 			if (nameLength > 0) {
 				if (name[nameLength - 1] == '.') name[nameLength - 1] = 0;
 			}
-			
+
 			// look for the current path element
 			int dirIterator = GetDirIterator(de);
 			while (!found && GetNextDirEntry(dirIterator, de)) {
@@ -1126,8 +1774,10 @@ bool isoDrive :: lookup(isoDirEntry *de, const char *path) {
 			}
 			FreeDirIterator(dirIterator);
 		}
+
 		if (!found) return false;
 	}
+
 	return true;
 }
 
@@ -1138,6 +1788,7 @@ void isoDrive :: MediaChange() {
 }
 
 void isoDrive :: EmptyCache(void) {
+	enable_udf = (dos.version.major > 7 || (dos.version.major == 7 && dos.version.minor >= 10));//default
 	enable_rock_ridge = dos.version.major >= 7 || uselfn;
 	enable_joliet = dos.version.major >= 7 || uselfn;
 	is_joliet = false;
