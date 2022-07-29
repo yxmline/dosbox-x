@@ -7945,6 +7945,12 @@ private:
              * bit[0:0] = 98 NOTE coprocessor function available */
             mem_writeb(0x45C,(enable_pc98_egc ? 0x40/*Extended Graphics*/ : 0x00));
 
+            /* CPU type in bits [1:0] */
+            if (CPU_ArchitectureType >= CPU_ARCHTYPE_286) {
+                    mem_writeb(0x480,CPU_ArchitectureType >= CPU_ARCHTYPE_386 ? 3 : 1);
+            }
+
+
             /* Keyboard type */
             /* bit[7:7] = ?
              * bit[6:6] = keyboard type bit 1
@@ -9102,7 +9108,7 @@ private:
         32
 #endif
         , SDL_STRING);
-        sprintf(logostr[6], "|  Version %7s  |", VERSION);
+        sprintf(logostr[6], "| Version %9s |", VERSION);
         strcpy(logostr[7], "+-------------------+");
 startfunction:
         int logo_x,logo_y,x=2,y=2,rowheight=8;
