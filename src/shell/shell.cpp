@@ -52,8 +52,8 @@
 
 extern bool dos_shell_running_program, mountwarning, winautorun;
 extern bool startcmd, startwait, startquiet, internal_program;
-extern bool addovl, addipx, addne2k, enableime, tryconvertcp;
-extern bool halfwidthkana, force_conversion, showdbcs, gbk, chinasea;
+extern bool addovl, addipx, addne2k, enableime, showdbcs;
+extern bool halfwidthkana, force_conversion, gbk;
 extern const char* RunningProgram;
 extern int enablelfn, msgcodepage, lastmsgcp;
 extern uint16_t countryNo;
@@ -66,7 +66,6 @@ Bitu call_int2e = 0;
 
 std::string GetDOSBoxXPath(bool withexe=false);
 const char* DOS_GetLoadedLayout(void);
-uint16_t GetDefaultCP(void);
 int Reflect_Menu(void);
 void SetIMPosition(void);
 void SetKEYBCP();
@@ -74,10 +73,10 @@ void initRand();
 void initcodepagefont(void);
 void runMount(const char *str);
 void ResolvePath(std::string& in);
+void DOS_SetCountry(uint16_t countryNo);
 void SwitchLanguage(int oldcp, int newcp, bool confirm);
 void CALLBACK_DeAllocate(Bitu in), DOSBox_ConsolePauseWait();
 void GFX_SetTitle(int32_t cycles, int frameskip, Bits timing, bool paused);
-void DOS_SetCountry(uint16_t countryNo), makestdcp950table(), makeseacp951table();
 bool isDBCSCP(), InitCodePage(), isKanji1(uint8_t chr), shiftjis_lead_byte(int c), sdl_wait_on_error();
 
 Bitu call_shellstop = 0;
@@ -413,7 +412,7 @@ public:
 		return true;
 	}
 	virtual bool Close() { return true; }
-	virtual uint16_t GetInformation(void) { return DeviceInfoFlags::Device | DeviceInfoFlags::Nul; }
+	virtual uint16_t GetInformation(void) { return (strcmp(RunningProgram, "WCLIP") ? DeviceInfoFlags::Device : 0) | DeviceInfoFlags::EofOnInput; }
 	virtual bool ReadFromControlChannel(PhysPt bufptr,uint16_t size,uint16_t * retcode) { (void)bufptr; (void)size; (void)retcode; return false; }
 	virtual bool WriteToControlChannel(PhysPt bufptr,uint16_t size,uint16_t * retcode) { (void)bufptr; (void)size; (void)retcode; return false; }
 };
@@ -606,15 +605,41 @@ void DOS_Shell::RunInternal(void) {
 	}
 }
 
-char *str_replace(char *orig, char *rep, char *with);
+bool ansiinstalled = true, ANSI_SYS_installed();
+extern void ReadCharAttr(uint16_t col,uint16_t row,uint8_t page,uint16_t * result);
+bool is_ANSI_installed(Program *shell) {
+    if (ANSI_SYS_installed()) return true;
+    uint16_t oldax=reg_ax;
+    if (CurMode->type == M_TEXT) {
+        shell->WriteOut("-\033[2J=+");
+        uint8_t page = real_readb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
+        uint16_t result1, result2;
+        ReadCharAttr(0,0,page,&result1);
+        ReadCharAttr(1,0,page,&result2);
+        bool installed = (uint8_t)result1=='=' && (uint8_t)result2=='+';
+        if (installed) {
+            shell->WriteOut("\033[2J");
+            return true;
+        }
+        reg_ax = (uint16_t)CurMode->mode;
+        CALLBACK_RunRealInt(0x10);
+        reg_ax=oldax;
+    }
+    reg_ax=0x1a00;
+    CALLBACK_RunRealInt(0x2F);
+    if (reg_al!=0xff) {reg_ax=oldax;return false;}
+    reg_ax=oldax;
+    return true;
+}
+
 std::string GetPlatform(bool save);
-bool ANSI_SYS_installed();
+char *str_replace(char *orig, char *rep, char *with);
 const char *ParseMsg(const char *msg) {
     char str[13];
     strncpy(str, UPDATED_STR, 12);
     str[12]=0;
     if (machine != MCH_PC98) {
-        if (!ANSI_SYS_installed() || J3_IsJapanese()) {
+        if (!ansiinstalled || J3_IsJapanese()) {
             msg = str_replace(str_replace((char *)msg, (char*)"\033[0m", (char*)""), (char*)"\033[1m", (char*)"");
             for (int i=1; i<8; i++) {
                 sprintf(str, "\033[3%dm", i);
@@ -729,6 +754,7 @@ void DOS_Shell::Prepare(void) {
         Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));
         if (section->Get_bool("startbanner")&&!control->opt_fastlaunch) {
             /* Start a normal shell and check for a first command init */
+            ansiinstalled = is_ANSI_installed(this);
             std::string verstr = "v"+std::string(VERSION)+", "+GetPlatform(false);
             if (machine == MCH_PC98) {
                 WriteOut(ParseMsg("\x86\x52\x86\x44\x86\x44\x86\x44\x86\x44\x86\x44\x86\x44\x86\x44\x86\x44\x86\x44\x86\x44\x86\x44"
@@ -921,17 +947,6 @@ void DOS_Shell::Prepare(void) {
 				}
 			}
 		}
-        unsigned int cp;
-#if defined(WIN32)
-        cp = GetACP();
-        const char *cstr = (control->opt_noconfig || !section) ? "" : (char *)section->Get_string("country");
-        char *r = (char *)strchr(cstr, ',');
-        if ((r==NULL || !*(r+1) || atoi(trim(r+1)) == cp || (atoi(trim(r+1)) == 951 && cp == 950)) && GetDefaultCP() == 437) {
-            if (cp == 950 && !chinasea) makestdcp950table();
-            if (cp == 951 && chinasea) makeseacp951table();
-            tryconvertcp = true;
-        }
-#endif
         std::string line;
         GetEnvStr("PATH",line);
 		if (!strlen(config_data)) {
@@ -940,6 +955,7 @@ void DOS_Shell::Prepare(void) {
 			strcat(config_data, "\r\n");
 		}
         internal_program = true;
+		VFILE_Register("AUTOEXEC.BAT",(uint8_t *)autoexec_data,(uint32_t)strlen(autoexec_data));
 		VFILE_Register("CONFIG.SYS",(uint8_t *)config_data,(uint32_t)strlen(config_data));
         internal_program = false;
 #if defined(WIN32)
@@ -967,7 +983,7 @@ void DOS_Shell::Prepare(void) {
         internal_program = true;
 		VFILE_Register("4DOS.INI",(uint8_t *)i4dos_data,(uint32_t)strlen(i4dos_data), "/4DOS/");
         internal_program = false;
-        cp=dos.loaded_codepage;
+        unsigned int cp=dos.loaded_codepage;
         if (!dos.loaded_codepage) InitCodePage();
         initcodepagefont();
         dos.loaded_codepage=cp;
