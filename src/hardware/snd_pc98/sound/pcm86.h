@@ -46,7 +46,7 @@ typedef struct {
 	UINT	stepmask;
 
 	UINT8	fifo;
-	UINT8	soundflags;			/*!< ƒTƒEƒ“ƒh ƒtƒ‰ƒO (A460) */
+	UINT8	soundflags;			/*!< ã‚µã‚¦ãƒ³ãƒ‰ ãƒ•ãƒ©ã‚° (A460) */
 	UINT8	dactrl;
 	UINT8	_write;
 	UINT8	stepbit;
