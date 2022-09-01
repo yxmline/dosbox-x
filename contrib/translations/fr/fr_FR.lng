@@ -1475,11 +1475,11 @@ Le fichier %s existe déjà.
 
 .
 :SHELL_CMD_DIR_BYTES_USED
-%5d Fichier(s) %17s Octets
+%5d Fichier(s) %14s Octets
 
 .
 :SHELL_CMD_DIR_BYTES_FREE
-%5d Dir(s) %17s Octets libres
+%5d Dir(s) %18s Octets libres
 
 .
 :SHELL_CMD_DIR_FILES_LISTED
@@ -2157,7 +2157,7 @@ CHCP nnn[:[langue]]
 Pages de code prises en charge pour être modifiées dans la sortie
 de la police TrueType :
 
-437,737,775,808,850,852,853,855-866,869,872,874,1250-1258,3021
+437,737,775,808,850,852,853,855-869,872,874,1250-1258,3021
 
 Également des pages de code à double octet, notamment 932, 936, 949 et 950/951.
 

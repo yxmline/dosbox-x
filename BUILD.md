@@ -18,7 +18,7 @@ The four major operating systems and platforms of DOSBox-X are:
 
 2. Linux (with X11) 64-bit x86/x64, and on a Raspberry Pi 3/4
 
-3. macOS (Mac OS X) Sierra 10.12 or higher, 64-bit Intel and ARM-based
+3. macOS (Mac OS X) recent version, 64-bit Intel and ARM-based
 
 4. DOS (MS-DOS 5.0+ or compatible)
 
@@ -190,7 +190,8 @@ but not Visual Studio builds.
 Build the source code for your platform (Win32, x64, ARM and ARM64 are supported).
 
 As of 2018/06/06, Visual Studio 2017 builds (32-bit and 64-bit) explicitly require
-a processor that supports the SSE instruction set.
+a processor that supports the SSE instruction set. As of version 2022.09.01, Visual
+Studio ARM/ARM64 builds require a Windows SDK that includes the OpenGL library.
 
 Visual Studio Code is supported, too.
 
@@ -201,14 +202,14 @@ Libraries used by DOSBox-X
 
 The following libraries are used by DOSBox-X:
 
-* SDL 1.2.x or SDL 2.0.x
+* SDL 1.2.x or SDL 2.x (in-tree)
 
     The Simple DirectMedia Library available at https://www.libsdl.org
 
     The SDL1 library distributed with DOSBox-X had been heavily modified
     from the original to support for example native OS menus.
     
-    Note that only version 1.2.x (SDL1 version) and version 2.0.x
+    Note that only version 1.2.x (SDL1 version) and version 2.x
     (SDL2 version) are currently supported.
     
     License: LGPLv2+
@@ -223,7 +224,7 @@ The following libraries are used by DOSBox-X:
     
     License: Public Domain
 
-* Libpng (optional)
+* Libpng (in-tree; optional)
 
     Needed for the screenshots.
     
@@ -233,7 +234,7 @@ The following libraries are used by DOSBox-X:
     
     License: zlib/libpng
 
-* Zlib
+* Zlib (in-tree)
 
     Needed by libpng, and for save-state and CHD support.
     
@@ -243,7 +244,7 @@ The following libraries are used by DOSBox-X:
     
     License: zlib
 
-* FreeType (optional)
+* FreeType (in-tree; optional)
 
     Needed for TrueType font (TTF) output and printing support.
     
@@ -277,7 +278,7 @@ The following libraries are used by DOSBox-X:
     
     License: Modified 4-clause BSD license
 
-* SDL_Net (optional)
+* SDL_Net (in-tree; optional)
 
     For Modem/IPX support.
     
@@ -285,7 +286,7 @@ The following libraries are used by DOSBox-X:
     
     License: LGPLv2+
 
-* SDL_Sound (optional)
+* SDL_Sound (in-tree; optional)
     
     For compressed audio on diskimages (cue sheets) support.
     

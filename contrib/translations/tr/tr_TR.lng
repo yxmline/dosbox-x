@@ -1476,11 +1476,11 @@ Dosya bulunamadı - %s
 
 .
 :SHELL_CMD_DIR_BYTES_USED
-%5d dosya, %17s bayt
+%5d dosya, %18s bayt
 
 .
 :SHELL_CMD_DIR_BYTES_FREE
-%5d dizin, %17s bayt boş
+%5d dizin, %18s bayt boş
 
 .
 :SHELL_CMD_DIR_FILES_LISTED
@@ -2154,7 +2154,7 @@ CHCP nnn[:[dil]]
 
 TrueType yazıtipi çıktısında desteklenen kod sayfaları aşağıdaki gibidir:
 
-437,737,775,808,850,852,853,855-866,869,872,874,1250-1258,3021
+437,737,775,808,850,852,853,855-869,872,874,1250-1258,3021
 
 Ek olarak 932,936,949,950/951 numaralı çoklu bit kod sayfaları da desteklenir.
 

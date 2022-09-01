@@ -71,6 +71,8 @@
 #include "cp864_uni.h"
 #include "cp865_uni.h"
 #include "cp866_uni.h"
+#include "cp867_uni.h"
+#include "cp868_uni.h"
 #include "cp869_uni.h"
 #include "cp872_uni.h"
 #include "cp874_uni.h"
@@ -645,6 +647,10 @@ bool CodePageHostToGuestUTF16(char *d/*CROSS_LEN*/,const uint16_t *s/*CROSS_LEN*
             return String_HOST_TO_SBCS_UTF16<uint16_t>(d,s,cp865_to_unicode,sizeof(cp865_to_unicode)/sizeof(cp865_to_unicode[0]));
         case 866:
             return String_HOST_TO_SBCS_UTF16<uint16_t>(d,s,cp866_to_unicode,sizeof(cp866_to_unicode)/sizeof(cp866_to_unicode[0]));
+        case 867:
+            return String_HOST_TO_SBCS_UTF16<uint16_t>(d,s,cp867_to_unicode,sizeof(cp867_to_unicode)/sizeof(cp867_to_unicode[0]));
+        case 868:
+            return String_HOST_TO_SBCS_UTF16<uint16_t>(d,s,cp868_to_unicode,sizeof(cp868_to_unicode)/sizeof(cp868_to_unicode[0]));
         case 869:
             return String_HOST_TO_SBCS_UTF16<uint16_t>(d,s,cp869_to_unicode,sizeof(cp869_to_unicode)/sizeof(cp869_to_unicode[0]));
         case 872:
@@ -739,6 +745,10 @@ bool CodePageHostToGuestUTF8(char *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/) {
             return String_HOST_TO_SBCS_UTF8<uint16_t>(d,s,cp865_to_unicode,sizeof(cp865_to_unicode)/sizeof(cp865_to_unicode[0]));
         case 866:
             return String_HOST_TO_SBCS_UTF8<uint16_t>(d,s,cp866_to_unicode,sizeof(cp866_to_unicode)/sizeof(cp866_to_unicode[0]));
+        case 867:
+            return String_HOST_TO_SBCS_UTF8<uint16_t>(d,s,cp867_to_unicode,sizeof(cp867_to_unicode)/sizeof(cp867_to_unicode[0]));
+        case 868:
+            return String_HOST_TO_SBCS_UTF8<uint16_t>(d,s,cp868_to_unicode,sizeof(cp868_to_unicode)/sizeof(cp868_to_unicode[0]));
         case 869:
             return String_HOST_TO_SBCS_UTF8<uint16_t>(d,s,cp869_to_unicode,sizeof(cp869_to_unicode)/sizeof(cp869_to_unicode[0]));
         case 872:
@@ -833,6 +843,10 @@ bool CodePageGuestToHostUTF16(uint16_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*
             return String_SBCS_TO_HOST_UTF16<uint16_t>(d,s,cp865_to_unicode,sizeof(cp865_to_unicode)/sizeof(cp865_to_unicode[0]));
         case 866:
             return String_SBCS_TO_HOST_UTF16<uint16_t>(d,s,cp866_to_unicode,sizeof(cp866_to_unicode)/sizeof(cp866_to_unicode[0]));
+        case 867:
+            return String_SBCS_TO_HOST_UTF16<uint16_t>(d,s,cp867_to_unicode,sizeof(cp867_to_unicode)/sizeof(cp867_to_unicode[0]));
+        case 868:
+            return String_SBCS_TO_HOST_UTF16<uint16_t>(d,s,cp868_to_unicode,sizeof(cp868_to_unicode)/sizeof(cp868_to_unicode[0]));
         case 869:
             return String_SBCS_TO_HOST_UTF16<uint16_t>(d,s,cp869_to_unicode,sizeof(cp869_to_unicode)/sizeof(cp869_to_unicode[0]));
         case 872:
@@ -927,6 +941,10 @@ bool CodePageGuestToHostUTF8(char *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/) {
             return String_SBCS_TO_HOST_UTF8<uint16_t>(d,s,cp865_to_unicode,sizeof(cp865_to_unicode)/sizeof(cp865_to_unicode[0]));
         case 866:
             return String_SBCS_TO_HOST_UTF8<uint16_t>(d,s,cp866_to_unicode,sizeof(cp866_to_unicode)/sizeof(cp866_to_unicode[0]));
+        case 867:
+            return String_SBCS_TO_HOST_UTF8<uint16_t>(d,s,cp867_to_unicode,sizeof(cp867_to_unicode)/sizeof(cp867_to_unicode[0]));
+        case 868:
+            return String_SBCS_TO_HOST_UTF8<uint16_t>(d,s,cp868_to_unicode,sizeof(cp868_to_unicode)/sizeof(cp868_to_unicode[0]));
         case 869:
             return String_SBCS_TO_HOST_UTF8<uint16_t>(d,s,cp869_to_unicode,sizeof(cp869_to_unicode)/sizeof(cp869_to_unicode[0]));
         case 872:
@@ -1616,7 +1634,7 @@ bool localDrive::FileUnlink(const char * name) {
 #else
 		FILE* file_writable = fopen(host_name,"rb+");
 #endif
-		if(!file_writable) return false; //No acces ? ERROR MESSAGE NOT SET. FIXME ?
+		if(!file_writable) return false; //No access ? ERROR MESSAGE NOT SET. FIXME ?
 		fclose(file_writable);
 
 		//File exists and can technically be deleted, nevertheless it failed.
@@ -2755,7 +2773,7 @@ bool localFile::Seek(uint32_t * pos,uint32_t type) {
 	if (file_access_tries>0) fail=lseek(fileno(fhandle),*reinterpret_cast<int32_t*>(pos),seektype)==-1;
 	else fail=fseek(fhandle,*reinterpret_cast<int32_t*>(pos),seektype)!=0;
 	if (fail) {
-		// Out of file range, pretend everythings ok
+		// Out of file range, pretend everything is ok
 		// and move file pointer top end of file... ?! (Black Thorne)
 		if (file_access_tries>0)
 			lseek(fileno(fhandle),0,SEEK_END);
