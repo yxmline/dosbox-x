@@ -104,7 +104,7 @@ static uint8_t ioperm[8192];
 static bool isNT = false;
 
 bool initPorttalk() {
-    // handles neded for starting service
+    // handles needed for starting service
     SC_HANDLE  ServiceManager = NULL;
     SC_HANDLE  PorttalkService = NULL;
 
@@ -148,7 +148,7 @@ bool initPorttalk() {
                     LOG_MSG("Porttalk service is not installed.");
                     break;
                 default:
-                    LOG_MSG("Error %d occured accessing porttalk dirver.",retval);
+                    LOG_MSG("Error %d occurred accessing porttalk driver.",retval);
                     break;
                 }
                 goto error;
@@ -175,7 +175,7 @@ bool initPorttalk() {
             if (porttalkhandle == INVALID_HANDLE_VALUE) {
                 // bullshit
                 LOG_MSG(
-                    "Porttalk driver could not be opened after being started successully.");
+                    "Porttalk driver could not be opened after being started successfully.");
                 return false;
             }
 
@@ -237,7 +237,7 @@ bool setPermissionList() {
 #endif
 
 #ifdef LINUX
-# if defined(__i386__) || defined(__amd64__) || defined(__x86_64__)
+# if (defined(__i386__) || defined(__amd64__) || defined(__x86_64__)) && !(defined(ANDROID) || defined(__ANDROID__)) // ioperm is unavaliable on Android
 // This Linux ioperm only works up to port 0x3FF
 #include <sys/perm.h>
 // For musl-libc based toolchain, use <sys/io.h> instead of <sys/perm.h>
@@ -255,7 +255,17 @@ void addIOPermission(uint16_t port) {
 bool setPermissionList() {
     return true;
 }
+# else
+// Placeholders
+bool initPorttalk() {
+    return false;
+}
+ 
+void addIOPermission(uint16_t port) {}
 
+bool setPermissionList() {
+    return false;
+}
 # endif
 #endif
 

@@ -1,3 +1,17 @@
+Unreleased
+  - Fixed some violations of the one definition rule.
+    (Jookia)
+  - Use pkg-config to find OpenGL (Jookia)
+  - Updated Flatpak SDK and dependencies (Jookia)
+  - Fixed FFMPEG 5 compatibility (Jookia)
+  - Fix FFMPEG crash if FFMPEG fails to write header
+    for some reason. (joncampbell123)
+  - Fix setcap on systems with split /usr (Jookia)
+  - Fix building with --disable-core-inline (Jookia)
+  - Fix building not finding fluidsynth (Jookia)
+  - Fix some NetBSD build issues
+    (Jookia, with patch from Nia)
+
 2022.09.0 (0.84.3)
   - Updated FFMPEG video capture to use newer API,
     fix memory leaks, and fix use-after-free bug that
