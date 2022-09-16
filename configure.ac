@@ -34,7 +34,7 @@ int main(){
   return 0;
 }
 EOF
-if $CXX $CPPFLAGS $CXXFLAGS -Werror -o conftest.o conftest.c++ [$1] > /dev/null 2>&1
+if $CXX $CPPFLAGS $CXXFLAGS -Werror -c -o conftest.o conftest.c++ [$1] > /dev/null 2>&1
 then
   AC_MSG_RESULT([yes])
   CXXFLAGS="${CXXFLAGS} [$1]"
@@ -63,6 +63,7 @@ AC_PROG_CPP
 AC_PROG_CXX
 AC_PROG_OBJCXX
 AC_PROG_INSTALL
+AC_CHECK_TOOL(AR, ar)
 AC_PROG_RANLIB
 AC_PREFIX_DEFAULT([/usr/local])
 
@@ -94,25 +95,6 @@ AC_CHECK_HEADERS([sys/socket.h  netinet/in.h pwd.h], [], [],
 # include <sys/types.h>
 #endif
 ])
-
-dnl check for the socklen_t (darwin doesn't always have it)
-AC_COMPILE_IFELSE([AC_LANG_SOURCE([
-#include <stdio.h>
-#ifdef STDC_HEADERS
-# include <stdlib.h>
-# include <stddef.h>
-#else
-# ifdef HAVE_STDLIB_H
-#  include <stdlib.h>
-# endif
-#endif
-#ifdef HAVE_SYS_TYPES_H
-# include <sys/types.h>
-#endif
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
-#endif
-])],[],[AC_DEFINE([socklen_t],[int],[Define to `int` if you don't have socklen_t])])
 
 dnl C++11 is mandatory in this codebase.
 dnl C++14 is optional at this time, will eventually become mandatory.
