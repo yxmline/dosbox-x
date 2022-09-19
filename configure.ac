@@ -607,14 +607,14 @@ case "$host" in
 esac
 
 
-dnl LIBRARY TEST: ncurses
+dnl LIBRARY TEST: curses
 AC_CHECK_HEADER(curses.h,have_curses_h=yes,)
-AC_CHECK_LIB(curses, initscr, have_curses_lib=yes, , )
-AC_CHECK_LIB(ncurses, initscr, have_ncurses_lib=yes, , )
-AC_CHECK_LIB(pdcurses, initscr, have_pdcurses_lib=yes, , )
+AC_CHECK_LIB(curses, initscr, curses_lib=curses, , )
+AC_CHECK_LIB(ncurses, initscr, curses_lib=ncurses, , )
+AC_CHECK_LIB(pdcurses, initscr, curses_lib=pdcurses, , )
 # Check if this system's ncurses uses a separate tinfo library
 AC_CHECK_LIB(tinfo, nodelay,
-	     if test x$have_ncurses_lib = xyes ; then
+	     if test x$curses_lib = xncurses ; then
 	       LIBS="$LIBS -ltinfo";
 	     fi)
 
@@ -838,20 +838,8 @@ AH_TEMPLATE(C_HEAVY_DEBUG,[Define to 1 to enable heavy debugging, also have to e
 AC_ARG_ENABLE(debug,AC_HELP_STRING([--enable-debug],[Enable debug mode]),[
    if test x$enable_debug = xno; then
      AC_MSG_RESULT([Debugger not enabled])
-   elif test x$have_ncurses_lib = xyes -a x$have_curses_h = xyes ; then
-     LIBS="$LIBS -lncurses"
-     AC_DEFINE(C_DEBUG,1)
-     if test x$enable_debug = xheavy ; then 
-       AC_DEFINE(C_HEAVY_DEBUG,1)
-     fi
-   elif test x$have_curses_lib = xyes -a x$have_curses_h = xyes ; then
-     LIBS="$LIBS -lcurses"
-     AC_DEFINE(C_DEBUG,1)
-     if test x$enable_debug = xheavy ; then 
-       AC_DEFINE(C_HEAVY_DEBUG,1)
-     fi
-   elif test x$have_pdcurses_lib = xyes -a x$have_curses_h = xyes ; then
-     LIBS="$LIBS -lpdcurses"
+   elif test x$curses_lib != x -a x$have_curses_h = xyes; then
+     LIBS="$LIBS -l$curses_lib"
      AC_DEFINE(C_DEBUG,1)
      if test x$enable_debug = xheavy ; then 
        AC_DEFINE(C_HEAVY_DEBUG,1)
@@ -860,17 +848,6 @@ AC_ARG_ENABLE(debug,AC_HELP_STRING([--enable-debug],[Enable debug mode]),[
      AC_MSG_ERROR([Can't find curses, which is required for debug mode])
    fi
 ],)
-
-dnl FEATURE: Whether to use inline functions for memory access
-AH_TEMPLATE(C_CORE_INLINE,[Define to 1 to use inlined memory functions in cpu core])
-AC_ARG_ENABLE(core-inline,AC_HELP_STRING([--disable-core-inline],[Disable inlined memory handling in CPU Core]),,enable_core_inline=yes)
-AC_MSG_CHECKING(whether memory handling in the CPU Core will be inlined)
-if test x$enable_core_inline = xyes ; then
-    AC_MSG_RESULT(yes)
-    AC_DEFINE(C_CORE_INLINE,1)
-else
-    AC_MSG_RESULT(no)
-fi
 
 dnl automake 1.14 and upwards rewrite the host to have always 64 bit unless i386 as host is passed
 dnl this can make building a 32 bit executable a bit tricky, as dosbox relies on the host to select the
