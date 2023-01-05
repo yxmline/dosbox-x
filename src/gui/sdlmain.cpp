@@ -7629,55 +7629,58 @@ namespace linker {
 	typedef uint64_t			segment_size_t;			// segment size in bytes
 	typedef uint64_t			segment_offset_t;		// offset within a segment
 	typedef int32_t				segment_relative_t;		// offset in segments. In real mode, as paragraphs. In protected mode, as index numbers. Can be negative.
-	typedef uint64_t			fragment_relative_t;		// offset in segment relative to fragment (so fragments can move easily)
 	typedef uint64_t			alignmask_t;			// alignment mask (bit mask)
 	typedef uint64_t			file_offset_t;			// file offset
 	typedef uint64_t			linear_addr_t;			// linear (flat) memory address
 	typedef size_t				source_ref_t;			// source index
-	typedef size_t				source_module_ref_t;		// source module index
 	typedef unsigned int			segment_flags_t;		// segment flags
 	typedef unsigned int			cpu_major_type_t;		// CPU type (major category)
 	typedef unsigned int			cpu_minor_type_t;		// CPU type (minor within category)
 	typedef unsigned int			cpu_flags_t;			// CPU flags, meaning depends on CPU type
-	typedef size_t				fragment_ref_t;			// fragment within segment index
 	typedef size_t				segment_ref_t;			// segment ref
 	typedef size_t				string_ref_t;			// string index reference
+	typedef uint8_t				fixup_method_t;			// fixup method
+	typedef uint8_t				fixup_how_t;			// fixup how
+	typedef uint8_t				symbol_type_t;			// symbol type
+	typedef size_t				symbol_ref_t;			// symbol reference
 
 	static constexpr segment_size_t		segment_size_undef = ~((uint64_t)(0ull));
 	static constexpr segment_offset_t	segment_offset_undef = ~((uint64_t)(0ull));
 	static constexpr segment_relative_t	segment_relative_undef = ~((int32_t)(0x7FFFFFFF));
-	static constexpr fragment_relative_t	fragment_relative_undef = ~((uint64_t)(0ull));
 	static constexpr file_offset_t		file_offset_undef = ~((uint64_t)(0ull));
 	static constexpr linear_addr_t		linear_addr_undef = ~((uint64_t)(0ull));
 	static constexpr source_ref_t		source_ref_undef = ~((size_t)(0ul));
-	static constexpr source_module_ref_t	source_module_ref_undef = ~((size_t)(0ul));
 	static constexpr cpu_major_type_t	cpu_major_undef = ~((unsigned int)(0u));
 	static constexpr cpu_minor_type_t	cpu_minor_undef = ~((unsigned int)(0u));
-	static constexpr fragment_ref_t		fragment_ref_undef = ~((size_t)(0ul));
 	static constexpr segment_ref_t		segment_ref_undef = ~((size_t)(0ul));
 	static constexpr string_ref_t		string_ref_undef = ~((size_t)(0ul));
+	static constexpr fixup_method_t		fixup_method_undef = ~((uint8_t)(0u));
+	static constexpr fixup_how_t		fixup_how_undef = ~((uint8_t)(0u));
+	static constexpr symbol_type_t		symbol_type_undef = ~((uint8_t)(0u));
+	static constexpr symbol_ref_t		symbol_ref_undef = ~((size_t)(0ul));
 
 	static constexpr alignmask_t		byte_align_mask = ~((alignmask_t)(0ull));
 	static constexpr alignmask_t		word_align_mask = ~((alignmask_t)(1ull));
 	static constexpr alignmask_t		dword_align_mask = ~((alignmask_t)(3ull));
 	static constexpr alignmask_t		qword_align_mask = ~((alignmask_t)(7ull));
 	static constexpr alignmask_t		para_align_mask = ~((alignmask_t)(15ull));
+	static constexpr alignmask_t		page_align_mask = ~((alignmask_t)(4095ull));
 
 	static constexpr cpu_major_type_t	CPUMAJT_INTELX86 = 0; /* Intel x86/x86_64 (8086, 386, etc.) */
 	static constexpr cpu_minor_type_t	CPUMINT_INTELX86_8086 = 0; /* Intel 8088/8086 (16-bit) */
-	static constexpr cpu_minor_type_t	CPUMINT_INTELX86_286 = 286; /* Intel 286 (16-bit) */
 	static constexpr cpu_minor_type_t	CPUMINT_INTELX86_386 = 386; /* Intel 386 (32-bit) */
-	static constexpr cpu_minor_type_t	CPUMINT_INTELX86_486 = 486; /* Intel 486 (32-bit) */
-	static constexpr cpu_minor_type_t	CPUMINT_INTELX86_586 = 586; /* Intel 586/Pentium (32-bit) */
-	static constexpr cpu_minor_type_t	CPUMINT_INTELX86_686 = 686; /* Intel 686/Pentium II (32-bit) */
 	static constexpr cpu_minor_type_t	CPUMINT_INTELX86_X64 = 6400; /* x86_64 (64-bit) */
 
-	static constexpr segment_flags_t	SEGFLAG_COMBINEABLE = segment_flags_t(1u << 0u); // source module says it's OK to combine segments of the same name and/or class
+	static constexpr segment_flags_t	SEGFLAG_PUBLIC = segment_flags_t(1u << 0u); // source module says it's OK to combine segments of the same name and/or class
 	static constexpr segment_flags_t	SEGFLAG_PINNED = segment_flags_t(1u << 1u); // segment is pinned at it's position in the segment order, do not move
 	static constexpr segment_flags_t	SEGFLAG_NOEMIT = segment_flags_t(1u << 2u); // segment exists only in memory and does not have data on disk (BSS, STACK, etc)
 	static constexpr segment_flags_t	SEGFLAG_HEADER = segment_flags_t(1u << 3u); // segment is part of the file header
 	static constexpr segment_flags_t	SEGFLAG_SEGMENTMODEL = segment_flags_t(1u << 4u); // segment is intended for segmented memory model (rel_offset/rel_segments values matter)
 	static constexpr segment_flags_t	SEGFLAG_FLATMODEL = segment_flags_t(1u << 5u); // segment is intended for flat memory model (linear_addr value matters)
+	static constexpr segment_flags_t	SEGFLAG_PRIVATE = segment_flags_t(1u << 6u); // do not combine with any other segment
+	static constexpr segment_flags_t	SEGFLAG_STACK = segment_flags_t(1u << 7u); // stack segment
+	static constexpr segment_flags_t	SEGFLAG_COMMON = segment_flags_t(1u << 8u); // common
+	static constexpr segment_flags_t	SEGFLAG_DELETED = segment_flags_t(1u << 9u); // deleted segment, do not consider anything
 
 	// cpu_major == CPUMAJT_INTELX86
 	static constexpr cpu_flags_t		CPUFLAG_INTELX86_BIG386 = cpu_flags_t(1u << 0u); // (i386) segment should be loaded as "big" 4GB limit (B bit)
@@ -7689,15 +7692,48 @@ namespace linker {
 	static constexpr cpu_flags_t		CPUFLAG_INTELX86_REALMODE = cpu_flags_t(1u << 4u); // real mode segment
 	static constexpr cpu_flags_t		CPUFLAG_INTELX86_PROTMODE = cpu_flags_t(1u << 5u); // protected mode segment
 
-	struct stringtable_t {
-		std::string				empty;
-		std::vector<std::string>		ref2str; // ref -> str
-		std::unordered_map<std::string,size_t>	str2ref; // str -> ref
+	// fixup methods
+	static constexpr fixup_method_t		FIXUPMETH_SEGMENT = 0; // fixup refers to segment base
+	static constexpr fixup_method_t		FIXUPMETH_GROUP = 1; // fixup refers to segment group base
+	static constexpr fixup_method_t		FIXUPMETH_EXTERN = 2; // fixup refers to external symbol
+	static constexpr fixup_method_t		FIXUPMETH_TARGET = 5; // fixup refers to target
 
-		bool exists(const string_ref_t x) const;
-		const std::string &get(const string_ref_t x) const;
-		string_ref_t add(const std::string &s);
+	// fixup how
+	static constexpr fixup_how_t		FIXUPHOW_OFFSET16 = 1; // 16-bit offset
+	static constexpr fixup_how_t		FIXUPHOW_SEGMENTBASE16 = 2; // 16-bit segment base
+	static constexpr fixup_how_t		FIXUPHOW_SEGMENTOFFSET16 = 3; // 16:16 segment:offset
+	static constexpr fixup_how_t		FIXUPHOW_OFFSET32 = 9; // 32-bit offset
+	static constexpr fixup_how_t		FIXUPHOW_SEGMENTOFFSET32 = 11; // 16:32 segment:offset
+
+	// symbol types
+	static constexpr symbol_type_t		SYMTYPE_DELETED = 0; // deleted symbol
+	static constexpr symbol_type_t		SYMTYPE_EXTERN = 1; // external symbol
+	static constexpr symbol_type_t		SYMTYPE_PUBLIC = 2; // public symbol
+	static constexpr symbol_type_t		SYMTYPE_LOCAL_EXTERN = 11; // external symbol local to module
+	static constexpr symbol_type_t		SYMTYPE_LOCAL_PUBLIC = 12; // public symbol local to module
+
+	// some object formats index from 1 instead of zero
+	template <typename T> static constexpr inline T from1based(const T x) { /* 1-based to zero based */
+		return x - T(1u);
+	}
+
+	template <typename T> static constexpr inline T to1based(const T x) { /* zero based to 1-based */
+		return x + T(1u);
+	}
+
+	template <typename T,typename refT> struct _common_ref2table_bidi_t {
+		T						empty;
+		std::vector<T>					ref2t; // ref -> T
+		std::unordered_map<T,refT>			t2ref; // T -> ref
+
+		bool exists(const refT x) const;
+		const T &get(const refT x) const;
+		T &get(const refT x);
+		refT add(const T &s);
+		refT add(T &&s);
 	};
+
+	typedef _common_ref2table_bidi_t<std::string,string_ref_t> stringtable_t;
 
 	template <typename T,typename refT> struct _common_ref2table_t {
 		std::vector<T>				ref;
@@ -7706,42 +7742,89 @@ namespace linker {
 		const T &get(const refT x) const;
 		T &get(const refT x);
 		refT allocate(void);
-
-		// This will pop the last added entry off the end. If the reference is not the end, then assigns a default
-		// constructor of T to the entry. Hope your class T has default values to indicate it is obviously not allocated!
-		void unallocate(const refT x);
 	};
 
-	struct fragment_t {
-		alignmask_t				alignmask = 0;
-		std::shared_ptr< std::vector<uint8_t> >	data; // data within fragment using shared_ptr for copy on write semantics if needed---CAN BE NULL, BE CAREFUL!
-		size_t					size = 0; // total size of fragment
-		source_ref_t				source = source_ref_undef; // from this source
-		source_module_ref_t			source_module = source_module_ref_undef; // from this module
-		segment_offset_t			assigned_offset = segment_offset_undef; // assigned offset of fragment within segment
-		segment_size_t				assigned_size = segment_size_undef; // assigned size of fragment within segment
-		segment_ref_t				assigned_segment = segment_ref_undef; // assigned to segment
-		// fragment data copy on write semantics:
-		// if shared_ptr has a use_count() == 1, it is OK to modify in place.
-		// if shared_ptr has a use_count() > 1, you must copy the data and then modify it.
-		// use_count() is 100% accurate for this code because we are not using it in a multithreaded manner.
+	struct symbol_t {
+		symbol_type_t				type = symbol_type_undef; // type of symbol
+		string_ref_t				name = string_ref_undef; // name of symbol
+		string_ref_t				group = string_ref_undef; // group of symbol (OMF)
+		segment_ref_t				segref = segment_ref_undef; // segment symbol belongs to (undefined if extern)
+		segment_offset_t			offset = segment_offset_undef; // offset within fragment
 	};
 
-	typedef _common_ref2table_t<fragment_t,fragment_ref_t> fragment_table_t;
+	template <typename T,typename refT,typename reverseT> struct _common_ref2symtable_t {
+		std::vector<T>							ref2t; /* ref -> T */
+		std::unordered_map<reverseT, std::vector<refT> >		name2t; /* reverseT -> one or more ref */
 
-	struct source_module_t {
-		string_ref_t		name = string_ref_undef;
-		size_t			index = source_module_ref_undef;
-		file_offset_t		offset = file_offset_undef;
+		bool exists(const refT x) const;
+		const T &get(const refT x) const;
+		T &get(const refT x);
+		refT add(const reverseT &name);
 	};
 
-	typedef _common_ref2table_t<source_module_t,source_module_ref_t> source_module_table_t;
+	struct symbol_table_t : public _common_ref2symtable_t<symbol_t,symbol_ref_t,string_ref_t> {
+		symbol_table_t() : _common_ref2symtable_t<symbol_t,symbol_ref_t,string_ref_t>() { }
+		void sortbyname(const stringtable_t &st);
+	};
+
+	const stringtable_t *symbol_table_sort_name_func_strings = NULL;
+
+	unsigned int symbol_type_to_priority_sort_val(const symbol_type_t t) {
+		switch (t) {
+			case SYMTYPE_LOCAL_PUBLIC:	return 4;
+			case SYMTYPE_PUBLIC:		return 3;
+			case SYMTYPE_LOCAL_EXTERN:	return 2;
+			case SYMTYPE_EXTERN:		return 1;
+			default:			break;
+		};
+
+		return 0;
+	}
+
+	bool symbol_table_name_sort_func(const symbol_t &a,const symbol_t &b) {
+		/* strings are different if string refs differ, if so sort alphabetically A-Z */
+		if (a.name != b.name) {
+			const char *sa = symbol_table_sort_name_func_strings->get(a.name).c_str();
+			const char *sb = symbol_table_sort_name_func_strings->get(b.name).c_str();
+			return strcmp(sa,sb) < 0; /* a < b   assume strcmp() != 0 */
+		}
+
+		/* string refs match, sort by type priority, highest to lowest */
+		const unsigned int pra = symbol_type_to_priority_sort_val(a.type);
+		const unsigned int prb = symbol_type_to_priority_sort_val(b.type);
+		if (pra != prb) return pra > prb; /* we want higher priority first before lower priority */
+
+		/* nothing to do */
+		return false;
+	}
+
+	void symbol_table_t::sortbyname(const stringtable_t &st) {
+		name2t.clear();
+		symbol_table_sort_name_func_strings = &st;
+		std::sort(ref2t.begin(),ref2t.end(),symbol_table_name_sort_func);
+		for (size_t si=0;si < ref2t.size();si++) name2t[ref2t[si].name/*string ref*/].push_back(si/*symbol ref*/);
+	}
+
+	struct fixup_t {
+		/* frame method and seg/group/extern name to which address computation is performed (OMF spec) */
+		fixup_method_t				frame_method = fixup_method_undef;
+		string_ref_t				frame_name = string_ref_undef;
+		/* target method and seg/group/extern name to which the fixup refers to (OMF spec) */
+		fixup_method_t				target_method = fixup_method_undef;
+		string_ref_t				target_name = string_ref_undef;
+		/* how to apply the fixup and where */
+		fixup_how_t				fixup_how = fixup_how_undef;
+		segment_offset_t			fixup_offset = segment_offset_undef;
+		/* other flags */
+		bool					segment_relative = false; /* segment relative vs self relative (OMF spec) */
+	};
 
 	struct source_t {
 		string_ref_t			name = string_ref_undef;
 		string_ref_t			path = string_ref_undef;
+		size_t				index = source_ref_undef;
+		file_offset_t			offset = file_offset_undef;
 		bool				is_library = false;
-		source_module_table_t		modules;
 	};
 
 	typedef _common_ref2table_t<source_t,source_ref_t> source_table_t;
@@ -7758,11 +7841,12 @@ namespace linker {
 		cpu_minor_type_t		cpu_minor = cpu_minor_undef; // intended CPU, minor category
 		cpu_flags_t			cpu_flags = 0; // meaning is specific to major/minor CPU type
 		source_ref_t			source = source_ref_undef; // segment first seen from this source
-		source_module_ref_t		source_module = source_module_ref_undef; // segment first seen from this module
 		string_ref_t			name = string_ref_undef;		// segment name
 		string_ref_t			classname = string_ref_undef;		// segment class
 		string_ref_t			groupname = string_ref_undef;		// segment group
-		std::vector<fragment_ref_t>	fragments; // fragments contained in this segment
+		unsigned int			format_index = 0;			// format specific index
+		std::vector<uint8_t>		data;					// segment data if applicable
+		std::vector<fixup_t>		fixups;					// fixups of segment
 
 		// NTS: rel_offset also allows the .COM memory model where the base of the executable image starts at offset 0x100 within the segment,
 		//      in which case rel_segments is negative number -0x10 for entry point rel_segments:0x100 to point to base of executable image.
@@ -7780,32 +7864,52 @@ namespace linker {
 		return (~v) + ((alignmask_t)1u);
 	}
 
-	bool stringtable_t::exists(const string_ref_t x) const {
-		return x < ref2str.size();
+	template <typename T,typename refT> bool _common_ref2table_bidi_t<T,refT>::exists(const refT x) const {
+		return x < ref2t.size();
 	}
 
-	const std::string &stringtable_t::get(const string_ref_t x) const {
-		if (x < ref2str.size())
-			return ref2str[x];
+	template <typename T,typename refT> const T &_common_ref2table_bidi_t<T,refT>::get(const refT x) const {
+		if (x < ref2t.size())
+			return ref2t[x];
 		else
 			return empty;
 	}
 
-	string_ref_t stringtable_t::add(const std::string &s) {
+	template <typename T,typename refT> T &_common_ref2table_bidi_t<T,refT>::get(const refT x) {
+		if (x < ref2t.size())
+			return ref2t[x];
+		else
+			return empty;
+	}
+
+	template <typename T,typename refT> refT _common_ref2table_bidi_t<T,refT>::add(const T &s) {
 		/* if the string already exists, return the existing reference */
 		{
-			const auto i = str2ref.find(s);
-			if (i != str2ref.end()) return i->second;
+			const auto i = t2ref.find(s);
+			if (i != t2ref.end()) return i->second;
 		}
 		/* else, add the string and return the new reference */
-		const string_ref_t newi = ref2str.size();
-		ref2str.push_back(s);
-		str2ref[s] = newi;
+		const refT newi = ref2t.size();
+		t2ref[s] = newi;
+		ref2t.push_back(s);
+		return newi;
+	}
+
+	template <typename T,typename refT> refT _common_ref2table_bidi_t<T,refT>::add(T &&s) {
+		/* if the string already exists, return the existing reference */
+		{
+			const auto i = t2ref.find(s);
+			if (i != t2ref.end()) return i->second;
+		}
+		/* else, add the string and return the new reference */
+		const refT newi = ref2t.size();
+		t2ref[s] = newi;
+		ref2t.push_back(std::move(s));
 		return newi;
 	}
 
 	template <typename T,typename refT> bool _common_ref2table_t<T,refT>::exists(const refT x) const {
-		return ref.find(x) != ref.end();
+		return x < ref.size();
 	}
 
 	template <typename T,typename refT> const T &_common_ref2table_t<T,refT>::get(const refT x) const {
@@ -7828,14 +7932,603 @@ namespace linker {
 		return id;
 	}
 
-	template <typename T,typename refT> void _common_ref2table_t<T,refT>::unallocate(const refT x) {
-		if (size_t(x) == (ref.size() - size_t(1u)))
-			ref.pop_back();
-		else
-			ref[x] = std::move(T());
+	template <typename T,typename refT,typename reverseT> bool _common_ref2symtable_t<T,refT,reverseT>::exists(const refT x) const {
+		return x < ref2t.size();
 	}
 
-};
+	template <typename T,typename refT,typename reverseT> const T &_common_ref2symtable_t<T,refT,reverseT>::get(const refT x) const {
+		if (x < ref2t.size())
+			return ref2t[x];
+		else
+			throw std::range_error("get() out of range (const)");
+	}
+
+	template <typename T,typename refT,typename reverseT> T &_common_ref2symtable_t<T,refT,reverseT>::get(const refT x) {
+		if (x < ref2t.size())
+			return ref2t[x];
+		else
+			throw std::range_error("get() out of range");
+	}
+
+	template <typename T,typename refT,typename reverseT> refT _common_ref2symtable_t<T,refT,reverseT>::add(const reverseT &rt) {
+		/* else, add the string and return the new reference */
+		const refT newi = ref2t.size();
+		name2t[rt].push_back(newi);
+		T newT;
+		newT.name = rt;
+		ref2t.push_back(std::move(newT));
+		return newi;
+	}
+
+	typedef struct std::vector<segment_ref_t> segment_order_list_t;
+
+	struct linkstate {
+		source_table_t			sources;
+		stringtable_t			strings;
+		segment_table_t			segments;
+		symbol_table_t			symbols;
+		segment_order_list_t		segment_order;
+	};
+
+	typedef uint8_t				omf_record_type_t;
+
+	static constexpr omf_record_type_t	omf_record_type_undef = ~((uint8_t)(0u));
+
+	static constexpr omf_record_type_t	OMFRECT_THEADR     = 0x80;
+	static constexpr omf_record_type_t	OMFRECT_LHEADR     = 0x82;
+	static constexpr omf_record_type_t	OMFRECT_COMENT     = 0x88;
+	static constexpr omf_record_type_t	OMFRECT_MODEND     = 0x8A;
+	static constexpr omf_record_type_t	OMFRECT_MODEND_32  = 0x8B;
+	static constexpr omf_record_type_t	OMFRECT_EXTDEF     = 0x8C;
+	static constexpr omf_record_type_t	OMFRECT_PUBDEF     = 0x90;
+	static constexpr omf_record_type_t	OMFRECT_PUBDEF_32  = 0x91;
+	static constexpr omf_record_type_t	OMFRECT_LINNUM     = 0x94;
+	static constexpr omf_record_type_t	OMFRECT_LINNUM_32  = 0x95;
+	static constexpr omf_record_type_t	OMFRECT_LNAMES     = 0x96;
+	static constexpr omf_record_type_t	OMFRECT_SEGDEF     = 0x98;
+	static constexpr omf_record_type_t	OMFRECT_SEGDEF_32  = 0x99;
+	static constexpr omf_record_type_t	OMFRECT_GRPDEF     = 0x9A;
+	static constexpr omf_record_type_t	OMFRECT_FIXUPP     = 0x9C;
+	static constexpr omf_record_type_t	OMFRECT_FIXUPP_32  = 0x9D;
+	static constexpr omf_record_type_t	OMFRECT_LEDATA     = 0xA0;
+	static constexpr omf_record_type_t	OMFRECT_LEDATA_32  = 0xA1;
+	static constexpr omf_record_type_t	OMFRECT_LIDATA     = 0xA2;
+	static constexpr omf_record_type_t	OMFRECT_LIDATA_32  = 0xA3;
+	static constexpr omf_record_type_t	OMFRECT_COMDEF     = 0xB0;
+	static constexpr omf_record_type_t	OMFRECT_BAKPAT     = 0xB2;
+	static constexpr omf_record_type_t	OMFRECT_BAKPAT_32  = 0xB3;
+	static constexpr omf_record_type_t	OMFRECT_LEXTDEF    = 0xB4;
+	static constexpr omf_record_type_t	OMFRECT_LPUBDEF    = 0xB6;
+	static constexpr omf_record_type_t	OMFRECT_LPUBDEF_32 = 0xB7;
+	static constexpr omf_record_type_t	OMFRECT_LCOMDEF    = 0xB8;
+	static constexpr omf_record_type_t	OMFRECT_CEXTDEF    = 0xBC;
+	static constexpr omf_record_type_t	OMFRECT_COMDAT     = 0xC2;
+	static constexpr omf_record_type_t	OMFRECT_COMDAT_32  = 0xC3;
+	static constexpr omf_record_type_t	OMFRECT_LINSYM     = 0xC4;
+	static constexpr omf_record_type_t	OMFRECT_LINSYM_32  = 0xC5;
+	static constexpr omf_record_type_t	OMFRECT_ALIAS      = 0xC6;
+	static constexpr omf_record_type_t	OMFRECT_NBKPAT     = 0xC8;
+	static constexpr omf_record_type_t	OMFRECT_NBKPAT_32  = 0xC9;
+	static constexpr omf_record_type_t	OMFRECT_LLNAMES    = 0xCA;
+	static constexpr omf_record_type_t	OMFRECT_VERNUM     = 0xCC;
+	static constexpr omf_record_type_t	OMFRECT_VENDEXT    = 0xCE;
+	static constexpr omf_record_type_t	OMFRECT_LIBHEAD    = 0xF0;
+	static constexpr omf_record_type_t	OMFRECT_LIBEND     = 0xF1;
+
+	struct OMF_record {
+		std::vector<uint8_t>		record;
+		omf_record_type_t		type = omf_record_type_undef;
+		unsigned long			file_offset = 0;
+	};
+
+	static constexpr uint8_t		OMF_LIBHEAD_FLAG_CASE_SENSITIVE = (1u << 0u);
+
+	struct OMF_LIBHEAD {
+		uint16_t			record_length = 0;
+		uint32_t			dict_offset = 0;
+		uint16_t			dict_size_in_blocks = 0;
+		uint8_t				flags = 0;
+
+		void				parse(const OMF_record &r);
+	};
+
+	struct OMF_XADR { // OMF_LHEADR / OMF_THEADR
+		std::string			name;
+
+		void				parse(const OMF_record &r);
+	};
+
+	typedef _common_ref2table_t<string_ref_t,string_ref_t> OMF_LNAMES_table_t;
+
+	typedef _common_ref2table_t<string_ref_t,size_t> OMF_GRPDEF_names_t;
+
+	struct OMF_extra_linkstate {
+		OMF_LNAMES_table_t		LNAMES; /* map LNAME index to string ref */
+		OMF_GRPDEF_names_t		GRPDEF_names; /* only the names */
+	};
+
+	void OMF_XADR::parse(const OMF_record &r) {
+		/* <length of string> <string> */
+		name.clear();
+		if (r.record.size() >= 1u) {
+			size_t len = r.record[0];
+			if (len > (r.record.size()-1u)) len = (r.record.size()-1u);
+			assert((1u+len) <= r.record.size());
+			name = std::string((char*)(&r.record[1]),len);
+		}
+	}
+
+	void OMF_LIBHEAD::parse(const OMF_record &r) {
+		record_length = r.record.size() + 3u/*header*/ + 1u/*checksum which is not included in record[]*/;
+		if (r.record.size() >= 7) {
+			dict_offset = le32toh( *((uint32_t*)(&r.record[0])) );
+			dict_size_in_blocks = le16toh( *((uint16_t*)(&r.record[4])) );
+			flags = r.record[6];
+		}
+	}
+
+	bool OMF_read_record(OMF_record &rec,FILE *fp/*TODO READER OBJECT*/,uint16_t block_size=0,uint32_t dict_offset=0) {
+		unsigned char hdr[3],chk;
+		uint16_t len;
+
+		/* note header offset */
+		rec.file_offset = ftell(fp);
+
+		/* header:
+		 *
+		 * <type> <16-bit length> <data> <checksum byte or 0>
+		 *
+		 * length includes <data> and <checksum>
+		 *
+		 * MS-DOS 16-bit linkers for arcane reasons probably related to FCBs and record length
+		 * like to use multiples of 512 bytes, supposedly. */
+		if (fread(hdr,3,1,fp) != 1)
+			return false;
+
+		/* type and length */
+		rec.type = hdr[0];
+		len = le16toh( *((uint16_t*)(hdr+1)) );
+		if (len == 0) return false;
+
+		/* read in length - 1 (data region) */
+		rec.record.resize(len-1u);
+		if (fread(&rec.record[0],len-1u,1,fp) != 1)
+			return false;
+
+		/* read in checksum byte */
+		if (fread(&chk,1,1,fp) != 1)
+			return false;
+
+		/* checksum is optional */
+		if (chk != 0) {
+			unsigned char sum = chk;
+			unsigned int i;
+
+			for (i=0;i < 3;i++)
+				sum += hdr[i];
+			for (i=0;i < (len-1u);i++)
+				sum += rec.record[i];
+
+			if (sum != 0)
+				return false;
+		}
+
+		if (rec.type == OMFRECT_MODEND || rec.type == OMFRECT_MODEND_32) {
+			if (block_size > 0) {
+				unsigned long ofs = ftell(fp);
+				ofs += (unsigned long)block_size - 1ul;
+				ofs -= ofs % (unsigned long)block_size;
+				fseek(fp,(long)ofs,SEEK_SET);
+			}
+			if (dict_offset != 0u) {
+				if ((unsigned long)ftell(fp) >= (unsigned long)dict_offset)
+					return false;
+			}
+		}
+
+		return true;
+	}
+
+	uint8_t OMF_read_byte(const uint8_t* &r,const uint8_t *e) {
+		if (r < e) {
+			const uint8_t v = *r; r++;
+			return v;
+		}
+
+		return 0x00;
+	}
+
+	uint16_t OMF_read_index(const uint8_t* &r,const uint8_t *e) {
+		uint16_t v = OMF_read_byte(r,e);
+		if (v & 0x80) v = ((v & 0x7Fu) << 8u) + OMF_read_byte(r,e);
+		return v;
+	}
+
+	uint16_t OMF_read_word(const uint8_t* &r,const uint8_t *e) {
+		if ((r+2u) <= e) {
+			const uint16_t v = le16toh( *((uint16_t*)r) ); r += 2;
+			return v;
+		}
+
+		return 0x00;
+	}
+
+	uint32_t OMF_read_dword(const uint8_t* &r,const uint8_t *e) {
+		if ((r+4u) <= e) {
+			const uint16_t v = le32toh( *((uint32_t*)r) ); r += 4;
+			return v;
+		}
+
+		return 0x00;
+	}
+
+	string_ref_t OMF_read_lenstring(stringtable_t &st,const uint8_t* &r,const uint8_t *e) {
+		const uint8_t len = OMF_read_byte(r,e);
+		if ((r+len) > e) return string_ref_undef;
+
+		const string_ref_t ref = st.add(std::move(std::string((char*)r,len)));
+		r += len;
+
+		return ref;
+	}
+
+	bool OMF_add_LNAMES(linkstate &module,OMF_extra_linkstate &modex,const OMF_record &rec) {
+		const uint8_t *ri = &rec.record[0];
+		const uint8_t *re = &rec.record[rec.record.size()];
+
+		while (ri < re) {
+			const string_ref_t r = OMF_read_lenstring(module.strings,ri,re);
+			if (r == string_ref_undef) return false;
+
+			modex.LNAMES.get(modex.LNAMES.allocate()) = r;
+		}
+
+		return true;
+	}
+
+	bool OMF_add_SEGDEF(linkstate &module,OMF_extra_linkstate &modex,const OMF_record &rec) {
+		const segment_ref_t segment_ref = module.segments.allocate();
+		segment_t &segref = module.segments.get(segment_ref);
+
+		const bool fmt32 = (rec.type == OMFRECT_SEGDEF_32);
+
+		const uint8_t *ri = &rec.record[0];
+		const uint8_t *re = &rec.record[rec.record.size()];
+
+		/* OMF counts segment indexes from 1, this code from 0, allocate() ref indexes always count up from 0 */
+		segref.format_index = (unsigned int)segment_ref + 1u;
+
+		/* OMF is almost always associated with Intel x86 (anything else use it?) */
+		segref.cpu_major = CPUMAJT_INTELX86;
+		segref.cpu_minor = CPUMINT_INTELX86_8086; // 16-bit by default
+
+		/* bits [7:5] = Alignment
+		 * bits [4:2] = Combination
+		 * bit  [1]   = Big (as in, segment length is exactly 64KB or 4GB depending on 16/32-bit)
+		 * bit  [0]   = P (1=32-bit segment  0=16-bit segment) */
+		uint8_t attr = OMF_read_byte(ri,re);
+
+		switch (attr>>5u) {
+			case 0: /* absolute segment (not supported here) even if Microsoft's linker supports it */
+				return false;
+			case 1: /* byte align */
+				segref.alignmask = byte_align_mask;
+				break;
+			case 2: /* word align */
+				segref.alignmask = word_align_mask;
+				break;
+			case 3: /* paragraph align */
+				segref.alignmask = para_align_mask;
+				break;
+			case 4: /* page align */
+				segref.alignmask = page_align_mask;
+				break;
+			case 5: /* dword align */
+				segref.alignmask = dword_align_mask;
+				break;
+			default:/* not supported */
+				break;
+		};
+
+		switch ((attr>>2u)&7u) {
+			case 0: /* private */
+				segref.flags |= SEGFLAG_PRIVATE;
+				break;
+			case 2: /* public (combineable) */
+			case 4: /* public (combineable) */
+			case 7: /* public (combineable) */
+				segref.flags |= SEGFLAG_PUBLIC;
+				break;
+			case 5: /* stack (combineable) */
+				segref.flags |= SEGFLAG_PUBLIC | SEGFLAG_STACK;
+				segref.alignmask = byte_align_mask;
+				break;
+			case 6: /* common (combineable) */
+				segref.flags |= SEGFLAG_PUBLIC | SEGFLAG_COMMON;
+				break;
+		};
+
+		if (attr & 2u) // B for big, as in the MSB of the size to allow exactly 64KB or 4GB in size
+			segref.size = (fmt32 ? 0x100000000ULL/*4GB*/ : 0x10000ULL/*64KB*/);
+		else
+			segref.size = 0;
+
+		if (attr & 1u) // USE32
+			segref.cpu_minor = CPUMINT_INTELX86_386; // 32-bit
+
+		// <segment length> <segment name index> <class name index> <overlay name index>
+		segref.size += (fmt32 ? OMF_read_dword(ri,re) : OMF_read_word(ri,re));
+		const uint16_t nameindex = OMF_read_index(ri,re);
+		const uint16_t classnameindex = OMF_read_index(ri,re);
+		const uint16_t overlaynameindex = OMF_read_index(ri,re);//ignored
+		(void)overlaynameindex;
+
+		if (!modex.LNAMES.exists(from1based(nameindex))) return false;
+		segref.name = modex.LNAMES.get(from1based(nameindex));
+
+		if (!modex.LNAMES.exists(from1based(classnameindex))) return false;
+		segref.classname = modex.LNAMES.get(from1based(classnameindex));
+
+		if (!modex.LNAMES.exists(from1based(overlaynameindex))) return false;
+		/* ignored */
+
+		return true;
+	}
+
+	bool OMF_add_GRPDEF(linkstate &module,OMF_extra_linkstate &modex,const OMF_record &rec) {
+		const uint8_t *ri = &rec.record[0];
+		const uint8_t *re = &rec.record[rec.record.size()];
+
+		// <name index> [ 0xFF <segment index> [ ... ] ]
+
+		const uint16_t nameindex = OMF_read_index(ri,re);
+		if (!modex.LNAMES.exists(from1based(nameindex))) return false;
+		const string_ref_t groupname = modex.LNAMES.get(from1based(nameindex));
+		size_t grpdefidx = modex.GRPDEF_names.allocate();
+		modex.GRPDEF_names.get(grpdefidx) = groupname;
+
+		while ((ri+2) <= re) {
+			if (*ri == 0xFF) {
+				ri++;
+				assert(ri <= re);
+				const uint16_t segindex = OMF_read_index(ri,re);
+				if (!module.segments.exists(from1based(segindex))) return false;
+				segment_t &sref = module.segments.get(from1based(segindex));
+				if (sref.groupname == string_ref_undef) sref.groupname = groupname;
+				else return false; // a segment cannot be part of multiple groups in one module!
+			}
+			else {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	bool OMF_add_LEDATA(linkstate &module,OMF_extra_linkstate &modex,const OMF_record &rec) {
+		const uint8_t *ri = &rec.record[0];
+		const uint8_t *re = &rec.record[rec.record.size()];
+
+		const bool fmt32 = (rec.type == OMFRECT_LEDATA_32);
+
+		(void)modex;
+
+		// <segment index> <data offset> <data>
+
+		const uint16_t segindex = OMF_read_index(ri,re);
+		if (!module.segments.exists(from1based(segindex))) return false;
+		segment_t &segref = module.segments.get(from1based(segindex));
+
+		const uint32_t dataoffset = (fmt32 ? OMF_read_dword(ri,re) : OMF_read_word(ri,re));
+
+		if (ri < re) {
+			const size_t datalen = (size_t)(re - ri);
+
+			// This code assumes that LEDATA is built completely in sequence, which most tools do.
+			// We do not support out of order LEDATA entries. Maybe someday if we have to support
+			// that kind of thing, we can change this later.
+			if ((uint32_t)segref.data.size() != dataoffset)
+				return false; // we only support append!
+
+			const size_t putat = segref.data.size();
+
+			// Are we about to append data beyond the reported size of the segment? That is an error too.
+			if (segref.size != segment_size_undef && segment_size_t(putat+datalen) > segref.size)
+				return false;
+
+			segref.data.resize(segref.data.size() + datalen);
+			assert((putat+datalen) <= segref.data.size());
+			assert((ri+datalen) <= re);
+			memcpy(&segref.data[putat],ri,datalen);
+			ri += datalen;
+		}
+
+		return true;
+	}
+
+	bool OMF_add_EXTDEF(linkstate &module,OMF_extra_linkstate &modex,const OMF_record &rec) {
+		const uint8_t *ri = &rec.record[0];
+		const uint8_t *re = &rec.record[rec.record.size()];
+
+		const bool local = (rec.type == OMFRECT_LEXTDEF);
+
+		(void)modex;
+
+		while (ri < re) {
+			/* <external name string> <type index> */
+			const string_ref_t nameref = OMF_read_lenstring(module.strings,ri,re);
+			if (nameref == string_ref_undef) return false;
+
+			const uint16_t type_index = OMF_read_index(ri,re);
+			(void)type_index;//ignored
+
+			const symbol_ref_t symref = module.symbols.add(nameref);
+			symbol_t &sym = module.symbols.get(symref);
+			sym.type = local ? SYMTYPE_LOCAL_EXTERN : SYMTYPE_EXTERN;
+		}
+
+		return true;
+	}
+
+	bool OMF_add_PUBDEF(linkstate &module,OMF_extra_linkstate &modex,const OMF_record &rec) {
+		const uint8_t *ri = &rec.record[0];
+		const uint8_t *re = &rec.record[rec.record.size()];
+
+		const bool fmt32 = (rec.type == OMFRECT_PUBDEF_32 || rec.type == OMFRECT_LPUBDEF_32);
+		const bool local = (rec.type == OMFRECT_LPUBDEF || rec.type == OMFRECT_LPUBDEF_32);
+
+		/* <base group index> <base segment index> [ base frame ] < entry [ entry ... ] >
+		 *
+		 * We do not support the case where base frame field exists.
+		 *
+		 * entry = <OMF string public name> <public offset> <type index>
+		 *
+		 * group index can be zero */
+		const uint16_t basegroupindex = OMF_read_index(ri,re);
+		const uint16_t basesegindex = OMF_read_index(ri,re);
+
+		/* we do not support the base frame case */
+		if (basesegindex == 0) return false;
+
+		while (ri < re) {
+			const string_ref_t nameref = OMF_read_lenstring(module.strings,ri,re);
+			if (ri >= re) break;
+
+			const uint32_t public_offset = (fmt32 ? OMF_read_dword(ri,re) : OMF_read_word(ri,re));
+			const uint16_t type_index = OMF_read_index(ri,re);
+			(void)type_index;//ignored
+
+			const symbol_ref_t symref = module.symbols.add(nameref);
+			symbol_t &sym = module.symbols.get(symref);
+			sym.type = local ? SYMTYPE_LOCAL_PUBLIC : SYMTYPE_PUBLIC;
+			sym.offset = segment_offset_t(public_offset);
+
+			if (basegroupindex != 0) {
+				if (modex.GRPDEF_names.exists(from1based(basegroupindex)))
+					sym.group = modex.GRPDEF_names.get(from1based(basegroupindex));
+				else
+					return false;
+			}
+
+			if (!modex.LNAMES.exists(from1based(basesegindex))) return false;
+			sym.segref = from1based(basesegindex);
+		}
+
+		return true;
+	}
+
+	bool OMF_read_module(linkstate &module,OMF_XADR &adr,const OMF_record &first_rec,const OMF_record &current_rec,const char *path,FILE *fp,uint16_t blocksize=0,uint32_t dict_offset=0) {
+		/* already read the THEADR/LHEADR */
+		const source_ref_t source_ref = module.sources.allocate();
+		source_t &source = module.sources.get(source_ref);
+		source.is_library = (first_rec.type == OMFRECT_LIBHEAD || first_rec.type == OMFRECT_LHEADR);
+		source.name = module.strings.add(adr.name);
+		source.path = module.strings.add(path);
+		source.offset = current_rec.file_offset;
+		source.index = source_ref;
+
+		OMF_extra_linkstate modex;
+		OMF_record rec;
+
+		while (OMF_read_record(rec,fp,blocksize,dict_offset)) {
+			if (rec.type == OMFRECT_SEGDEF || rec.type == OMFRECT_SEGDEF_32) {
+				if (!OMF_add_SEGDEF(module,modex,rec))
+					return false;
+			}
+			else if (rec.type == OMFRECT_GRPDEF) {
+				if (!OMF_add_GRPDEF(module,modex,rec))
+					return false;
+			}
+			else if (rec.type == OMFRECT_LNAMES) {
+				if (!OMF_add_LNAMES(module,modex,rec))
+					return false;
+			}
+			else if (rec.type == OMFRECT_LEDATA || rec.type == OMFRECT_LEDATA_32) {
+				if (!OMF_add_LEDATA(module,modex,rec))
+					return false;
+			}
+			else if (rec.type == OMFRECT_EXTDEF || rec.type == OMFRECT_LEXTDEF) {
+				if (!OMF_add_EXTDEF(module,modex,rec))
+					return false;
+			}
+			else if (rec.type == OMFRECT_PUBDEF || rec.type == OMFRECT_PUBDEF_32 || rec.type == OMFRECT_LPUBDEF || rec.type == OMFRECT_LPUBDEF_32) {
+				if (!OMF_add_PUBDEF(module,modex,rec))
+					return false;
+			}
+			// TODO: OMFRECT_LIDATA / OMFRECT_LIDATA_32 (iterated data), which is not often used except by Microsoft tools like Microsoft MASM.
+			else if (rec.type == OMFRECT_MODEND || rec.type == OMFRECT_MODEND_32) {
+				break;
+			}
+			else if (rec.type == OMFRECT_LIBEND) {
+				break;
+			}
+		}
+
+		for (size_t i=0;i < module.segments.ref.size();i++) module.segment_order.push_back(segment_ref_t(i));
+
+		module.symbols.sortbyname(module.strings);
+
+		return true;
+	}
+
+	bool OMF_read(std::vector<linkstate> &modules,const char *path/*TODO READER OBJECT*/) {
+		OMF_LIBHEAD libhead;
+		OMF_record rec;
+		FILE *fp;
+
+		if ((fp=fopen(path,"rb")) == NULL)
+			return false;
+
+		/* the first record must be THEADR (single object) or LHEADR (library) */
+		if (!OMF_read_record(rec,fp)) {
+			fclose(fp);
+			return false;
+		}
+
+		if (rec.type == OMFRECT_LIBHEAD || rec.type == OMFRECT_LHEADR) {
+			OMF_record headrec = rec;
+
+			if (rec.type == OMFRECT_LIBHEAD)
+				libhead.parse(rec);
+
+			while (OMF_read_record(rec,fp,libhead.record_length,libhead.dict_offset)) {
+				if (rec.type == OMFRECT_LHEADR || rec.type == OMFRECT_THEADR) {
+					OMF_XADR adr;
+					adr.parse(rec);
+
+					modules.push_back(std::move(linkstate()));
+					linkstate &module = modules.back();
+					if (!OMF_read_module(module,adr,headrec,rec,path,fp,libhead.record_length,libhead.dict_offset)) {
+						fclose(fp);
+						return false;
+					}
+				}
+				else if (rec.type == OMFRECT_LIBEND) {
+					break;
+				}
+			}
+		}
+		else if (rec.type == OMFRECT_THEADR) {
+			OMF_XADR adr;
+			adr.parse(rec);
+
+			modules.push_back(std::move(linkstate()));
+			linkstate &module = modules.back();
+			if (!OMF_read_module(module,adr,rec,rec,path,fp)) {
+				fclose(fp);
+				return false;
+			}
+		}
+		else {
+			fclose(fp);
+			return false;
+		}
+
+		fclose(fp);
+		return true;
+	}
+
+}
 #endif
 
 void DISP2_Init(uint8_t color), DISP2_Shut();
@@ -7847,6 +8540,82 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
     bool saved_opt_test;
 
 #ifdef LNKDEV
+	{
+		std::vector<linker::linkstate> modules;
+		// test cases, the hw/cpu/dos86l directory of my DOSLIB development Git repository after a build
+		if (!linker::OMF_read(modules,"cpu.lib"))
+			fprintf(stderr,"Fail cpu.lib\n");
+		if (!linker::OMF_read(modules,"sseoff.obj"))
+			fprintf(stderr,"Fail sseoff.obj\n");
+
+		for (auto mi=modules.begin();mi!=modules.end();mi++) {
+			fprintf(stderr,"Module %zu\n",(size_t)(mi-modules.begin()));
+			auto &module = *mi;
+			for (auto si=module.sources.ref.begin();si!=module.sources.ref.end();si++) {
+				auto &source = *si;
+				fprintf(stderr,"  Source LIB=%u name='%s' path='%s' index=%lu offset=%lu\n",
+					source.is_library?1:0,
+					module.strings.get(source.name).c_str(),
+					module.strings.get(source.path).c_str(),
+					(unsigned long)source.index,
+					(unsigned long)source.offset);
+			}
+			for (auto si=module.segments.ref.begin();si!=module.segments.ref.end();si++) {
+				auto &segm = *si; // "segment" might still be reserved by your compiler... maybe?
+				fprintf(stderr,"  Segment name='%s' class='%s' group='%s' size=0x%lx align=%lu flags=0x%0lx USE%d\n",
+					module.strings.get(segm.name).c_str(),
+					module.strings.get(segm.classname).c_str(),
+					module.strings.get(segm.groupname).c_str(),
+					(unsigned long)segm.size,
+					(unsigned long)linker::align_mask_to_value(segm.alignmask),
+					(unsigned long)segm.flags,
+					(segm.cpu_major == linker::CPUMAJT_INTELX86 && segm.cpu_minor == linker::CPUMINT_INTELX86_386)?32:16);
+				if (!segm.data.empty()) {
+					size_t o=0;
+
+					fprintf(stderr,"    Data:\n");
+					while (o < segm.data.size()) {
+						if ((o&15u) == 0) fprintf(stderr,"0x%08lx:",(unsigned long)o);
+						fprintf(stderr," %02x",segm.data[o]);
+						if ((o&15u) == 15u) fprintf(stderr,"\n");
+						o++;
+					}
+					if ((o&15u) != 0u) fprintf(stderr,"\n");
+				}
+			}
+			fprintf(stderr,"  Segment order:");
+			for (auto si=module.segment_order.begin();si!=module.segment_order.end();si++) {
+				auto &segm = module.segments.get(*si);
+				fprintf(stderr," (%lu)('%s')",(unsigned long)(*si),module.strings.get(segm.name).c_str());
+			}
+			fprintf(stderr,"\n");
+			fprintf(stderr,"  Symbols:\n");
+			for (size_t si=0;si < module.symbols.ref2t.size();si++) {
+				const auto &sym = module.symbols.get(linker::symbol_ref_t(si));
+				fprintf(stderr,"    '%s' ",module.strings.get(sym.name).c_str());
+				switch (sym.type) {
+					case linker::SYMTYPE_DELETED: fprintf(stderr,"(DELETED) "); break;
+					case linker::SYMTYPE_EXTERN: fprintf(stderr,"(extern) "); break;
+					case linker::SYMTYPE_PUBLIC: fprintf(stderr,"(public) "); break;
+					case linker::SYMTYPE_LOCAL_EXTERN: fprintf(stderr,"(localextern) "); break;
+					case linker::SYMTYPE_LOCAL_PUBLIC: fprintf(stderr,"(localpublic) "); break;
+					default: fprintf(stderr,"(%lu""??"") ",(unsigned long)sym.type); break;
+				}
+				if (sym.group != linker::segment_ref_undef) {
+					fprintf(stderr,"group=('%s') ",module.strings.get(sym.group).c_str());
+				}
+				if (sym.segref != linker::segment_ref_undef) {
+					auto &segref = module.segments.get(sym.segref);
+					fprintf(stderr,"segment=('%s') ",module.strings.get(segref.name).c_str());
+				}
+				if (sym.offset != linker::segment_offset_undef) {
+					fprintf(stderr,"offset=0x%08lx ",(unsigned long)sym.offset);
+				}
+				fprintf(stderr,"\n");
+			}
+			fprintf(stderr,"\n");
+		}
+	}
 #endif
 
     control=&myconf;
