@@ -7619,7 +7619,7 @@ std::wstring win32_prompt_folder(const char *default_folder) {
 }
 #endif
 
-#define LNKDEV
+//#define LNKDEV
 
 #ifdef LNKDEV
 #include <unordered_map>
@@ -7638,11 +7638,13 @@ namespace linker {
 	typedef unsigned int			cpu_minor_type_t;		// CPU type (minor within category)
 	typedef unsigned int			cpu_flags_t;			// CPU flags, meaning depends on CPU type
 	typedef size_t				segment_ref_t;			// segment ref
+	typedef size_t				group_ref_t;			// group ref
 	typedef size_t				string_ref_t;			// string index reference
 	typedef uint8_t				fixup_method_t;			// fixup method
 	typedef uint8_t				fixup_how_t;			// fixup how
 	typedef uint8_t				symbol_type_t;			// symbol type
 	typedef size_t				symbol_ref_t;			// symbol reference
+	typedef size_t				fixup_method_index_t;		// index behind fixup method
 
 	static constexpr segment_size_t		segment_size_undef = ~((uint64_t)(0ull));
 	static constexpr segment_offset_t	segment_offset_undef = ~((uint64_t)(0ull));
@@ -7650,6 +7652,7 @@ namespace linker {
 	static constexpr file_offset_t		file_offset_undef = ~((uint64_t)(0ull));
 	static constexpr linear_addr_t		linear_addr_undef = ~((uint64_t)(0ull));
 	static constexpr source_ref_t		source_ref_undef = ~((size_t)(0ul));
+	static constexpr group_ref_t		group_ref_undef = ~((size_t)(0ul));
 	static constexpr cpu_major_type_t	cpu_major_undef = ~((unsigned int)(0u));
 	static constexpr cpu_minor_type_t	cpu_minor_undef = ~((unsigned int)(0u));
 	static constexpr segment_ref_t		segment_ref_undef = ~((size_t)(0ul));
@@ -7658,6 +7661,7 @@ namespace linker {
 	static constexpr fixup_how_t		fixup_how_undef = ~((uint8_t)(0u));
 	static constexpr symbol_type_t		symbol_type_undef = ~((uint8_t)(0u));
 	static constexpr symbol_ref_t		symbol_ref_undef = ~((size_t)(0ul));
+	static constexpr fixup_method_index_t	fixup_method_index_undef = ~((size_t)(0ul));
 
 	static constexpr alignmask_t		byte_align_mask = ~((alignmask_t)(0ull));
 	static constexpr alignmask_t		word_align_mask = ~((alignmask_t)(1ull));
@@ -7696,7 +7700,6 @@ namespace linker {
 	static constexpr fixup_method_t		FIXUPMETH_SEGMENT = 0; // fixup refers to segment base
 	static constexpr fixup_method_t		FIXUPMETH_GROUP = 1; // fixup refers to segment group base
 	static constexpr fixup_method_t		FIXUPMETH_EXTERN = 2; // fixup refers to external symbol
-	static constexpr fixup_method_t		FIXUPMETH_TARGET = 5; // fixup refers to target
 
 	// fixup how
 	static constexpr fixup_how_t		FIXUPHOW_OFFSET16 = 1; // 16-bit offset
@@ -7747,7 +7750,7 @@ namespace linker {
 	struct symbol_t {
 		symbol_type_t				type = symbol_type_undef; // type of symbol
 		string_ref_t				name = string_ref_undef; // name of symbol
-		string_ref_t				group = string_ref_undef; // group of symbol (OMF)
+		group_ref_t				group = group_ref_undef; // group of symbol (OMF)
 		segment_ref_t				segref = segment_ref_undef; // segment symbol belongs to (undefined if extern)
 		segment_offset_t			offset = segment_offset_undef; // offset within fragment
 	};
@@ -7806,12 +7809,14 @@ namespace linker {
 	}
 
 	struct fixup_t {
+		/* NTS: the index, according to method, can be a segment reference, group reference, or EXTERN reference */
 		/* frame method and seg/group/extern name to which address computation is performed (OMF spec) */
 		fixup_method_t				frame_method = fixup_method_undef;
-		string_ref_t				frame_name = string_ref_undef;
+		fixup_method_index_t			frame_index = fixup_method_index_undef;
 		/* target method and seg/group/extern name to which the fixup refers to (OMF spec) */
 		fixup_method_t				target_method = fixup_method_undef;
-		string_ref_t				target_name = string_ref_undef;
+		fixup_method_index_t			target_index = fixup_method_index_undef;
+		segment_offset_t			target_offset = segment_offset_undef;
 		/* how to apply the fixup and where */
 		fixup_how_t				fixup_how = fixup_how_undef;
 		segment_offset_t			fixup_offset = segment_offset_undef;
@@ -7962,13 +7967,89 @@ namespace linker {
 
 	typedef struct std::vector<segment_ref_t> segment_order_list_t;
 
+	static const unsigned int		SRCFMT_UNSPEC = 0;
+	static const unsigned int		SRCFMT_OMF = 1; // relocatable object module format
+
+	struct moduleinfo_t {
+		unsigned int			source_format = SRCFMT_UNSPEC;
+		fixup_t				entry_point;
+		bool				is_main = false;
+		bool				has_entry = false;
+		bool				optimized = false;
+		bool				dosseg = false; // DOSSEG switch
+		int16_t				intel_cpulevel = -1;
+		int32_t				m68k_cpulevel = -1;
+		int				memory_model = -1;
+		std::vector<string_ref_t>	default_library_search;
+	};
+
+	struct group_t {
+		string_ref_t			name = string_ref_undef;
+		std::vector<segment_ref_t>	segment_members;
+	};
+
+	typedef _common_ref2table_t<group_t,group_ref_t> group_table_t;
+
+	const char *fixup_how_to_string(const fixup_how_t h) {
+		switch (h) {
+			case FIXUPHOW_OFFSET16: return "offset16";
+			case FIXUPHOW_SEGMENTBASE16: return "segbase16";
+			case FIXUPHOW_SEGMENTOFFSET16: return "segoffset16";
+			case FIXUPHOW_OFFSET32: return "offset32";
+			case FIXUPHOW_SEGMENTOFFSET32: return "segoffset32";
+			default: break;
+		};
+
+		return "?";
+	}
+
 	struct linkstate {
 		source_table_t			sources;
 		stringtable_t			strings;
 		segment_table_t			segments;
 		symbol_table_t			symbols;
 		segment_order_list_t		segment_order;
+		moduleinfo_t			moduleinfo;
+		group_table_t			groups;
+
+		std::string			fixup_to_string(const fixup_method_t m,const fixup_method_index_t i);
 	};
+
+	std::string linkstate::fixup_to_string(const fixup_method_t m,const fixup_method_index_t i) {
+		std::string r;
+		char tmp[64];
+
+		switch (m) {
+			case FIXUPMETH_SEGMENT:
+				r += "segment ";
+				if (segments.exists(segment_ref_t(from1based(i)))) {
+					const auto &ref = segments.get(segment_ref_t(from1based(i)));
+					r += std::string("'")+strings.get(ref.name)+"'";
+				}
+				break;
+			case FIXUPMETH_GROUP:
+				r += "group ";
+				if (groups.exists(group_ref_t(from1based(i)))) {
+					const auto &ref = groups.get(group_ref_t(from1based(i)));
+					r += std::string("'")+strings.get(ref.name)+"'";
+				}
+				break;
+			case FIXUPMETH_EXTERN:
+				r += "extern ";
+				if (symbols.exists(symbol_ref_t(from1based(i)))) {
+					const auto &ref = symbols.get(symbol_ref_t(from1based(i)));
+					r += std::string("'")+strings.get(ref.name)+"'";
+				}
+				break;
+			default:
+				r += "??? ";
+				sprintf(tmp,"%lu",(unsigned long)i);
+				r += i;
+				break;
+		};
+
+		return r;
+	}
 
 	typedef uint8_t				omf_record_type_t;
 
@@ -8015,6 +8096,19 @@ namespace linker {
 	static constexpr omf_record_type_t	OMFRECT_LIBHEAD    = 0xF0;
 	static constexpr omf_record_type_t	OMFRECT_LIBEND     = 0xF1;
 
+	static constexpr uint8_t		OMFCOMENT_MEMORYMODEL_OW_C = 0x9B; // memory model (Open Watcom C)
+	static constexpr uint8_t		OMFCOMENT_MEMORYMODEL_MS_C = 0x9D; // memory model (Microsoft C)
+	static constexpr uint8_t		OMFCOMENT_DOSSEG = 0x9E; // DOSSEG switch
+	static constexpr uint8_t		OMFCOMENT_DEFAULT_LIBRARY_SEARCH_NAME = 0x9F;
+
+	static constexpr uint8_t		MEMMODEL_TINY      = uint8_t('t');
+	static constexpr uint8_t		MEMMODEL_SMALL     = uint8_t('s');
+	static constexpr uint8_t		MEMMODEL_MEDIUM    = uint8_t('m');
+	static constexpr uint8_t		MEMMODEL_COMPACT   = uint8_t('c');
+	static constexpr uint8_t		MEMMODEL_LARGE     = uint8_t('l');
+	static constexpr uint8_t		MEMMODEL_HUGE      = uint8_t('h');
+	static constexpr uint8_t		MEMMODEL_FLAT      = uint8_t('f');
+
 	struct OMF_record {
 		std::vector<uint8_t>		record;
 		omf_record_type_t		type = omf_record_type_undef;
@@ -8040,11 +8134,13 @@ namespace linker {
 
 	typedef _common_ref2table_t<string_ref_t,string_ref_t> OMF_LNAMES_table_t;
 
-	typedef _common_ref2table_t<string_ref_t,size_t> OMF_GRPDEF_names_t;
+	typedef _common_ref2table_t<symbol_ref_t,size_t> OMF_EXTDEF_table_t;
 
 	struct OMF_extra_linkstate {
 		OMF_LNAMES_table_t		LNAMES; /* map LNAME index to string ref */
-		OMF_GRPDEF_names_t		GRPDEF_names; /* only the names */
+		OMF_EXTDEF_table_t		EXTDEF; /* map EXTDEF to symbol ref */
+		segment_ref_t			last_LEDATA_segment = segment_ref_undef; /* last LEDATA segment */
+		segment_offset_t		last_LEDATA_offset = segment_offset_undef; /* last LEDATA offset */
 	};
 
 	void OMF_XADR::parse(const OMF_record &r) {
@@ -8279,21 +8375,25 @@ namespace linker {
 		const uint8_t *ri = &rec.record[0];
 		const uint8_t *re = &rec.record[rec.record.size()];
 
+		(void)modex;
+
 		// <name index> [ 0xFF <segment index> [ ... ] ]
 
 		const uint16_t nameindex = OMF_read_index(ri,re);
 		if (!modex.LNAMES.exists(from1based(nameindex))) return false;
 		const string_ref_t groupname = modex.LNAMES.get(from1based(nameindex));
-		size_t grpdefidx = modex.GRPDEF_names.allocate();
-		modex.GRPDEF_names.get(grpdefidx) = groupname;
+		const group_ref_t grpdefidx = module.groups.allocate();
+		auto &groupref = module.groups.get(grpdefidx);
+		groupref.name = groupname;
 
 		while ((ri+2) <= re) {
 			if (*ri == 0xFF) {
 				ri++;
 				assert(ri <= re);
 				const uint16_t segindex = OMF_read_index(ri,re);
-				if (!module.segments.exists(from1based(segindex))) return false;
-				segment_t &sref = module.segments.get(from1based(segindex));
+				if (!module.segments.exists(segment_ref_t(from1based(segindex)))) return false;
+				groupref.segment_members.push_back(segment_ref_t(from1based(segindex)));
+				segment_t &sref = module.segments.get(segment_ref_t(from1based(segindex)));
 				if (sref.groupname == string_ref_undef) sref.groupname = groupname;
 				else return false; // a segment cannot be part of multiple groups in one module!
 			}
@@ -8311,8 +8411,6 @@ namespace linker {
 
 		const bool fmt32 = (rec.type == OMFRECT_LEDATA_32);
 
-		(void)modex;
-
 		// <segment index> <data offset> <data>
 
 		const uint16_t segindex = OMF_read_index(ri,re);
@@ -8320,6 +8418,10 @@ namespace linker {
 		segment_t &segref = module.segments.get(from1based(segindex));
 
 		const uint32_t dataoffset = (fmt32 ? OMF_read_dword(ri,re) : OMF_read_word(ri,re));
+
+		/* keep track of this segment index as last tracked segment, some FIXUPPs rely on it */
+		modex.last_LEDATA_segment = from1based(segindex);
+		modex.last_LEDATA_offset = dataoffset;
 
 		if (ri < re) {
 			const size_t datalen = (size_t)(re - ri);
@@ -8352,8 +8454,6 @@ namespace linker {
 
 		const bool local = (rec.type == OMFRECT_LEXTDEF);
 
-		(void)modex;
-
 		while (ri < re) {
 			/* <external name string> <type index> */
 			const string_ref_t nameref = OMF_read_lenstring(module.strings,ri,re);
@@ -8365,6 +8465,11 @@ namespace linker {
 			const symbol_ref_t symref = module.symbols.add(nameref);
 			symbol_t &sym = module.symbols.get(symref);
 			sym.type = local ? SYMTYPE_LOCAL_EXTERN : SYMTYPE_EXTERN;
+
+			/* build EXTDEF table according to OMF spec because FIXUPP records, if they refer to an EXTERN,
+			 * do so by a 1-based index into that table. Here, the table is built so that an EXTDEF index
+			 * can be quickly mapped to a symbol_ref_t. */
+			modex.EXTDEF.ref.push_back(symref);
 		}
 
 		return true;
@@ -8404,14 +8509,264 @@ namespace linker {
 			sym.offset = segment_offset_t(public_offset);
 
 			if (basegroupindex != 0) {
-				if (modex.GRPDEF_names.exists(from1based(basegroupindex)))
-					sym.group = modex.GRPDEF_names.get(from1based(basegroupindex));
+				if (module.groups.exists(group_ref_t(from1based(basegroupindex))))
+					sym.group = group_ref_t(from1based(basegroupindex));
 				else
 					return false;
 			}
 
 			if (!modex.LNAMES.exists(from1based(basesegindex))) return false;
 			sym.segref = from1based(basesegindex);
+		}
+
+		return true;
+	}
+
+	bool OMF_add_MODEND(linkstate &module,OMF_extra_linkstate &modex,const OMF_record &rec) {
+		const uint8_t *ri = &rec.record[0];
+		const uint8_t *re = &rec.record[rec.record.size()];
+
+		const bool fmt32 = (rec.type == OMFRECT_MODEND_32);
+
+		(void)modex;
+
+		/* <module type> [ ... ] */
+
+		const uint8_t module_type = OMF_read_byte(ri,re);
+		module.moduleinfo.is_main = (module_type & 0x80) != 0;
+		module.moduleinfo.has_entry = (module_type & 0x40) != 0;
+
+		if (module.moduleinfo.has_entry) {
+			/* <end data byte> <frame index> <target index> <target offset> */
+			const uint8_t end_data = OMF_read_byte(ri,re);
+
+			/* the end data byte has the same format as the Fix Data bit layout */
+			if (end_data & 0x80) return false; /* F=0 or bust (FRAME method explicitly specified) */
+			if (end_data & 0x04) return false; /* T=0 or bust (TARGET method explicitly specified) */
+
+			switch ((end_data >> 4u) & 7u) {
+				case 0:	module.moduleinfo.entry_point.frame_method = FIXUPMETH_SEGMENT; break;
+				case 1: module.moduleinfo.entry_point.frame_method = FIXUPMETH_GROUP; break; /* NTS: Only used for 32-bit 'FLAT' group */
+				default: return false; /* no other is supported */
+			};
+
+			switch (end_data & 3u) {
+				case 0:	module.moduleinfo.entry_point.target_method = FIXUPMETH_SEGMENT; break;
+				default: return false; /* no other is supported */
+			};
+
+			const uint16_t frame_index = OMF_read_index(ri,re);
+			const uint16_t target_index = OMF_read_index(ri,re);
+			const uint32_t offset = (fmt32 ? OMF_read_dword(ri,re) : OMF_read_word(ri,re));
+
+			// Reference by group is only allowed if it refers to 'FLAT' which is used for 32-bit flat memory models
+			if (module.moduleinfo.entry_point.frame_method == FIXUPMETH_GROUP) {
+				if (!module.groups.exists(from1based(frame_index)))
+					return false;
+
+				const auto &grp = module.groups.get(from1based(frame_index));
+				if (module.strings.get(grp.name) != "FLAT")
+					return false;
+			}
+
+			// fixup how is not used for entry point
+			module.moduleinfo.entry_point.frame_index = frame_index;
+			module.moduleinfo.entry_point.target_index = target_index;
+			module.moduleinfo.entry_point.fixup_offset = segment_offset_t(offset);
+		}
+
+		return true;
+	}
+
+	bool OMF_add_FIXUPP(linkstate &module,OMF_extra_linkstate &modex,const OMF_record &rec) {
+		const uint8_t *ri = &rec.record[0];
+		const uint8_t *re = &rec.record[rec.record.size()];
+
+		const bool fmt32 = (rec.type == OMFRECT_FIXUPP_32);
+
+		/* fixups apply to the segment index of the last LEDATA */
+		if (modex.last_LEDATA_segment == segment_ref_undef) return false;
+		if (!module.segments.exists(modex.last_LEDATA_segment)) return false;
+		auto &segref = module.segments.get(modex.last_LEDATA_segment);
+
+		/* <subrecord> [ <subrecord> ... ] */
+		/* NTS: We only support FIXUP types, not THREAD, at this time */
+		while (ri < re) {
+			fixup_t fixup;
+
+			/* FIXUP:
+			 *   <word>
+			 *   bit 15: 1 (FIXUP)
+			 *   bit 14: mode (1=segment-relative 0=self-relative)
+			 *   bits [13-10]: Location (how to fix up i.e. 16-bit offset)
+			 *   bits [9-0]: data record offset (relative to last LEDATA/LIDATA)
+			 *   <fix data> (conditionally present)
+			 *   bit 7: F (1=FRAME by thread  0=FRAME explicitly defined in this record)
+			 *   bits [6-4]: Frame method
+			 *   bit 3: T (1=TARGET by thread  0=TARGET explicitly defined in this record)
+			 *   bit 2: P (1=no target displacement  0=target displacement)
+			 *   bits [1-0]: Target method
+			 *   <frame index> (conditional)
+			 *   <target index> (conditional)
+			 *   <target displacement> (conditional) */
+			/* THREAD:
+			 *   <byte>
+			 *   bit 7: 0 (THREAD)
+			 *   bit 6: D 0=TARGET thread  1=FRAME thread
+			 *   bit 5: 0
+			 *   bits [4-2]: method
+			 *   bits [1-0]: thread number
+			 *   <index> (conditional) */
+			if (*ri & 0x80) {
+				// FIXUP
+				// 16-bit word is big endian
+				uint16_t h = OMF_read_byte(ri,re) << 8u;
+				h += OMF_read_byte(ri,re);
+				assert((h&0x8000u) != 0u);
+
+				fixup.segment_relative = (h & 0x4000u) != 0; // bit 14
+				fixup.fixup_offset = (h & 0x3FFu) + modex.last_LEDATA_offset; // bits 9-0 relative to last LEDATA
+				// TODO: If the last was LIDATA not LEDATA then fixup_offset points at a data field of the iterated data structure
+
+				switch ((h >> 10u) & 15u) { // bits 13-10
+					case 1: fixup.fixup_how = FIXUPHOW_OFFSET16; break;
+					case 2: fixup.fixup_how = FIXUPHOW_SEGMENTBASE16; break;
+					case 3: fixup.fixup_how = FIXUPHOW_SEGMENTOFFSET16; break;
+					case 5: fixup.fixup_how = FIXUPHOW_OFFSET16; break;
+					case 9: fixup.fixup_how = FIXUPHOW_OFFSET32; break;
+					case 11: fixup.fixup_how = FIXUPHOW_SEGMENTOFFSET32; break;
+					case 13: fixup.fixup_how = FIXUPHOW_OFFSET32; break;
+					default: return false;
+				};
+
+				const uint8_t fixdata = OMF_read_byte(ri,re);
+				if ((fixdata & 0x80u) != 0u) return false; // FRAME threads not supported
+				if ((fixdata & 0x08u) != 0u) return false; // TARGET threads not supported
+
+				if (((fixdata >> 4u) & 7u) <= 2u) /* F0, F1, or F2 have frame index */
+					fixup.frame_index = OMF_read_index(ri,re);
+
+				if (true) /* any conditions otherwise? */
+					fixup.target_index = OMF_read_index(ri,re);
+
+				switch (fixdata & 3u) {
+					case 0: fixup.target_method = FIXUPMETH_SEGMENT; break;
+					case 1: fixup.target_method = FIXUPMETH_GROUP; break;
+					case 2: fixup.target_method = FIXUPMETH_EXTERN; break;
+					default: return false;
+				};
+
+				switch ((fixdata >> 4u) & 7u) {
+					case 0: fixup.frame_method = FIXUPMETH_SEGMENT; break;
+					case 1: fixup.frame_method = FIXUPMETH_GROUP; break;
+					case 2: fixup.frame_method = FIXUPMETH_EXTERN; break;
+					case 4: fixup.frame_method = FIXUPMETH_SEGMENT; /* frame is segment reference to whatever the last LEDATA segment referred to */
+						fixup.frame_index = to1based(modex.last_LEDATA_segment);
+						break;
+					case 5: /* frame is the same as target */
+						fixup.frame_method = fixup.target_method;
+						fixup.frame_index = fixup.target_index;
+						break;
+					default: return false;
+				};
+
+				if ((fixdata & 4u) == 0u)
+					fixup.target_offset = (fmt32 ? OMF_read_dword(ri,re) : OMF_read_word(ri,re));
+
+				segref.fixups.push_back(std::move(fixup));
+			}
+			else {
+				// THREAD
+				return false; // NOT SUPPORTED
+			}
+		}
+
+		return true;
+	}
+
+	bool OMF_add_COMENT(linkstate &module,OMF_extra_linkstate &modex,const OMF_record &rec) {
+		const uint8_t *ri = &rec.record[0];
+		const uint8_t *re = &rec.record[rec.record.size()];
+
+		// not used yet
+		(void)modex;
+
+		/* <comment type> <comment class> <byte string> */
+		if ((ri+2u) > re) return true;
+
+		const uint8_t ctype = OMF_read_byte(ri,re);
+		/* bit 7: no purge
+		 * bit 6: no list */
+		const uint8_t cclass = OMF_read_byte(ri,re);
+
+		if (cclass == OMFCOMENT_DEFAULT_LIBRARY_SEARCH_NAME) {
+			if (ri < re)
+				module.moduleinfo.default_library_search.push_back(module.strings.add(std::string((const char*)(ri),(size_t)(re-ri))));
+		}
+		else if (cclass == OMFCOMENT_DOSSEG) {
+			module.moduleinfo.dosseg = true;
+		}
+		else if (cclass == OMFCOMENT_MEMORYMODEL_MS_C) {
+			module.moduleinfo.intel_cpulevel = -1;
+			module.moduleinfo.optimized = false;
+			module.moduleinfo.memory_model = -1;
+			module.moduleinfo.m68k_cpulevel = -1;
+			/* various ASCII characters indicating instruction set, memory model, optimization, and even Motorola 68000 CPU...
+			 * Wait... OMF was used for 68000 processors too?
+			 * This is generated by the Microsoft C compiler. */
+			while (ri < re) {
+				uint8_t cc = OMF_read_byte(ri,re);
+
+				switch (cc) {
+					// NTS: OMF spec lists only 8086 to 386. Microsoft's last 16-bit compiler in 1993-ish or so
+					//      was made late enough to possibly support the 486 and might have supported the Pentium
+					//      if made any later than that, so we recognize '4' here as well.
+					case '0': module.moduleinfo.intel_cpulevel = 0; break; // 8086
+					case '1': module.moduleinfo.intel_cpulevel = 1; break; // 80186
+					case '2': module.moduleinfo.intel_cpulevel = 2; break; // 80286
+					case '3': module.moduleinfo.intel_cpulevel = 3; break; // 80386
+					case '4': module.moduleinfo.intel_cpulevel = 4; break; // 80486
+					case 'O': module.moduleinfo.optimized = true; break;
+					case 't': module.moduleinfo.memory_model = MEMMODEL_TINY; break; // not listed, assumed
+					case 's': module.moduleinfo.memory_model = MEMMODEL_SMALL; break;
+					case 'm': module.moduleinfo.memory_model = MEMMODEL_MEDIUM; break;
+					case 'c': module.moduleinfo.memory_model = MEMMODEL_COMPACT; break;
+					case 'l': module.moduleinfo.memory_model = MEMMODEL_LARGE; break;
+					case 'h': module.moduleinfo.memory_model = MEMMODEL_HUGE; break;
+					case 'f': module.moduleinfo.memory_model = MEMMODEL_FLAT; break; // not listed, assumed
+					// Apparently there was a version of Microsoft C that used OMF for the 68000 processors too
+					case 'A': module.moduleinfo.m68k_cpulevel = 68000; break;
+					case 'B': module.moduleinfo.m68k_cpulevel = 68010; break;
+					case 'C': module.moduleinfo.m68k_cpulevel = 68020; break;
+					case 'D': module.moduleinfo.m68k_cpulevel = 68030; break;
+				};
+			}
+		}
+		else if (cclass == OMFCOMENT_MEMORYMODEL_OW_C) {
+			module.moduleinfo.intel_cpulevel = -1;
+			module.moduleinfo.optimized = false;
+			module.moduleinfo.memory_model = -1;
+			while (ri < re) {
+				uint8_t cc = OMF_read_byte(ri,re);
+
+				switch (cc) {
+					case '0': module.moduleinfo.intel_cpulevel = 0; break; // 8086
+					case '1': module.moduleinfo.intel_cpulevel = 1; break; // 80186
+					case '2': module.moduleinfo.intel_cpulevel = 2; break; // 80286
+					case '3': module.moduleinfo.intel_cpulevel = 3; break; // 80386
+					case '4': module.moduleinfo.intel_cpulevel = 4; break; // 80486
+					case '5': module.moduleinfo.intel_cpulevel = 5; break; // 80586
+					case '6': module.moduleinfo.intel_cpulevel = 6; break; // 80686
+					case 'O': module.moduleinfo.optimized = true; break;
+					case 't': module.moduleinfo.memory_model = MEMMODEL_TINY; break; // not listed, assumed
+					case 's': module.moduleinfo.memory_model = MEMMODEL_SMALL; break;
+					case 'm': module.moduleinfo.memory_model = MEMMODEL_MEDIUM; break;
+					case 'c': module.moduleinfo.memory_model = MEMMODEL_COMPACT; break;
+					case 'l': module.moduleinfo.memory_model = MEMMODEL_LARGE; break;
+					case 'h': module.moduleinfo.memory_model = MEMMODEL_HUGE; break;
+					case 'f': module.moduleinfo.memory_model = MEMMODEL_FLAT; break; // not listed, assumed
+				};
+			}
 		}
 
 		return true;
@@ -8457,10 +8812,21 @@ namespace linker {
 			}
 			// TODO: OMFRECT_LIDATA / OMFRECT_LIDATA_32 (iterated data), which is not often used except by Microsoft tools like Microsoft MASM.
 			else if (rec.type == OMFRECT_MODEND || rec.type == OMFRECT_MODEND_32) {
+				if (!OMF_add_MODEND(module,modex,rec))
+					return false;
+
 				break;
+			}
+			else if (rec.type == OMFRECT_FIXUPP || rec.type == OMFRECT_FIXUPP_32) {
+				if (!OMF_add_FIXUPP(module,modex,rec))
+					return false;
 			}
 			else if (rec.type == OMFRECT_LIBEND) {
 				break;
+			}
+			else if (rec.type == OMFRECT_COMENT) {
+				if (!OMF_add_COMENT(module,modex,rec))
+					return false;
 			}
 		}
 
@@ -8498,6 +8864,7 @@ namespace linker {
 
 					modules.push_back(std::move(linkstate()));
 					linkstate &module = modules.back();
+					module.moduleinfo.source_format = SRCFMT_OMF;
 					if (!OMF_read_module(module,adr,headrec,rec,path,fp,libhead.record_length,libhead.dict_offset)) {
 						fclose(fp);
 						return false;
@@ -8514,6 +8881,7 @@ namespace linker {
 
 			modules.push_back(std::move(linkstate()));
 			linkstate &module = modules.back();
+			module.moduleinfo.source_format = SRCFMT_OMF;
 			if (!OMF_read_module(module,adr,rec,rec,path,fp)) {
 				fclose(fp);
 				return false;
@@ -8547,6 +8915,8 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 			fprintf(stderr,"Fail cpu.lib\n");
 		if (!linker::OMF_read(modules,"sseoff.obj"))
 			fprintf(stderr,"Fail sseoff.obj\n");
+		if (!linker::OMF_read(modules,"hello.obj"))
+			fprintf(stderr,"Fail hello.obj\n");
 
 		for (auto mi=modules.begin();mi!=modules.end();mi++) {
 			fprintf(stderr,"Module %zu\n",(size_t)(mi-modules.begin()));
@@ -8582,13 +8952,53 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 					}
 					if ((o&15u) != 0u) fprintf(stderr,"\n");
 				}
+				if (!segm.fixups.empty()) {
+					fprintf(stderr,"    Fixups:\n");
+					for (auto fi=segm.fixups.begin();fi!=segm.fixups.end();fi++) {
+						const auto &f = *fi;
+
+						fprintf(stderr,"      Entry:\n");
+
+						fprintf(stderr,"        Frame: index=%lu method=%u %s\n",
+							(unsigned long)f.frame_index,
+							f.frame_method,
+							module.fixup_to_string(f.frame_method,f.frame_index).c_str());
+
+						fprintf(stderr,"        Target: index=%lu method=%u",
+							(unsigned long)f.target_index,
+							f.target_method);
+						if (f.target_offset != linker::segment_offset_undef) {
+							fprintf(stderr," targetoffset=0x%08lx",
+								(unsigned long)f.target_offset);
+						}
+						fprintf(stderr," %s\n",
+							module.fixup_to_string(f.target_method,f.target_index).c_str());
+
+						fprintf(stderr,"        segmentrel=%u offset=0x%08lx how=%s\n",
+							f.segment_relative,
+							(unsigned long)f.fixup_offset,
+							linker::fixup_how_to_string(f.fixup_how));
+					}
+				}
 			}
 			fprintf(stderr,"  Segment order:");
 			for (auto si=module.segment_order.begin();si!=module.segment_order.end();si++) {
-				auto &segm = module.segments.get(*si);
+				const auto &segm = module.segments.get(*si);
 				fprintf(stderr," (%lu)('%s')",(unsigned long)(*si),module.strings.get(segm.name).c_str());
 			}
 			fprintf(stderr,"\n");
+			fprintf(stderr,"  Groups:\n");
+			for (size_t gi=0;gi < module.groups.ref.size();gi++) {
+				const auto &grp = module.groups.get(gi);
+				fprintf(stderr,"    name='%s' ",module.strings.get(grp.name).c_str());
+				fprintf(stderr,"segs='");
+				for (auto si=grp.segment_members.begin();si!=grp.segment_members.end();si++) {
+					const auto &srp = module.segments.get(*si);
+					fprintf(stderr,"%s ",module.strings.get(srp.name).c_str());
+				}
+				fprintf(stderr,"'");
+				fprintf(stderr,"\n");
+			}
 			fprintf(stderr,"  Symbols:\n");
 			for (size_t si=0;si < module.symbols.ref2t.size();si++) {
 				const auto &sym = module.symbols.get(linker::symbol_ref_t(si));
@@ -8602,16 +9012,42 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 					default: fprintf(stderr,"(%lu""??"") ",(unsigned long)sym.type); break;
 				}
 				if (sym.group != linker::segment_ref_undef) {
-					fprintf(stderr,"group=('%s') ",module.strings.get(sym.group).c_str());
+					const auto &grpref = module.groups.get(sym.group);
+					fprintf(stderr,"group=('%s') ",module.strings.get(grpref.name).c_str());
 				}
 				if (sym.segref != linker::segment_ref_undef) {
-					auto &segref = module.segments.get(sym.segref);
+					const auto &segref = module.segments.get(sym.segref);
 					fprintf(stderr,"segment=('%s') ",module.strings.get(segref.name).c_str());
 				}
 				if (sym.offset != linker::segment_offset_undef) {
 					fprintf(stderr,"offset=0x%08lx ",(unsigned long)sym.offset);
 				}
 				fprintf(stderr,"\n");
+			}
+			fprintf(stderr,"  Module end: main=%u entry=%u\n",module.moduleinfo.is_main,module.moduleinfo.has_entry);
+			if (module.moduleinfo.has_entry) {
+				// NTS: entry point does not use fixup how field and self relative field
+				const auto &f = module.moduleinfo.entry_point; // reduce typing
+				fprintf(stderr,"   Frame: index=%lu method=%u %s\n",
+					(unsigned long)f.frame_index,f.frame_method,module.fixup_to_string(f.frame_method,f.frame_index).c_str());
+				fprintf(stderr,"   Target: index=%lu method=%u %s\n",
+					(unsigned long)f.target_index,f.target_method,module.fixup_to_string(f.target_method,f.target_index).c_str());
+				fprintf(stderr,"   offset=0x%08lx\n",(unsigned long)f.fixup_offset);
+			}
+			if (module.moduleinfo.optimized)
+				fprintf(stderr,"  Is optimized\n");
+			if (module.moduleinfo.dosseg)
+				fprintf(stderr,"  Is DOSSEG\n");
+			if (module.moduleinfo.intel_cpulevel >= 0)
+				fprintf(stderr,"  Intel CPU level: %d\n",module.moduleinfo.intel_cpulevel);
+			if (module.moduleinfo.m68k_cpulevel >= 0)
+				fprintf(stderr,"  68000 CPU level: %d\n",module.moduleinfo.m68k_cpulevel);
+			if (module.moduleinfo.memory_model >= 0)
+				fprintf(stderr,"  Memory model: '%c'\n",module.moduleinfo.memory_model);
+			if (!module.moduleinfo.default_library_search.empty()) {
+				fprintf(stderr,"  Default library search:\n");
+				for (auto si=module.moduleinfo.default_library_search.begin();si!=module.moduleinfo.default_library_search.end();si++)
+					fprintf(stderr,"    '%s'\n",module.strings.get(*si).c_str());
 			}
 			fprintf(stderr,"\n");
 		}
