@@ -1,4 +1,24 @@
 Next
+  - Change default mixer rate to 48KHz instead of the
+    long standard 44.1KHz. Most modern sound cards on
+    modern OSes render at 48KHz anyway and resample
+    either in hardware or software and most configurations
+    render at 48KHz. Perhaps somewhat improved audio quality
+    could be had by rendering at what most sound cards are
+    doing these days anyway. As usual, audiophiles are free
+    to set the mixer rate to 96KHz if supported by their
+    sound card. (joncampbell123)
+  - Fix PIT 0 timer interrupt handling not to attempt
+    periodic event and error adjustment unless the game
+    is using periodic modes 2 or 3. This fixes PIT timing
+    bug and possible emulator hang when exiting games
+    like "Days of Thunder" that leave PIT 0 in mode 0 or
+    1 on exit for some reason. (joncampbell123)
+  - Fix Sound Blaster DMA rate limits to better reflect
+    actual hardware. SB16 limits to 45454Hz just as
+    Pro and earlier do. These limits were added before
+    the proper measurements were coded and tested on
+    real hardware. (joncampbell123)
   - Fix S3 cursor emulation to support both X11 and
     Windows hardware mouse cursor modes available
     on S3 Virge, Trio, and possibly other cards
