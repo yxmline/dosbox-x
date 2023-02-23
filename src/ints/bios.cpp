@@ -9930,12 +9930,12 @@ public:
          *
          *      I am fairly certain that there is nothing on Tandy systems to occupy A0000-AFFFFh. Unless of course you install EGA/VGA
          *      hardware in such a system. */
-        if (allow_more_than_640kb || machine == MCH_TANDY) {
-            if (machine == MCH_CGA || machine == MCH_TANDY)
-                ulimit = 736;       /* 640KB + 64KB + 32KB = 0x00000-0xB7FFF */
+        if (allow_more_than_640kb) {
+            if (machine == MCH_CGA)
+                ulimit = 736;       /* 640KB + 96KB = 0x00000-0xB7FFF */
             else if (machine == MCH_HERC || machine == MCH_MDA)
                 ulimit = 704;       /* 640KB + 64KB = 0x00000-0xAFFFF */
-            else if (machine == MCH_TANDY)
+	    else if (machine == MCH_TANDY)
                 ulimit = 768;       /* 640KB + 128KB = 0x00000-0xBFFFF */
 
             /* NTS: Yes, this means Tandy video memory at B8000 overlaps conventional memory, but the
@@ -9944,7 +9944,9 @@ public:
              *      to be a way to install only 704KB for example. */
 
             if (t_conv > ulimit) t_conv = ulimit;
-            if (t_conv > 640) { /* because the memory emulation has already set things up */
+            if (t_conv > 640 && machine != MCH_TANDY) {
+                /* because the memory emulation has already set things up
+                 * HOWEVER Tandy emulation has already properly mapped A0000-BFFFF so don't mess with it */
                 bool MEM_map_RAM_physmem(Bitu start,Bitu end);
                 MEM_map_RAM_physmem(0xA0000,(t_conv<<10)-1);
                 memset(GetMemBase()+(640<<10),0,(t_conv-640)<<10);
