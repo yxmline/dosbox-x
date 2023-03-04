@@ -1,4 +1,36 @@
 Next
+  - Dynamic core: Fix serious bug in dynrec dynamic core where calls
+    to handle x86 FPU instructions erronously passed the entire
+    FPU status word instead of passing only the FPU stack pointer.
+    The result of this error was that floating point was erratic,
+    buggy, and often caused memory corruption in DOSBox-X eventually
+    leading to a crash. It should now be possible to properly run
+    DOS games on dynrec based systems, including ARM-based M1 Macbooks,
+    that use the FPU. (joncampbell123)
+  - Debugger: When entering debugger interface, force dynamic core
+    to flush it's state so that the debugger can show the correct
+    state to the user when they use the "FPU" command to see it.
+     (joncampbell123).
+  - VGA emulation: Automatically ignore odd/even mode if "Chain 4"
+    mode is enabled in the sequencer (normally enabled only for
+    256-color mode). Some games accidentally set odd/even mode
+    in 256-color mode and yet apparently worked just fine on real
+    hardware. Without this change, such games will display distorted
+    graphics. It makes logical sense "Chain 4" would take priority
+    over odd/even mode. Note: If a game uses 256-color unchained mode
+    AND foolishly enables odd/even mode, then the resulting distorted
+    graphics are probably accurate to what would happen on real
+    hardware, but then programmers would have caught their mistake
+    and fixed it so that is very unlikely to occur. This helps to fix
+    "Seal: Magic Eye" although some remaining visual artifacts in the
+    game can only be resolved by setting machine=svga_et4000
+     (joncampbell123).
+  - Set usescancodes=true when non-US keyboards are detected
+     (Windows builds) (maron2000)
+  - For long double without using x86 FPU, the code still calls the
+    fstcw instruction and can enable FPU exceptions that crash the
+    emulator, therefore mask off all exception bits to stop that.
+    (joncampbell123)
   - Added code to mouse emulation to control how often the mouse
     reports events through the interrupt. Added dosbox.conf option
     to allow the user to force a report rate, which can be used to
