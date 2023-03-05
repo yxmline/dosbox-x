@@ -899,7 +899,23 @@ void RENDER_SetSize(Bitu width,Bitu height,Bitu bpp,float fps,double scrn_ratio)
      * in still image or video capture, they can. */
     if (video_debug_overlay) {
 	if (width < 320) width = 320;
-	height += 128;
+	height += 4;
+	if (machine == MCH_EGA) {
+		height += 8*3;
+	}
+	else if (machine == MCH_MDA || machine == MCH_HERC) {
+		/* add nothing, nothing to show at this time */
+	}
+	else if (machine == MCH_PC98) {
+		height += 8*6;
+	}
+	else if (machine == MCH_VGA) {
+		height += 8*7;
+	}
+	else {
+		height += 8*2;
+	}
+	height += 4;
     }
 
     if ( ratio > 1.0 ) {

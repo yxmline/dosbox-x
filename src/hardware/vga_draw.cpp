@@ -40,6 +40,7 @@
 #include "timer.h"
 #include "config.h"
 #include "control.h"
+#include "sdlmain.h"
 #include "shiftjis.h"
 #include "../ints/int10.h"
 #include "pc98_cg.h"
@@ -3322,6 +3323,11 @@ void VGA_DebugOverlay() {
         RENDER_DrawLine(VGA_debug_screen+(y*VGA_debug_screen_stride));
 }
 
+EGAMonitorMode egaMonitorMode(void);
+
+extern uint8_t CGAPal2[2];
+extern uint8_t CGAPal4[4];
+
 void VGA_sof_debug_video_info(void) {
 	unsigned int green,white;
 	char tmp[256];
@@ -3372,11 +3378,17 @@ void VGA_sof_debug_video_info(void) {
 
 		/* graphics */
 		if (pc98_gdc[GDC_SLAVE].display_enable) {
+			unsigned int rowsize = pc98_gdc[GDC_SLAVE].row_height;
+
+			/* NTS: Testing with real hardware shows 256-color mode ignores row height, or else the PC-98 port of "Alone in the Dark" would look wrong */
+			if (pc98_gdc_vramop & (1 << VOPBIT_VGA))
+				rowsize = 1;
+
 			/* FIXME: Pixels count is incorrect for PC-9821 DOS utility "Paint tool" by Login... but correct for 256-color PC-9821 version
 			 *        of Battle Skin Panic */
 			d += sprintf(d,"G%ux%u",
 				pc98_gdc[GDC_SLAVE].active_display_words_per_line * (gdc_5mhz_mode?8:16)/*character clocks to pixels*/,
-				pc98_gdc[GDC_SLAVE].active_display_lines / pc98_gdc[GDC_SLAVE].row_height);
+				pc98_gdc[GDC_SLAVE].active_display_lines / rowsize);
 
 			if (pc98_gdc_vramop & (1 << VOPBIT_VGA))
 				d += sprintf(d,"-256c");
@@ -3402,7 +3414,7 @@ void VGA_sof_debug_video_info(void) {
 		else if (machine == MCH_HERC)
 			pixperclock = 8;
 
-		sprintf(tmp,"T %ux%u/%ux%u",
+		sprintf(tmp,"T%ux%u>%ux%u",
 			(unsigned int)vga.draw.width / pixperclock,(unsigned int)vga.draw.height / (unsigned int)vga.draw.address_line_total,
 			(unsigned int)vga.draw.width,(unsigned int)vga.draw.height);
 	}
@@ -3419,11 +3431,492 @@ void VGA_sof_debug_video_info(void) {
 			else if (rowdiv == 2 && (vga.tandy.line_mask & 1)) rowdiv = 1;
 		}
 
-		sprintf(tmp,"G %ux%u/%ux%u",
+		sprintf(tmp,"G%ux%u>%ux%u",
 			(unsigned int)vga.draw.width,((unsigned int)vga.draw.height * interleave_mul) / rowdiv,
 			(unsigned int)vga.draw.width,(unsigned int)vga.draw.height);
 	}
-	x = VGA_debug_screen_puts8(x,y,tmp,white);
+	x = VGA_debug_screen_puts8(x,y,tmp,white) + 8;
+
+	if (vga.mode == M_PC98) {
+		char *d = tmp;
+
+		d += sprintf(d,"T@%04x+%03x/",
+			(unsigned int)pc98_gdc[GDC_MASTER].scan_address,
+			(unsigned int)pc98_gdc[GDC_MASTER].display_pitch);
+
+		if (pc98_gdc_vramop & (1 << VOPBIT_VGA)) {
+			d += sprintf(d,"G@0");
+		}
+		else {
+			/* TODO: Show stride, then both display partitions, including start address and number of lines.
+			 *       It might be helpful to the curious to see how vertical scrolling is actually done with
+			 *       most PC-98 games. Don't bother showing all 4 data partitions because you're supposed to
+			 *       only use the first 8 bytes for two and the latter 8 bytes for "parameters" to GDC commands.
+			 *       Older PC-98 games exploit the fact that the hardware will happily allow the latter 8 to
+			 *       be used as a 3rd and 4th display partition (Edge, Steel Hearts) even when newer hardware
+			 *       fixes the "bug" and forces only two partitions. Therefore, show only the first two.
+			 *
+			 *       As for the text display, you can use all 4 display partitions, however I have yet to see
+			 *       any PC-98 game use partitions at all on the text layer. Some might adjust the first
+			 *       partition for text scrolling... that's about it. */
+			d += sprintf(d,"G@%04x+%03x",
+				(unsigned int)pc98_gdc[GDC_SLAVE].scan_address,
+				(unsigned int)pc98_gdc[GDC_MASTER].display_pitch);
+		}
+
+		d += sprintf(d," pg:c%ud%u",(pc98_gdc_vramop & (1 << VOPBIT_ACCESS))?1:0,GDC_display_plane_pending);
+	}
+	else if (IS_EGAVGA_ARCH) {
+		char *d = tmp;
+
+		if (IS_VGA_ARCH && svgaCard != SVGA_None)
+			d += sprintf(d,"@%05x+%03x",(unsigned int)vga.config.display_start,(unsigned int)vga.config.scan_len*2);
+		else
+			d += sprintf(d,"@%04x+%02x",(unsigned int)vga.config.display_start,(unsigned int)vga.config.scan_len*2);
+
+		switch (vga.config.addr_shift) {
+			case 0: *d++ = '-'; *d++ = 'B'; break;
+			case 1: *d++ = '-'; *d++ = 'W'; break;
+			case 2: *d++ = '-'; *d++ = 'D'; break;
+			default: break;
+		}
+
+		if (IS_VGA_ARCH && (vga.mode == M_LIN8 || vga.mode == M_VGA)) {
+			/* maybe the user might want to know if 256-color mode is chained or unchained */
+			if (vga.seq.memory_mode & 8) d += sprintf(d,"ch4"); /* if the "chain 4" bit is set, normal chained 4 */
+			else if (vga.config.addr_shift == 0) d += sprintf(d,"uch"); /* if not set, and CRTC mode is byte mode, unchained */
+			/* anything else is weird */
+		}
+
+		*d = 0;
+	}
+	else {
+		sprintf(tmp,"@%04x+%02x",(unsigned int)vga.config.display_start,(unsigned int)vga.other.hdend);
+	}
+	x = VGA_debug_screen_puts8(x,y,tmp,white) + 8;
+
+	if (machine == MCH_EGA) {
+		char *d = tmp;
+		EGAMonitorMode m = egaMonitorMode();
+		if (m == EGA) d += sprintf(d,"64c");
+		else if (m == CGA) d += sprintf(d,"16c");
+		else if (m == MONO) d += sprintf(d,"mono");
+
+		x = VGA_debug_screen_puts8(x,y,tmp,white) + 8;
+	}
+
+	/* next line: The color palette. Show a) the raw palette and b) the effective palette after all bit masking.
+	 * What we show depends on the hardware. For MDA/Hercules, you have ON and OFF so there's really no point in drawing it.
+	 * For CGA, you have all 16 colors in text mode, 4 colors for 320x200 from one 3 palettes (I'm counting the unofficial
+	 * palette with red instead of magenta) and a background color, and 2 colors for 640x200 (black + foreground color).
+	 *
+	 * PCjr and Tandy allow remapping the IRGB colors to... uh... other IRGB colors.
+	 *
+	 * EGA remaps the 16-color palette through the Attribute Controller (first 16 registers) which then either becomes a
+	 * 4-bit IRGB color for 200-line modes or a 6-bit xxRGBrgb (2-bit RGB = one of 64 colors) color. This is also affected
+	 * by a register that controls which bitplanes are sent to the display. I don't think EGA has a pel mask register.
+	 *
+	 * MCGA, except for 256-color mode, could be thought of as a fancy CGA card that produces a 4-bit IRGB value, which is
+	 * then treated like any other 8-bit value and sent to the DAC as-is. The 256-color mode is just 8-bit values sent to
+	 * the DAC as-is. Testing on a real PS/2 shows that MCGA systems have a VGA-like PEL mask register.
+	 *
+	 * VGA could be thought of as hardware that latches 4-bit pixel values around, which makes sense when you consider that
+	 * all standard modes OTHER than 256-color mode all boil down to: load, shift, mask, 4-bit pixel, send to output. Testing
+	 * shows that 256-color mode is even affected by this design. What looks like 8-bit values on display are apparently just
+	 * bytes from RAM shifted in 4 bits at a time per dot clock. You don't see that because another bit is set to hold the
+	 * DAC at the last whole value to hide the "halfway" byte underneath. It does explain why 256-color mode has only 320
+	 * pixels across and yet CRTC horizontal timing and dot clock values are programmed as if a 640 pixel wide mode, and why
+	 * standard VGA hardware cannot do a 640-pixel wide 256-color mode. Anyway, the 4-bit pixels going through the VGA hardware
+	 * could be thought of as going through a bitplane mask register, then the attribute controller which is then expanded to
+	 * a 6-bit value (EGA compatibility). If the right bits are set, you can fill in the top 2 bits from the color select
+	 * registers. The result is an 8-bit value which is then masked off through the PEL mask and then sent to the DAC through
+	 * which the final color is determined by the VGA palette. The two 4-bit values that make up the 8-bit 256-color mode
+	 * are handled in exactly the same way, the Attribute Controller palette can affect 256-color mode! The difference is
+	 * that color select doesn't have any effect because only the low 4 bits are used to produce the final 8 bits (although
+	 * the 1992 demo "Copper" exploits a hardware bug on Tseng ET4000 cards regarding color select to do those nifty "line
+	 * fading" demo effects).
+	 *
+	 * PC-98 hardware could be thought of as having 3 hardware palettes: the 8-color "digital" mode, the 16-color "analog"
+	 * mode, and the 256-color "vga" mode. At least the hardware I've tested on seems to behave as if somewhere in the
+	 * hardware, all 3 palettes exist simultaneously at once. The 8-color "digital" mode can remap the GRB colors from
+	 * any 3-bit value to any other 3-bit value. The 16-color analog mode offers RGB output with 4 bits per channel, which
+	 * incidentally, is why when PC-98 games do palette fades, they aren't as smooth as VGA or SVGA palette fades. However
+	 * the 256-color mode has a full 8 bits per channel to work with (2 more bits than VGA's 6 bits per channel!). Which
+	 * palette we show therefore depends on which mode the graphics plane is. There is also a "monochrome" mode which reduces
+	 * the 8-color mode to only bitplane 2 (green) and then the final color is controlled by the color attribute of the
+	 * text layer. As for the text mode, it has 3 bits to encode GRB and there's no palette to remap it, therefore nothing
+	 * to see here. There's no funny bitplane masking to the display that I'm aware of unlike VGA, which should make the
+	 * display code simpler here. */
+	y += 8;
+	x = 4;
+	if (machine == MCH_PC98) {
+		if (vga.draw.bpp == 32) { /* PC-98 emulation doesn't use anything else */
+			const unsigned int dkgray =
+				((GFX_Rmask >> 2) & GFX_Rmask) |
+				((GFX_Gmask >> 2) & GFX_Gmask) |
+				((GFX_Bmask >> 2) & GFX_Bmask);
+
+			/* NTS: We *could* show all 3 hardware palettes, but I don't think anything out there
+			 *      depends on flipping between them like that. I doubt the hardware could support
+			 *      anything funky like flipping between 8/16-color mode mid-scanline like that. */
+			if (pc98_gdc_vramop & (1u << VOPBIT_VGA)) {
+				x = VGA_debug_screen_puts8(x,y,"PAL256:",white) + 8;
+				VGA_debug_screen_func->rect(x-1,y,x,y+7,dkgray);
+				VGA_debug_screen_func->rect(x-1,y,x+(4*128),y+1,dkgray);
+				VGA_debug_screen_func->rect(x-1,y+(4*2)-1,x+(4*128),y+(4*2),dkgray);
+				for (unsigned int c=0;c < 256;c++) {
+					const int bx = x+((c&127)*4),by = y+((c>>7)*4);
+					VGA_debug_screen_func->rect(bx,by+1,bx+3,by+4,vga.dac.xlat32[c]); /* xlat32[] already contains the translated color */
+					VGA_debug_screen_func->rect(bx+3,by+1,bx+4,by+4,dkgray);
+				}
+
+				x += 8 + (4*128);
+			}
+			else if (pc98_gdc_vramop & (1u << VOPBIT_ANALOG)) {
+				x = VGA_debug_screen_puts8(x,y,"PAL16:",white) + 8;
+				VGA_debug_screen_func->rect(x-1,y,x,y+7,dkgray);
+				VGA_debug_screen_func->rect(x-1,y,x+(8*16),y+1,dkgray);
+				VGA_debug_screen_func->rect(x-1,y+7,x+(8*16),y+8,dkgray);
+				for (unsigned int c=0;c < 16;c++) {
+					VGA_debug_screen_func->rect(x,y+1,x+7,y+7,vga.dac.xlat32[c]); /* xlat32[] already contains the translated color */
+					VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,dkgray);
+					x += 8;
+				}
+
+				x += 8;
+			}
+			else {
+				x = VGA_debug_screen_puts8(x,y,"PAL8:",white) + 8;
+				VGA_debug_screen_func->rect(x-1,y,x,y+7,dkgray);
+				VGA_debug_screen_func->rect(x-1,y,x+(8*8),y+1,dkgray);
+				VGA_debug_screen_func->rect(x-1,y+7,x+(8*8),y+8,dkgray);
+				for (unsigned int c=0;c < 8;c++) {
+					VGA_debug_screen_func->rect(x,y+1,x+7,y+7,vga.dac.xlat32[c]); /* xlat32[] already contains the translated color */
+					VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,dkgray);
+					x += 8;
+				}
+
+				x += 8;
+
+				if (pc98_monochrome_mode) {
+					x = VGA_debug_screen_puts8(x,y,"PALM:",white) + 8;
+					VGA_debug_screen_func->rect(x-1,y,x,y+7,dkgray);
+					VGA_debug_screen_func->rect(x-1,y,x+(8*2),y+1,dkgray);
+					VGA_debug_screen_func->rect(x-1,y+7,x+(8*2),y+8,dkgray);
+					for (unsigned int c=0;c < 2;c++) {
+						VGA_debug_screen_func->rect(x,y,x+7,y+7,vga.dac.xlat32[c<<4u]); /* xlat32[] already contains the translated color, green -> mono */
+						VGA_debug_screen_func->rect(x+7,y,x+8,y+7,dkgray);
+						x += 8;
+					}
+				}
+
+				x += 8;
+			}
+		}
+	}
+	else if (machine == MCH_CGA) {
+		if (vga.draw.bpp == 8 && vga.mode != M_CGA16) { /* CGA emulation doesn't use anything else, and do not draw palette in "composite" mode */
+			x = VGA_debug_screen_puts8(x,y,"PAL:",white) + 8;
+			VGA_debug_screen_func->rect(x-1,y,x,y+7,0x8/*dkgray*/);
+			if (vga.mode == M_CGA4 || vga.mode == M_TANDY4) {
+				VGA_debug_screen_func->rect(x-1,y,x+(8*4),y+1,0x8);
+				VGA_debug_screen_func->rect(x-1,y+7,x+(8*4),y+8,0x8);
+				for (unsigned int c=0;c < 4;c++) {
+					VGA_debug_screen_func->rect(x,y+1,x+7,y+7,CGAPal4[c]);
+					VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,0x8);
+					x += 8;
+				}
+			}
+			else if (vga.mode == M_CGA2 || vga.mode == M_TANDY2) {
+				VGA_debug_screen_func->rect(x-1,y,x+(8*2),y+1,0x8);
+				VGA_debug_screen_func->rect(x-1,y+7,x+(8*2),y+8,0x8);
+				for (unsigned int c=0;c < 2;c++) {
+					VGA_debug_screen_func->rect(x,y+1,x+7,y+7,CGAPal2[c]);
+					VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,0x8);
+					x += 8;
+				}
+			}
+			else {
+				VGA_debug_screen_func->rect(x-1,y,x+(8*16),y+1,0x8);
+				VGA_debug_screen_func->rect(x-1,y+7,x+(8*16),y+8,0x8);
+				for (unsigned int c=0;c < 16;c++) {
+					VGA_debug_screen_func->rect(x,y+1,x+7,y+7,c);
+					VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,0x8);
+					x += 8;
+				}
+			}
+
+			x += 8;
+		}
+	}
+	else if (machine == MCH_PCJR || machine == MCH_TANDY) {
+		/* Tandy/PCjr code re-uses the VGA attribute controller palette. CGA emulation re-uses CGA remaps. */
+		if (vga.draw.bpp == 8) { /* Doesn't use anything else */
+			x = VGA_debug_screen_puts8(x,y,"HWPAL:",white) + 8;
+			VGA_debug_screen_func->rect(x-1,y,x,y+7,0x8/*dkgray*/);
+			VGA_debug_screen_func->rect(x-1,y,x+(8*16),y+1,0x8);
+			VGA_debug_screen_func->rect(x-1,y+7,x+(8*16),y+8,0x8);
+			for (unsigned int c=0;c < 16;c++) {
+				VGA_debug_screen_func->rect(x,y+1,x+7,y+7,vga.attr.palette[c]);
+				VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,0x8);
+				x += 8;
+			}
+
+			x += 8;
+
+			if (vga.mode == M_CGA4 || vga.mode == M_TANDY4) {
+				x = VGA_debug_screen_puts8(x,y,"MDPAL:",white) + 8;
+				VGA_debug_screen_func->rect(x-1,y,x,y+7,0x8/*dkgray*/);
+				VGA_debug_screen_func->rect(x-1,y,x+(8*4),y+1,0x8);
+				VGA_debug_screen_func->rect(x-1,y+7,x+(8*4),y+8,0x8);
+				for (unsigned int c=0;c < 4;c++) {
+					VGA_debug_screen_func->rect(x,y+1,x+7,y+7,CGAPal4[c]);//already remapped, vga_other.cpp
+					VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,0x8);
+					x += 8;
+				}
+			}
+			else if (vga.mode == M_CGA2 || vga.mode == M_TANDY2) {
+				x = VGA_debug_screen_puts8(x,y,"MDPAL:",white) + 8;
+				VGA_debug_screen_func->rect(x-1,y,x,y+7,0x8/*dkgray*/);
+				VGA_debug_screen_func->rect(x-1,y,x+(8*2),y+1,0x8);
+				VGA_debug_screen_func->rect(x-1,y+7,x+(8*2),y+8,0x8);
+				for (unsigned int c=0;c < 2;c++) {
+					VGA_debug_screen_func->rect(x,y+1,x+7,y+7,CGAPal2[c]);//already remapped, vga_other.cpp
+					VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,0x8);
+					x += 8;
+				}
+			}
+			else {
+				/* would be redundant copy of HWPAL */
+			}
+
+			x += 8;
+		}
+	}
+	else if (machine == MCH_VGA || machine == MCH_MCGA) {
+		/* MCGA: Each mode produces an 8-bit pixel, which is masked by PEL mask and sent to the DAC.
+		 *       Text modes produce values 0-15, CGA 4-color 0-3, CGA 2-color and MCGA monochrome graphics 0-1,
+		 *       and of course 256-color mode 0-255. Correct colors are set by the BIOS through programming
+		 *       the color palette. There is no attribute controller, but then again, there is no support for
+		 *       planar 16-color modes, or 16-color at all (although poking at registers reveals that you can
+		 *       hack yourself a packed 4-bit 16-color mode that renders only every other pixel).
+		 *
+		 * VGA: Each mode produces 4-bit pixels per dot clock (256-color mode loads 2 4-bit pixels and emits the 8-bit value per every other dot clock).
+		 *      Text modes and EGA/VGA 16-color modes produce values 0-15, CGA 4-color 0-3, CGA 2-color and monochrome EGA/MCGA 0-1,
+		 *      and 256-color mode 0-15 for each half of the 8-bit pixel value. Note that on EGA/VGA, there's a "color plane enable"
+		 *      register that is used to make sure CGA 2-color and monochrone MCGA modes are limited to one bitplane, in fact CGA 2-color
+		 *      and MCGA monochrome modes are really just EGA 16-color modes with only one bitplane enabled for display and writing
+		 *      and the memory map set up to emulate non-planar video memory like the DOS application expects. CGA 4-color is still one
+		 *      bitplane with odd/even mode enabled and a bit that instructs the hardware to latch 2 bits at a time which are then internally
+		 *      mapped as if bitplane 0 and 1.
+		 *
+		 *      Then, the 4-bit value is remapped through the Attribute Controller (which helps make VGA backwards compatible with EGA
+		 *      palette tricks) to produce a 6-bit value. On the EGA hardware this 6-bit value went directly to the TTL pins, while on
+		 *      VGA, the value eventually becomes an index into the VGA color palette. If Color Select is enabled, an additional 2 bits
+		 *      are filled in at the top to produce an 8-bit value (though Tseng ET4000 cards have Color Select hardware bugs that a
+		 *      few demoscene productions exploit for an effect ref. 1992 demo "Copper").
+		 *
+		 *      The 8-bit value is masked by the PEL mask register before it is finally sent to the DAC and translated by the color
+		 *      palette registers to the analog VGA output sent to the monitor.
+		 *
+		 *      Note that since 256-color mode is just two 4-bit values internally, it too is affected by the attribute controller,
+		 *      though only the 4 bits are used coming out and Color Select has no effect (but see comments on Tseng ET4000 hardware
+		 *      bugs farther up). Don't believe me? Bring up 256-color mode, clear the "Shift256" bit in the Graphics registers, and
+		 *      you'll see that every odd column corresponds to some intermediate 8-bit value made from 4 bits of the previous pixel
+		 *      and 4 bits of the next pixel. In this way you kind of sort of have a 640x200 256-color mode but you have to use it
+		 *      carefully knowing the odd pixel columns are drawn that way (NTS: According to my tests this trick does not work on
+		 *      Tseng ET4000 cards... doing that will instead give you a 320x200 screen that is not pixel doubled and is squeezed on
+		 *      the right half of the screen with garbage data on the left half).
+		 *
+		 *      Got it? Good. This complexity is why most games written for EGA work pefectly fine on VGA, even if they play with the
+		 *      EGA palette in the Attribute Controller or color plane masks.
+		 *
+		 * NOTES: A good test case for the color plane enable:
+		 *      - Any CGA graphics mode or monochrome mode where INT 10h uses color plane enable to limit the modes to one bitplane.
+		 *      - "Megademo" by Space Pigs which plays with the color plane enable and EGA palette a lot for demo effects. Pay particular
+		 *        attention to the end "credits" which uses color plane enable as both a crude method of "page flipping" for the rotating
+		 *        dot animation in the background AND as a way to store both pages of credit text in bitplanes 2 and 3 while only showing
+		 *        bitplane 2 the first time and bitplane 3 the second time as it hardware scrolls. */
+		if (vga.draw.bpp == 32 && !(vga.mode == M_LIN15 || vga.mode == M_LIN16 || vga.mode == M_LIN24 || vga.mode == M_LIN32)) {
+			const unsigned int dacshift =
+				vga_8bit_dac?0:2;
+			const unsigned int dkgray =
+				((GFX_Rmask >> 2) & GFX_Rmask) |
+				((GFX_Gmask >> 2) & GFX_Gmask) |
+				((GFX_Bmask >> 2) & GFX_Bmask);
+
+			/* VGA emulation always renders 32bpp. Do not show palette in highcolor/truecolor 15/16/24/32bpp modes because
+			 * there is no palette to worry about.
+			 *
+			 * FIXME: That's not entirely true. SVGA chipset manufacturers at some point in the mid to late 1990s decided that
+			 *        it would be neat-o if the user could go into the Control Panel of their Windows system and have the ability
+			 *        to adjust the gamma curve of their display. Since the DAC palette is otherwise unused in highcolor/truecolor
+			 *        modes, they decided to re-use the DAC palette as a way to remap the R, G, and B values of the mode so gamma
+			 *        curve adjustments are possible. Many SVGA chipsets from the 2000s on have some form of this "VGA palette
+			 *        as gamma curve" function including Intel GPUs and ATI Radeon cards. */
+
+			/* NTS: Render as 64x4 grid instead of a 128x2 grid. Unlike the PC-98 case where we can always assume a 640-wide render,
+			 *      the VGA emulation might double the pixels horizontally for 320-pixel wide modes. */
+
+			/* raw PAL (actual DAC contents) */
+			sprintf(tmp,"RPAL%u:",vga_8bit_dac?8:6);
+			x = VGA_debug_screen_puts8(x,y,tmp,white) + 8;
+			VGA_debug_screen_func->rect(x-1,y,x,y+(4*4),dkgray);
+			VGA_debug_screen_func->rect(x-1,y,x+(4*64),y+1,dkgray);
+			VGA_debug_screen_func->rect(x-1,y+(4*4)-1,x+(4*64),y+(4*4),dkgray);
+			for (unsigned int c=0;c < 256;c++) {
+				const int bx = x+((c&63)*4),by = y+((c>>6)*4);
+				const unsigned int color = SDL_MapRGB(
+					sdl.surface->format,
+					((vga.dac.rgb[c].red << dacshift) & 0xFF),
+					((vga.dac.rgb[c].green << dacshift) & 0xFF),
+					((vga.dac.rgb[c].blue << dacshift) & 0xFF));
+				VGA_debug_screen_func->rect(bx,by+1,bx+3,by+4,color);
+				VGA_debug_screen_func->rect(bx+3,by+1,bx+4,by+4,dkgray);
+			}
+
+			x = 4;
+			y += 8*2; /* next line */
+
+			/* effective PAL (after all remapping) */
+			sprintf(tmp,"EPAL%u:",vga_8bit_dac?8:6);
+			x = VGA_debug_screen_puts8(x,y,tmp,white) + 8;
+			if (vga.mode == M_LIN8 || vga.mode == M_VGA) {
+				VGA_debug_screen_func->rect(x-1,y,x,y+(4*4),dkgray);
+				VGA_debug_screen_func->rect(x-1,y,x+(4*64),y+1,dkgray);
+				VGA_debug_screen_func->rect(x-1,y+(4*4)-1,x+(4*64),y+(4*4),dkgray);
+				for (unsigned int c=0;c < 256;c++) {
+					const int bx = x+((c&63)*4),by = y+((c>>6)*4);
+					VGA_debug_screen_func->rect(bx,by+1,bx+3,by+4,vga.dac.xlat32[c]); /* xlat32[] already contains the translated color */
+					VGA_debug_screen_func->rect(bx+3,by+1,bx+4,by+4,dkgray);
+				}
+			}
+			else {
+				unsigned int colors = 16;
+
+				if (!(vga.mode == M_TEXT || vga.mode == M_TANDY_TEXT || vga.mode == M_HERC_TEXT)) {
+					unsigned char chk = vga.attr.color_plane_enable;
+
+					if (vga.gfx.mode & 0x20/*CGA 4-color*/)
+						chk |= (chk & 0x5u) << 1u; /* bit 0->1 and 2->3 */
+
+					if (chk & 8) colors = 16;
+					else if (chk & 4) colors = 8;
+					else if (chk & 2) colors = 4;
+					else colors = 2;
+				}
+
+				VGA_debug_screen_func->rect(x-1,y,x+(8*colors),y+1,dkgray);
+				VGA_debug_screen_func->rect(x-1,y+7,x+(8*colors),y+8,dkgray);
+				for (unsigned int c=0;c < colors;c++) {
+					VGA_debug_screen_func->rect(x,y+1,x+7,y+7,vga.dac.xlat32[c]);
+					VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,dkgray);
+					x += 8;
+				}
+			}
+
+			x = 4;
+			y += 8*2; /* next line */
+
+			if (IS_VGA_ARCH) {
+				/* attribute controller PAL */
+				x = VGA_debug_screen_puts8(x,y,"ACPAL:",white) + 8;
+				VGA_debug_screen_func->rect(x-1,y,x+(8*16),y+1,dkgray);
+				VGA_debug_screen_func->rect(x-1,y+7,x+(8*16),y+8,dkgray);
+				for (unsigned int c=0;c < 16;c++) {
+					const unsigned int idx = vga.attr.palette[c]&0x3F;
+					const unsigned int color = SDL_MapRGB(
+						sdl.surface->format,
+						((vga.dac.rgb[idx].red << dacshift) & 0xFF),
+						((vga.dac.rgb[idx].green << dacshift) & 0xFF),
+						((vga.dac.rgb[idx].blue << dacshift) & 0xFF));
+					VGA_debug_screen_func->rect(x,y+1,x+7,y+7,color);
+					VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,dkgray);
+					x += 8;
+				}
+
+				x += 8;
+
+				sprintf(tmp,"CPE:%x HPEL:%x",vga.attr.color_plane_enable&0xF,vga.config.pel_panning&0xF); /* 4 bits, 4 bitplanes, one hex digit */
+				x = VGA_debug_screen_puts8(x,y,tmp,white) + 8;
+
+				x = 4;
+				y += 8; /* next line */
+
+				/* attribute controller PAL with color select and other in force */
+				x = VGA_debug_screen_puts8(x,y,"CSPAL:",white) + 8;
+				VGA_debug_screen_func->rect(x-1,y,x+(8*16),y+1,dkgray);
+				VGA_debug_screen_func->rect(x-1,y+7,x+(8*16),y+8,dkgray);
+				for (unsigned int c=0;c < 16;c++) {
+					const unsigned int idx = vga.dac.combine[c]; /* vga_dac.cpp considers color select */
+					const unsigned int color = SDL_MapRGB(
+						sdl.surface->format,
+						((vga.dac.rgb[idx].red << dacshift) & 0xFF),
+						((vga.dac.rgb[idx].green << dacshift) & 0xFF),
+						((vga.dac.rgb[idx].blue << dacshift) & 0xFF));
+					VGA_debug_screen_func->rect(x,y+1,x+7,y+7,color);
+					VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,dkgray);
+					x += 8;
+				}
+
+				x += 8;
+
+				sprintf(tmp,"PM%02x MD%02x CS%02x",vga.dac.pel_mask,vga.attr.mode_control,vga.attr.color_select);
+				x = VGA_debug_screen_puts8(x,y,tmp,white) + 8;
+			}
+		}
+	}
+	else if (machine == MCH_EGA) {
+		/* Everything on EGA goes through the Attribute Controller.
+		 * Two palettes are shown because what's on the screen is also controlled by a register that masks off bitplanes.
+		 * The Attribute Controller maps the 4-bit color code to a 6-bit TTL output on the EGA connector. For extra fun,
+		 * the meaning of the pins changes depending on whether the card is emitting 200-line output compatible with a
+		 * CGA monitor or 350-line output for an EGA monitor. In the 200-line mode only the 4 bits have meaning and they
+		 * are handled the same as CGA IRGB output. In 350-line mode the 6 bits define one of 64 possible colors in the
+		 * form rgbRGB as binary bits where the least signficant bits are "rgb" and most significant bits are "RGB".
+		 * This is why you can't do more than 16 colors except in 350-line modes. */
+		if (vga.draw.bpp == 8) { /* Doesn't use anything else */
+			unsigned int dkgray = (egaMonitorMode() == EGA) ? 0x38 : 0x10;
+
+			x = VGA_debug_screen_puts8(x,y,"ACPAL:",white) + 8;
+			VGA_debug_screen_func->rect(x-1,y,x,y+7,dkgray/*dkgray*/);
+			VGA_debug_screen_func->rect(x-1,y,x+(8*16),y+1,dkgray);
+			VGA_debug_screen_func->rect(x-1,y+7,x+(8*16),y+8,dkgray);
+			for (unsigned int c=0;c < 16;c++) {
+				VGA_debug_screen_func->rect(x,y+1,x+7,y+7,vga.attr.palette[c]);
+				VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,dkgray);
+				x += 8;
+			}
+
+			x += 8;
+
+			// show the normally invisible (in the emulator) overscan color
+			x = VGA_debug_screen_puts8(x,y,"OVSC:",white) + 8;
+			sprintf(tmp,"%02X",vga.attr.overscan_color);
+			x = VGA_debug_screen_puts8(x,y,tmp,white);
+
+			x += 8;
+
+			// in 320-pixel wide modes both won't fit!
+			x = 4;
+			y += 8;
+
+			x = VGA_debug_screen_puts8(x,y,"MDPAL:",white) + 8;
+			VGA_debug_screen_func->rect(x-1,y,x,y+7,dkgray/*dkgray*/);
+			VGA_debug_screen_func->rect(x-1,y,x+(8*16),y+1,dkgray);
+			VGA_debug_screen_func->rect(x-1,y+7,x+(8*16),y+8,dkgray);
+			for (unsigned int c=0;c < 16;c++) {
+				VGA_debug_screen_func->rect(x,y+1,x+7,y+7,vga.attr.palette[c&vga.attr.color_plane_enable]);
+				VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,dkgray);
+				x += 8;
+			}
+
+			x += 8;
+
+			sprintf(tmp,"CPE:%x HPEL:%x",vga.attr.color_plane_enable&0xF,vga.config.pel_panning&0xF); /* 4 bits, 4 bitplanes, one hex digit */
+			x = VGA_debug_screen_puts8(x,y,tmp,white);
+		}
+	}
 }
 
 static void VGA_VerticalTimer(Bitu /*val*/) {
