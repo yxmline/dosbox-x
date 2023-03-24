@@ -323,6 +323,8 @@ extern bool DOSBox_Paused(), isDBCSCP(), InitCodePage();
 //For trying other delays
 #define wrap_delay(a) SDL_Delay(a)
 
+static Uint32 SDL_ticks_last = 0,SDL_ticks_next = 0;
+
 static Bitu Normal_Loop(void) {
     bool saved_allow = dosbox_allow_nonrecursive_page_fault;
     Bits ret;
@@ -345,6 +347,17 @@ static Bitu Normal_Loop(void) {
             GFX_SetTitle((int32_t)CPU_CycleMax,-1,-1,false);
             frames = 0;
         }
+    }
+
+    if (control->opt_print_ticks) {
+        Uint32 now = SDL_GetTicks();
+
+        if (now >= SDL_ticks_next || now < SDL_ticks_last) {
+            LOG_MSG("Tick report: SDL=%lu emu=%.6f",(unsigned long)now,(double)PIC_FullIndex());
+            SDL_ticks_next = now + 1000;
+        }
+
+        SDL_ticks_last = now;
     }
 
     try {
@@ -4113,6 +4126,9 @@ void DOSBOX_SetupConfigSections(void) {
 
     Pstring = secprop->Add_string("badcommandhandler",Property::Changeable::WhenIdle,"");
     Pstring->Set_help("Allow to specify a custom error handler command for the internal DOS shell before the \"Bad command or file name\" message shows up.");
+
+    Pstring = secprop->Add_string("mscdex device name",Property::Changeable::WhenIdle,"");
+    Pstring->Set_help("If set, use this name as the MSCDEX device name instead of MSCD001");
 
     Pbool = secprop->Add_bool("hma",Property::Changeable::WhenIdle,true);
     Pbool->Set_help("Report through XMS that HMA exists (not necessarily available)");

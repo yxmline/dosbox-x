@@ -1235,6 +1235,17 @@ case "$host" in
 esac
 fi
 
+dnl BUILD: whether to enable universal binary support
+if test x"$macosx" = x"1" && test x"$host_cpu" = x"arm"; then
+  AC_ARG_ENABLE(universal,AC_HELP_STRING([--enable-universal],[Enable macOS universal binary support]),
+    [enable_universal=$enableval],
+    [enable_universal=no])
+else
+  enable_universal=no
+fi
+
+AM_CONDITIONAL(MACOS_UNIVERSAL, [ test x$enable_universal = xyes ])
+
 AC_CONFIG_FILES([ 
 Makefile
 src/Makefile
