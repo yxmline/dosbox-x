@@ -1,4 +1,17 @@
-Next
+Next:
+  - SDL2: Stop checking for compiler flags that make it an error to
+    declare variables after statements in a function or any other
+    terrible sins that would offend old C89 standard compilers.
+    DOSBox-X is never going to compile for a C standard that old.
+    Furthermore this check is preventing compilation on ARM-based
+    Macbooks for some reason, though not Intel based Macbooks.
+
+2023.03.31
+  - "mount -t overlay" will now print a message on the console to
+    let you know if the act of mounting the overlay replaced a
+    previous overlay mount. Overlay mounts cannot be stacked in
+    DOSBox-X (and probably most DOSBox forks that support overlays)
+    and the user should understand that. (joncampbell123).
   - Remove kludges from DOS path resolution to handle drive paths
     that refer to drive @ (at sign). Note that in ASCII the at sign
     is one code below capital "A". Windows 95 FORMAT.COM due to
