@@ -9370,7 +9370,17 @@ startfunction:
                 card = "IBM Monochrome Display Adapter";
                 break;
             case MCH_HERC:
-                card = "Hercules Monochrome Graphics Adapter";
+                switch (hercCard) {
+                    case HERC_GraphicsCardPlus:
+                        card = "Hercules+ Graphics Adapter";
+                        break;
+                    case HERC_InColor:
+                        card = "Hercules InColor Graphics Adapter";
+                        break;
+                    default:
+                        card = "Hercules Graphics Adapter";
+                        break;
+                }
                 break;
             case MCH_EGA:
                 card = "IBM Enhanced Graphics Adapter";
@@ -9405,6 +9415,19 @@ startfunction:
                             case S3_Trio64V:    card = "S3 Trio64V+ SVGA"; break;
                             case S3_ViRGE:      card = "S3 ViRGE SVGA"; break;
                             case S3_ViRGEVX:    card = "S3 ViRGE VX SVGA"; break;
+                        }
+                        break;
+                    case SVGA_ATI:
+                        card = "ATI SVGA";
+                        switch (atiCard) {
+                            case ATI_EGAVGAWonder:     card = "ATI EGA/VGA Wonder"; break;
+                            case ATI_VGAWonder:        card = "ATI VGA Wonder"; break;
+                            case ATI_VGAWonderPlus:    card = "ATI VGA Wonder+"; break;
+                            case ATI_VGAWonderXL:      card = "ATI VGA WonderXL"; break;
+                            case ATI_VGAWonderXL24:    card = "ATI VGA WonderXL24"; break;
+                            case ATI_Mach8:            card = "ATI Mach8"; break;
+                            case ATI_Mach32:           card = "ATI Mach32"; break;
+                            case ATI_Mach64:           card = "ATI Mach64"; break;
                         }
                         break;
                     default:
