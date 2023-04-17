@@ -155,11 +155,14 @@
 
 #include "zipfile.h"
 
+#include <output/output_ttf.h>
+
 using namespace std;
 
 Bitu pc98_read_9a8(Bitu /*port*/,Bitu /*iolen*/);
 void pc98_write_9a8(Bitu port,Bitu val,Bitu iolen);
 
+void SVGA_Setup_ATI(void);
 bool VGA_IsCaptureEnabled(void);
 void VGA_UpdateCapturePending(void);
 bool VGA_CaptureHasNextFrame(void);
@@ -1031,7 +1034,12 @@ void VGA_Reset(Section*) {
      * for selecting machine type AND video card. */
     switch (machine) {
         case MCH_HERC:
-            if (vga.mem.memsize < _KB_bytes(64)) vga.mem.memsize = _KB_bytes(64);
+            if (hercCard >= HERC_InColor) {
+                if (vga.mem.memsize < _KB_bytes(256)) vga.mem.memsize = _KB_bytes(256);
+            }
+            else {
+                if (vga.mem.memsize < _KB_bytes(64)) vga.mem.memsize = _KB_bytes(64);
+            }
             break;
         case MCH_MDA:
             if (vga.mem.memsize < _KB_bytes(4)) vga.mem.memsize = _KB_bytes(4);
@@ -1517,6 +1525,22 @@ void VGA_Init() {
 
 	vga.config.chained = false;
 
+    vga.herc.xMode = 0;
+    vga.herc.underline = 0xD;
+    vga.herc.strikethrough = 0xD;
+    vga.herc.latch = 0;
+    vga.herc.exception = 0x20;
+    vga.herc.planemask_protect = 0;
+    vga.herc.planemask_visible = 0xF;
+    vga.herc.maskpolarity = 0xFF;
+    vga.herc.write_mode = 0;
+    vga.herc.dont_care = 0;
+    vga.herc.fgcolor = 0xF;
+    vga.herc.bgcolor = 0x0;
+    vga.herc.latchprotect = 0;
+    vga.herc.palette_index = 0;
+    for (unsigned int i=0;i < 8;i++) vga.herc.palette[i] = i;
+    for (unsigned int i=8;i < 16;i++) vga.herc.palette[i] = i + 0x30;
     vga.draw.render_step = 0;
     vga.draw.render_max = 1;
 
@@ -1826,6 +1850,9 @@ void SVGA_Setup_Driver(void) {
         break;
     case SVGA_ParadisePVGA1A:
         SVGA_Setup_ParadisePVGA1A();
+        break;
+    case SVGA_ATI:
+        SVGA_Setup_ATI();
         break;
     default:
         if (IS_JEGA_ARCH) SVGA_Setup_JEGA();

@@ -1096,6 +1096,7 @@ void DOSBOX_RealInit() {
     else if (mtype == "hercules")      { machine = MCH_HERC; hercCard = HERC_GraphicsCard; }
     else if (mtype == "hercules_plus") { machine = MCH_HERC; hercCard = HERC_GraphicsCardPlus; }
     else if (mtype == "hercules_incolor") { machine = MCH_HERC; hercCard = HERC_InColor; }
+    else if (mtype == "hercules_color") { machine = MCH_CGA; mono_cga = false; new_cga = true; } /* guess */
     else if (mtype == "svga_ati_egavgawonder") { svgaCard = SVGA_ATI; atiCard = ATI_EGAVGAWonder; }
     else if (mtype == "svga_ati_vgawonder") { svgaCard = SVGA_ATI; atiCard = ATI_VGAWonder; }
     else if (mtype == "svga_ati_vgawonderplus") { svgaCard = SVGA_ATI; atiCard = ATI_VGAWonderPlus; }
@@ -1349,7 +1350,7 @@ void DOSBOX_SetupConfigSections(void) {
     const char* machines[] = {
         "mda",
         "cga", "cga_mono", "cga_rgb", "cga_composite", "cga_composite2",
-        "hercules","hercules_plus","hercules_incolor",
+        "hercules","hercules_plus","hercules_incolor", "hercules_color",
         "tandy",
         "pcjr", "pcjr_composite", "pcjr_composite2",
         "amstrad",
@@ -3898,6 +3899,7 @@ void DOSBOX_SetupConfigSections(void) {
         "    shellhide to hide the command window when opening programs on the Windows platform.\n"
         "    openwith:<program>: start a program to open the output file.\n"
         "    openerror:<program>: start a program to open the output file if an error had occurred.\n"
+        "    multiplier:<x>: Actual baud rate is the programmed rate times X to allow rates higher than 115200.\n"
         "Example: serial1=file file:output1.txt timeout:1000 openwith:notepad\n"
         "for directserial: realport (required), rxdelay (optional).\n"
         "                 (realport:COM1 realport:ttyS0).\n"
