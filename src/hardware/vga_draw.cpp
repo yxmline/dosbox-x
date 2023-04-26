@@ -30,6 +30,7 @@
 #include "timer.h"
 #include "setup.h"
 #include "support.h"
+#include "hardware.h"
 #include "video.h"
 #include "render.h"
 #include "../gui/render_scalers.h"
@@ -46,6 +47,12 @@
 #include "pc98_cg.h"
 #include "pc98_gdc.h"
 #include "pc98_gdc_const.h"
+
+#if (C_SSHOT) || (C_AVCODEC)
+#include <zlib.h>
+#include <png.h>
+#include "../libs/zmbv/zmbv.h"
+#endif
 
 /* do not issue CPU-side I/O here -- this code emulates functions that the GDC itself carries out, not on the CPU */
 #include "cpu_io_is_forbidden.h"
@@ -91,6 +98,66 @@ struct s3drawstream S3SSdraw = {0};
 enum {
 	DBGEV_SPLIT=0		// EGA/VGA splitscreen
 };
+
+struct rawscreenshot {
+	unsigned char*		image = NULL;
+	unsigned int		image_stride = 0;
+	unsigned int		image_width = 0,image_height = 0;
+	unsigned int		image_bpp = 0;
+	unsigned char*		image_palette = NULL;
+	unsigned int		image_palette_size = 0;
+	unsigned int		render_y = 0;
+
+	void free(void);
+	void allocate(unsigned int w,unsigned int h,unsigned int bpp);
+	void allocpalette(unsigned int count);
+	rawscreenshot();
+	~rawscreenshot();
+};
+
+rawscreenshot::rawscreenshot() {
+}
+
+rawscreenshot::~rawscreenshot() {
+	free();
+}
+
+void rawscreenshot::free(void) {
+	if (image != NULL) {
+		delete[] image;
+		image = NULL;
+	}
+	if (image_palette != NULL) {
+		delete[] image_palette;
+		image_palette = NULL;
+	}
+}
+
+void rawscreenshot::allocate(unsigned int w,unsigned int h,unsigned int bpp) {
+	if (image != NULL) {
+		if (w == image_width && h == image_height && bpp == image_bpp) return;
+		free();
+	}
+
+	if (!(bpp == 1 || bpp == 4 || bpp == 8 || bpp == 24 || bpp == 32)) return;
+	if (w == 0 || h == 0) return;
+
+	image_stride = ((w+31)&(~15))*(bpp>>3);
+	image = new unsigned char[image_stride*h];
+	image_bpp = bpp;
+	image_width = w;
+	image_height = h;
+}
+
+void rawscreenshot::allocpalette(unsigned int count) {
+	if (count > 256) return;
+	if (count == 0) return;
+	if (image_palette == NULL) image_palette = new unsigned char[256*3];
+	image_palette_size = count;
+}
+
+static rawscreenshot rawshot; // raw image data, translated palette
+static rawscreenshot rawshot2; // raw image data, raw palette
 
 struct debugline_event {
 	unsigned int	colorline = 0;
@@ -221,9 +288,11 @@ void memxor_greendotted_32bpp(uint32_t *d,unsigned int count,unsigned int line) 
     }
 }
 
+typedef void (* VGA_RawLine_Handler)(uint8_t *dst,uint8_t *dst2,Bitu vidstart, Bitu line);
 typedef uint8_t * (* VGA_Line_Handler)(Bitu vidstart, Bitu line);
 
 static VGA_Line_Handler VGA_DrawLine;
+static VGA_RawLine_Handler VGA_DrawRawLine;
 static uint8_t TempLine[SCALER_MAXWIDTH * 4 + 256];
 static float hretrace_fx_avg = 0;
 
@@ -748,6 +817,25 @@ static uint8_t * VGA_Draw_Linear_Line(Bitu vidstart, Bitu /*line*/) {
     return ret;
 }
 
+static void VGA_RawDraw_Xlat32_VGA_CRTC_bmode_Line(uint8_t *dst,uint8_t* /*dst2*/,Bitu vidstart, Bitu /*line*/) {
+    const Bitu skip = 4u << vga.config.addr_shift; /* how much to skip after drawing 4 pixels */
+
+    /* *sigh* it looks like DOSBox's VGA scanline code will pass nonzero bits 0-1 in vidstart */
+    vidstart &= ~3ul;
+
+    for(Bitu i = 0; i < (vga.draw.width>>(2/*4 pixels*/)); i++) {
+        uint8_t *ret = &vga.draw.linear_base[ vidstart & vga.draw.linear_mask ];
+
+        /* one group of 4 */
+        *dst++ = *ret++;
+        *dst++ = *ret++;
+        *dst++ = *ret++;
+        *dst++ = *ret++;
+        /* and skip */
+        vidstart += skip;
+    }
+}
+
 /* WARNING: This routine assumes (vidstart&3) == 0 */
 static uint8_t * VGA_Draw_Xlat32_VGA_CRTC_bmode_Line(Bitu vidstart, Bitu /*line*/) {
     uint32_t* temps = (uint32_t*) TempLine;
@@ -800,6 +888,11 @@ static uint8_t * VGA_Draw_Xlat32_VGA_CRTC_bmode_Line(Bitu vidstart, Bitu /*line*
     }
 
     return TempLine + (poff * 4);
+}
+
+static void VGA_RawDraw_Xlat32_Linear_Line(uint8_t *dst,uint8_t* /*dst*/,Bitu vidstart, Bitu /*line*/) {
+    for(Bitu i = 0; i < vga.draw.width; i++)
+        dst[i]=vga.draw.linear_base[(vidstart+i)&vga.draw.linear_mask];
 }
 
 static uint8_t * VGA_Draw_Xlat32_Linear_Line(Bitu vidstart, Bitu /*line*/) {
@@ -893,6 +986,63 @@ static uint8_t * EGA_Draw_VGA_Planar_Xlat8_Line(Bitu vidstart, Bitu line) {
 
 static uint8_t * VGA_Draw_VGA_Planar_Xlat32_Line(Bitu vidstart, Bitu line) {
     return EGA_Planar_Common_Line<MCH_VGA,uint32_t>(vidstart,line);
+}
+
+template <const unsigned int card,const unsigned int xlat,typename templine_type_t> static inline templine_type_t EGA_Planar_Common_RawBlock_xlat(const uint8_t t) {
+    if (card == MCH_VGA) {
+        if (xlat) return vga.attr.palette[t&vga.attr.color_plane_enable];
+        return t;
+    }
+    else if (card == MCH_EGA) {
+        if (xlat) return vga.attr.palette[t&vga.attr.color_plane_enable];
+        return t;
+    }
+
+    return 0;
+}
+
+template <const unsigned int card,const unsigned int xlat,typename templine_type_t> static inline void EGA_Planar_Common_RawBlock(templine_type_t * const temps,const uint32_t t1,const uint32_t t2) {
+    uint32_t tmp;
+
+    tmp =   Expand16Table[0][(t1>>0)&0xFF] |
+            Expand16Table[1][(t1>>8)&0xFF] |
+            Expand16Table[2][(t1>>16)&0xFF] |
+            Expand16Table[3][(t1>>24)&0xFF];
+    temps[0] = EGA_Planar_Common_RawBlock_xlat<card,xlat,templine_type_t>((tmp>> 0ul)&0xFFul);
+    temps[1] = EGA_Planar_Common_RawBlock_xlat<card,xlat,templine_type_t>((tmp>> 8ul)&0xFFul);
+    temps[2] = EGA_Planar_Common_RawBlock_xlat<card,xlat,templine_type_t>((tmp>>16ul)&0xFFul);
+    temps[3] = EGA_Planar_Common_RawBlock_xlat<card,xlat,templine_type_t>((tmp>>24ul)&0xFFul);
+
+    tmp =   Expand16Table[0][(t2>>0)&0xFF] |
+            Expand16Table[1][(t2>>8)&0xFF] |
+            Expand16Table[2][(t2>>16)&0xFF] |
+            Expand16Table[3][(t2>>24)&0xFF];
+    temps[4] = EGA_Planar_Common_RawBlock_xlat<card,xlat,templine_type_t>((tmp>> 0ul)&0xFFul);
+    temps[5] = EGA_Planar_Common_RawBlock_xlat<card,xlat,templine_type_t>((tmp>> 8ul)&0xFFul);
+    temps[6] = EGA_Planar_Common_RawBlock_xlat<card,xlat,templine_type_t>((tmp>>16ul)&0xFFul);
+    temps[7] = EGA_Planar_Common_RawBlock_xlat<card,xlat,templine_type_t>((tmp>>24ul)&0xFFul);
+}
+
+template <const unsigned int card,const unsigned int xlat,typename templine_type_t> static void EGA_Planar_Common_RawLine(uint8_t *dst,Bitu vidstart, Bitu /*line*/) {
+    templine_type_t* temps = (templine_type_t*)dst;
+    Bitu count = vga.draw.blocks;
+    Bitu i = 0;
+
+    while (count > 0u) {
+        uint32_t t1,t2;
+        t1 = t2 = *((uint32_t*)(&vga.draw.linear_base[ vidstart & vga.draw.linear_mask ]));
+        t1 = (t1 >> 4) & 0x0f0f0f0f;
+        t2 &= 0x0f0f0f0f;
+        vidstart += (uintptr_t)4 << (uintptr_t)vga.config.addr_shift;
+        EGA_Planar_Common_RawBlock<card,xlat,templine_type_t>(temps+i,t1,t2);
+        count--;
+        i += 8;
+    }
+}
+
+static void VGA_RawDraw_VGA_Planar_Xlat32_Line(uint8_t *dst,uint8_t* dst2,Bitu vidstart, Bitu line) {
+    EGA_Planar_Common_RawLine<MCH_VGA,0/*xlat*/,uint8_t>(dst,vidstart,line);
+    if (dst2 != NULL) EGA_Planar_Common_RawLine<MCH_VGA,1/*xlat*/,uint8_t>(dst2,vidstart,line);
 }
 
 static uint8_t * VGA_Draw_VGA_Packed4_Xlat32_Line(Bitu vidstart, Bitu /*line*/) {
@@ -3069,6 +3219,15 @@ again:
             }
             RENDER_DrawLine(TempLine);
         } else {
+            if ((CaptureState & CAPTURE_RAWIMAGE) && VGA_DrawRawLine) {
+                if (rawshot.render_y < rawshot.image_height && rawshot.image != NULL) {
+                    VGA_DrawRawLine(
+                        rawshot.image+(rawshot.render_y*rawshot.image_stride),
+                        rawshot2.image ? (rawshot2.image+(rawshot.render_y*rawshot2.image_stride)) : NULL,
+                        vga.draw.address, vga.draw.address_line );
+                    rawshot.render_y++;
+                }
+            }
             uint8_t * data=VGA_DrawLine( vga.draw.address, vga.draw.address_line );
             /* WARNING: For magic reasons possibly related to gremlins added by the GNU C++ compiler or other otherwordly phenomona,
              *          modifying the rendered scanline pointed to by *data somehow corrupts the video memory of the guest, even though
@@ -4641,6 +4800,229 @@ void VGA_sof_debug_video_info(void) {
 	}
 }
 
+static inline uint8_t dacexpand(const uint8_t v,const uint8_t dacshl,const uint8_t dacshr) {
+	/* NTS: Expand to int for shift. You never know if some processor might
+	 *      limit the bit shift to the number of bits needed for the data
+	 *      type. Intel processors for example which only pay attention to
+	 *      the low 5 bits after the 8086 (6 bits for 64-bit).
+	 *
+	 *      In 6-bit mode, v is 6 bits wide. Caller is expected to mask v
+	 *      to 6 bits
+	 *
+	 *      The algorithm here is (x << dacshift) | (x >> (8 - (dacshift * 2u))).
+	 *
+	 *      For dacshift == 0, the result is v.
+	 *      For dacshift == 2, the result is (v << 2) | (v >> 4).
+	 *
+	 *      If dacshift 2, the idea is to take the top 2 bits and fill in
+	 *      the low 2 bits of the result with them. This is equivalent to
+	 *      computing (v * 255) / 63 but without a multiply and divide.
+	 *      dacshl == 2, dacshr == 4.
+	 *
+	 *      With apologies to those on GitHub I may have confused explaining
+	 *      this algorithm when I was more busy at work compared to a pull
+	 *      request that hardcoded (x << dacshift) | (x >> (dacshift * 2)),
+	 *      which would happen to work here, but would produce a wrong result
+	 *      for anything other than dacshift == 0 or dacshift == 2.
+	 *
+	 *      ++--------------++
+	 *      ||              ||
+	 *      001010 -> 00101000
+	 *      011001 -> 01000001
+	 *      100101 -> 10010110
+	 *      110011 -> 11001111
+	 *      abcdef    abcdefab
+	 */
+	if (dacshl == 0)
+		return v;
+	else
+		return	uint8_t((unsigned int)v << (unsigned int)dacshl) |
+			uint8_t((unsigned int)v >> (unsigned int)dacshr);
+}
+
+void SetRawImagePalette(void) {
+	const uint8_t dacshift = vga_8bit_dac ? 0u : 2u;
+	const uint8_t dacshl = dacshift;
+	const uint8_t dacshr = 8u - (dacshift * 2u); /* take 8 - dacshift bit field and shift right by dacshift i.e. 6 bit field shift right by 4 to fill lower bits. */
+	const uint8_t dacmask = (0x100 >> dacshift) - 1u; /* 8-bit = 0xFF 6-bit = 0x3F */
+
+	if (IS_VGA_ARCH || machine == MCH_MCGA) {
+		rawshot.allocpalette(256); // raw image, translated palette
+		rawshot2.allocpalette(256); // raw image, raw palette
+
+		for (unsigned int i=0;i < 256;i++) {
+			rawshot.image_palette[i*3+0] = (vga.dac.xlat32[i] & GFX_Rmask) >> GFX_Rshift;
+			rawshot.image_palette[i*3+1] = (vga.dac.xlat32[i] & GFX_Gmask) >> GFX_Gshift;
+			rawshot.image_palette[i*3+2] = (vga.dac.xlat32[i] & GFX_Bmask) >> GFX_Bshift;
+
+			rawshot2.image_palette[i*3+0] = dacexpand(vga.dac.rgb[i].red&dacmask,dacshl,dacshr);
+			rawshot2.image_palette[i*3+1] = dacexpand(vga.dac.rgb[i].green&dacmask,dacshl,dacshr);
+			rawshot2.image_palette[i*3+2] = dacexpand(vga.dac.rgb[i].blue&dacmask,dacshl,dacshr);
+		}
+	}
+}
+
+void AllocateRawImage(void) {
+	switch (vga.mode) {
+		case M_VGA:
+		case M_LIN8:
+			rawshot.allocate(vga.draw.width,vga.draw.height,8);
+			rawshot2.free();
+			break;
+		case M_EGA:
+		case M_LIN4:
+			rawshot.allocate(vga.draw.width,vga.draw.height,8);
+			rawshot2.allocate(vga.draw.width,vga.draw.height,8);
+			break;
+		default:
+			rawshot.free();
+			rawshot2.free();
+			break;
+	}
+}
+
+#if !defined(C_EMSCRIPTEN)
+#if (C_SSHOT)
+FILE * OpenCaptureFile(const char * type,const char * ext);
+extern bool show_recorded_filename;
+extern std::string pathscr;
+#endif
+#endif
+
+#if !defined(C_EMSCRIPTEN)
+#if (C_SSHOT)
+void WriteARawImage(rawscreenshot &rawimg,rawscreenshot &rawpal,const char *ext) {
+	png_structp png_ptr;
+	png_infop info_ptr;
+	png_color palette[256];
+	Bitu flags;
+
+	flags = 0;
+	if (render.src.dblw != render.src.dblh) {
+		if (render.src.dblw) flags|=CAPTURE_FLAG_DBLW;
+		if (render.src.dblh) flags|=CAPTURE_FLAG_DBLH;
+	}
+
+	/* Open the actual file */
+	FILE * fp=OpenCaptureFile("Raw Screenshot",ext);
+	if (!fp) return;
+	/* First try to allocate the png structures */
+	png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL,NULL, NULL);
+	if (!png_ptr) return;
+	info_ptr = png_create_info_struct(png_ptr);
+	if (!info_ptr) {
+		png_destroy_write_struct(&png_ptr,(png_infopp)NULL);
+		return;
+	}
+
+	/* Finalize the initing of png library */
+	png_init_io(png_ptr, fp);
+	png_set_compression_level(png_ptr,Z_BEST_COMPRESSION);
+
+	/* set other zlib parameters */
+	png_set_compression_mem_level(png_ptr, 8);
+	png_set_compression_strategy(png_ptr,Z_DEFAULT_STRATEGY);
+	png_set_compression_window_bits(png_ptr, 15);
+	png_set_compression_method(png_ptr, 8);
+	png_set_compression_buffer_size(png_ptr, 8192);
+
+	unsigned int finalw = rawimg.image_width;
+	unsigned int finalh = rawimg.image_height;
+
+	if (flags & CAPTURE_FLAG_DBLW) finalw *= 2;
+	if (flags & CAPTURE_FLAG_DBLH) finalh *= 2;
+
+	if (rawimg.image_bpp == 8) {
+		png_set_IHDR(png_ptr, info_ptr, (png_uint_32)finalw, (png_uint_32)finalh,
+			8, PNG_COLOR_TYPE_PALETTE, PNG_INTERLACE_NONE,
+			PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+		for (unsigned int i=0;i<rawpal.image_palette_size;i++) {
+			palette[i].red=rawpal.image_palette[i*3+0];
+			palette[i].green=rawpal.image_palette[i*3+1];
+			palette[i].blue=rawpal.image_palette[i*3+2];
+		}
+		png_set_PLTE(png_ptr, info_ptr, palette, rawpal.image_palette_size);
+	} else {
+		png_set_bgr( png_ptr );
+		png_set_IHDR(png_ptr, info_ptr, (png_uint_32)finalw, (png_uint_32)finalh,
+			8, (rawimg.image_bpp >= 32 ? PNG_COLOR_TYPE_RGBA : PNG_COLOR_TYPE_RGB), PNG_INTERLACE_NONE,
+			PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+	}
+#ifdef PNG_TEXT_SUPPORTED
+	int fields = 1;
+	png_text text[1] = {};
+	const char* text_s = "DOSBox-X " VERSION;
+	size_t strl = strlen(text_s);
+	char* ptext_s = new char[strl + 1];
+	strcpy(ptext_s, text_s);
+	char software[9] = { 'S','o','f','t','w','a','r','e',0};
+	text[0].compression = PNG_TEXT_COMPRESSION_NONE;
+	text[0].key  = software;
+	text[0].text = ptext_s;
+	png_set_text(png_ptr, info_ptr, text, fields);
+#endif
+	png_write_info(png_ptr, info_ptr);
+#ifdef PNG_TEXT_SUPPORTED
+	delete [] ptext_s;
+#endif
+	{
+		const unsigned int yshf = (flags & CAPTURE_FLAG_DBLH) ? 1 : 0;
+		if (flags & CAPTURE_FLAG_DBLW) {
+			for (unsigned int i=0;i<finalh;i++) {
+				unsigned char *src = rawimg.image+((i>>yshf)*rawimg.image_stride);
+				for (unsigned int x=0;x < rawimg.image_width;x++) TempLine[x*2+0] = TempLine[x*2+1] = src[x];
+				png_write_row(png_ptr, (png_bytep)TempLine);
+			}
+		}
+		else {
+			for (unsigned int i=0;i<finalh;i++) {
+				png_write_row(png_ptr, (png_bytep)(rawimg.image+((i>>yshf)*rawimg.image_stride)));
+			}
+		}
+	}
+	/* Finish writing */
+	png_write_end(png_ptr, 0);
+	/*Destroy PNG structs*/
+	png_destroy_write_struct(&png_ptr, &info_ptr);
+	/*close file*/
+	fclose(fp);
+	if (show_recorded_filename && pathscr.size()) systemmessagebox("Recording completed",("Saved screenshot to the file:\n\n"+pathscr).c_str(),"ok", "info", 1);
+}
+#endif
+#endif
+
+#if !defined(C_EMSCRIPTEN)
+#if (C_SSHOT)
+static bool rawpalette_is_same(const rawscreenshot &r1,const rawscreenshot &r2) {
+	if ((r1.image_palette != NULL) != (r2.image_palette != NULL))
+		return false;
+	if (r1.image_palette_size != r2.image_palette_size)
+		return false;
+	if (memcmp(r1.image_palette,r2.image_palette,r1.image_palette_size*3) != 0)
+		return false;
+
+	return true;
+}
+#endif
+#endif
+
+void WriteRawImage(void) {
+#if !defined(C_EMSCRIPTEN)
+#if (C_SSHOT)
+	if (rawshot.image != NULL && rawshot.image_palette != NULL && rawshot.image_palette_size > 0)
+		WriteARawImage(rawshot/*img*/,rawshot/*pal*/,".raw1.png");
+	if (rawshot.image != NULL && rawshot2.image_palette != NULL && rawshot2.image_palette_size > 0 && !rawpalette_is_same(rawshot,rawshot2))
+		WriteARawImage((rawshot2.image != NULL ? rawshot2 : rawshot)/*img*/,rawshot2/*pal*/,".raw2.png");
+#endif
+#endif
+	rawshot.render_y = 0;
+}
+
+void FreeRawImage(void) {
+	rawshot.free();
+	rawshot2.free();
+}
+
 static void VGA_VerticalTimer(Bitu /*val*/) {
     double current_time = PIC_GetCurrentEventTime();
 
@@ -4669,6 +5051,25 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
         VGA_CaptureStartNextFrame();
         if (!VGA_CaptureValidateCurrentFrame())
             VGA_CaptureMarkError();
+    }
+
+    if (CaptureState & CAPTURE_RAWIMAGE) {
+        if (VGA_DrawRawLine != NULL) {
+            if (rawshot.render_y >= vga.draw.height) {
+                WriteRawImage();
+                CaptureState &= ~CAPTURE_RAWIMAGE;
+                LOG(LOG_VGAMISC,LOG_NORMAL)("Raw capture saved");
+            }
+            else {
+                AllocateRawImage();
+                SetRawImagePalette();
+            }
+            rawshot.render_y = 0;
+        }
+        else {
+            LOG(LOG_VGAMISC,LOG_ERROR)("Raw capture not supported in the current video mode");
+            CaptureState &= ~CAPTURE_RAWIMAGE;
+        }
     }
 
     vga.draw.hsync_events = 0;
@@ -5591,6 +5992,9 @@ void VGA_SetupDrawing(Bitu /*val*/) {
     vga.draw.render_step = 0;
     vga.draw.render_max = 1;
 
+    rawshot.render_y = 0;
+    VGA_DrawRawLine = NULL;
+
     // set the drawing mode
     switch (machine) {
     case MCH_CGA:
@@ -6116,10 +6520,12 @@ void VGA_SetupDrawing(Bitu /*val*/) {
             /* ET4000 chipsets handle the chained mode (in my opinion) with sanity and we can scan linearly for it.
              * Chained VGA mode maps planar byte addr = (addr >> 2) and plane = (addr & 3) */
             VGA_DrawLine = VGA_Draw_Xlat32_Linear_Line;
+            VGA_DrawRawLine = VGA_RawDraw_Xlat32_Linear_Line;
         }
         else if (machine == MCH_MCGA) {
             pix_per_char = 8;
             VGA_DrawLine = VGA_Draw_Xlat32_Linear_Line;
+            VGA_DrawRawLine = VGA_RawDraw_Xlat32_Linear_Line;
             vga.tandy.draw_base = vga.mem.linear;
             vga.draw.address_line_total = 1;
         }
@@ -6131,11 +6537,13 @@ void VGA_SetupDrawing(Bitu /*val*/) {
              * "planar" writing to all 16 pixels properly. Chained VGA maps like planar byte = (addr & ~3) and
              * plane = (addr & 3) */
             VGA_DrawLine = VGA_Draw_Xlat32_VGA_CRTC_bmode_Line;
+            VGA_DrawRawLine = VGA_RawDraw_Xlat32_VGA_CRTC_bmode_Line;
         }
         break;
     case M_LIN8:
         bpp = 32;
         VGA_DrawLine = VGA_Draw_Xlat32_Linear_Line;
+        VGA_DrawRawLine = VGA_RawDraw_Xlat32_Linear_Line;
 
         if ((vga.s3.reg_3a & 0x10)||(svgaCard!=SVGA_S3Trio))
             pix_per_char = 8; // TODO fiddle out the bits for other svga cards
@@ -6168,6 +6576,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
         }
         else {
             VGA_DrawLine = VGA_Draw_VGA_Planar_Xlat32_Line;
+            VGA_DrawRawLine = VGA_RawDraw_VGA_Planar_Xlat32_Line;
             bpp = 32;
         }
         break;
