@@ -68,6 +68,7 @@ bool dbg_event_color_select = false;
 bool dbg_event_color_plane_enable = false;
 
 extern bool vga_render_on_demand;
+extern signed char vga_render_on_demand_user;
 
 /* S3 streams processor state.
  * Registers are only loaded into hardware on vertical sync anyway. */
@@ -3412,6 +3413,8 @@ void VGA_RenderOnDemandUpTo(void) {
     signed int scanline = (signed int)floor((double)(1.0 + ((dt - (vga.draw.delay.htotal/4.0)) / vga.draw.delay.singleline_delay)));
     int patience = 4096;
 
+//assert(vga_render_on_demand);
+
     if (scanline < 0) scanline = 0;
     while (vga.draw.lines_done < vga.draw.lines_total && vga.draw.hsync_events < (unsigned int)scanline && patience-- > 0)
         VGA_DrawSingleLine(0);
@@ -3420,12 +3423,16 @@ void VGA_RenderOnDemandUpTo(void) {
 void VGA_RenderOnDemandComplete(void) {
     int patience = 4096;
 
+//assert(vga_render_on_demand);
+
     while (vga.draw.lines_done < vga.draw.lines_total && patience-- > 0)
         VGA_DrawSingleLine(0);
 }
 
 static void VGA_VertInterrupt(Bitu /*val*/) {
-    VGA_RenderOnDemandComplete();
+    if (vga_render_on_demand)
+        VGA_RenderOnDemandComplete();
+
     if (IS_PC98_ARCH) {
         if (GDC_vsync_interrupt) {
             GDC_vsync_interrupt = false;
@@ -3441,13 +3448,16 @@ static void VGA_VertInterrupt(Bitu /*val*/) {
 }
 
 static void VGA_Other_VertInterrupt(Bitu val) {
-    VGA_RenderOnDemandComplete();
+    if (vga_render_on_demand)
+        VGA_RenderOnDemandComplete();
+
     if (val) PIC_ActivateIRQ(5);
     else PIC_DeActivateIRQ(5);
 }
 
 static void VGA_DisplayStartLatch(Bitu /*val*/) {
-    VGA_RenderOnDemandComplete();
+    if (vga_render_on_demand)
+        VGA_RenderOnDemandComplete();
 
     /* hretrace fx support: store the hretrace value at start of picture so we have
      * a point of reference how far to displace the scanline when wavy effects are
@@ -3463,7 +3473,9 @@ static void VGA_DisplayStartLatch(Bitu /*val*/) {
 }
  
 static void VGA_PanningLatch(Bitu /*val*/) {
-    VGA_RenderOnDemandComplete();
+    if (vga_render_on_demand)
+        VGA_RenderOnDemandComplete();
+
     vga.draw.panning = vga.config.pel_panning;
 
     if (IS_PC98_ARCH) {
@@ -5960,6 +5972,18 @@ void VGA_ActivateHardwareCursor(void) {
     }
 }
 
+static bool isSVGAMode(void) {
+	if (vga.mode == M_LIN15 || vga.mode == M_LIN16 || vga.mode == M_LIN24 || vga.mode == M_LIN32 || vga.mode == M_PACKED4)
+		return true;
+
+	if (vga.mode == M_LIN8) {
+		if (vga.draw.width >= 512 && vga.draw.height >= 384 && vga.draw.address_line_total == 1)
+			return true;
+	}
+
+	return false;
+}
+
 void VGA_SetupDrawing(Bitu /*val*/) {
     if (vga.mode==M_ERROR) {
         PIC_RemoveEvents(VGA_VerticalTimer);
@@ -5974,6 +5998,15 @@ void VGA_SetupDrawing(Bitu /*val*/) {
     vga.draw.doublescan_effect = true;
     vga.draw.render_step = 0;
     vga.draw.render_max = 1;
+
+    if (vga_render_on_demand_user >= 0)
+        vga_render_on_demand = vga_render_on_demand_user > 0;
+    else if (IS_VGA_ARCH && svgaCard != SVGA_None && isSVGAMode())
+        vga_render_on_demand = true;
+    else
+        vga_render_on_demand = false;
+
+    LOG(LOG_VGAMISC,LOG_DEBUG)("Render On Demand mode is %s for RodU %d",vga_render_on_demand?"on":"off",vga_render_on_demand_user);
 
     rawshot.render_y = 0;
     VGA_DrawRawLine = NULL;
