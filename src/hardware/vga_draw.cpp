@@ -391,50 +391,84 @@ void VGA_VsyncUpdateMode(VGA_Vsync vsyncmode) {
 void VGA_TweakUserVsyncOffset(float val) { uservsyncjolt = val; }
 
 template <const unsigned int card,typename templine_type_t> static inline templine_type_t InColor_Planar_Common_Block_xlat(const uint8_t t) {
-    return t&vga.herc.planemask_visible;
+    if (card == MCH_RAW_SNAPSHOT)
+        return t;
+    else
+        return t&vga.herc.planemask_visible;
+}
+
+template <const unsigned int card,typename templine_type_t> static uint8_t * VGA_Draw_HercInColor_Mono_1BPP_Line_Common(uint8_t *dst,Bitu vidstart, Bitu line) {
+	const uint32_t *base = (const uint32_t*)vga.tandy.draw_base + ((line & vga.tandy.line_mask) << vga.tandy.line_shift);
+	uint8_t *draw = (uint8_t *)dst;
+	uint32_t t1,t2,tmp;
+
+	for (Bitu x=vga.draw.blocks;x>0;x--, vidstart++) {
+		t1 = t2 = base[vidstart & ((8 * 1024) - 1)];
+		t1 = (t1 >> 4) & 0x0f0f0f0f;
+		t2 &= 0x0f0f0f0f;
+
+		tmp =   Expand16Table[0][(t1>>0)&0xFF] |
+			Expand16Table[1][(t1>>8)&0xFF] |
+			Expand16Table[2][(t1>>16)&0xFF] |
+			Expand16Table[3][(t1>>24)&0xFF];
+		draw[0] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>> 0ul)&0xFFul);
+		draw[1] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>> 8ul)&0xFFul);
+		draw[2] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>>16ul)&0xFFul);
+		draw[3] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>>24ul)&0xFFul);
+
+		tmp =   Expand16Table[0][(t2>>0)&0xFF] |
+			Expand16Table[1][(t2>>8)&0xFF] |
+			Expand16Table[2][(t2>>16)&0xFF] |
+			Expand16Table[3][(t2>>24)&0xFF];
+		draw[4] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>> 0ul)&0xFFul);
+		draw[5] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>> 8ul)&0xFFul);
+		draw[6] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>>16ul)&0xFFul);
+		draw[7] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>>24ul)&0xFFul);
+		draw += 8;
+	}
+	return dst;
+}
+
+static void VGA_RawDraw_HercInColor_Mono_1BPP_Line(uint8_t *dst,Bitu vidstart, Bitu line) {
+	VGA_Draw_HercInColor_Mono_1BPP_Line_Common<MCH_RAW_SNAPSHOT,uint8_t>(dst,vidstart,line);
 }
 
 static uint8_t * VGA_Draw_HercInColor_Mono_1BPP_Line(Bitu vidstart, Bitu line) {
-    const uint32_t *base = (const uint32_t*)vga.tandy.draw_base + ((line & vga.tandy.line_mask) << vga.tandy.line_shift);
-    uint8_t *draw = (uint8_t *)TempLine;
-    uint32_t t1,t2,tmp;
+	return VGA_Draw_HercInColor_Mono_1BPP_Line_Common<MCH_HERC,uint8_t>(TempLine,vidstart,line);
+}
 
-    for (Bitu x=vga.draw.blocks;x>0;x--, vidstart++) {
-        t1 = t2 = base[vidstart & ((8 * 1024) - 1)];
-        t1 = (t1 >> 4) & 0x0f0f0f0f;
-        t2 &= 0x0f0f0f0f;
+template <const unsigned int card,typename templine_type_t> static uint8_t * VGA_Draw_1BPP_Line_Common(uint8_t *dst,Bitu vidstart, Bitu line) {
+	const uint8_t *base = vga.tandy.draw_base + ((line & vga.tandy.line_mask) << vga.tandy.line_shift);
+        if (card == MCH_RAW_SNAPSHOT) {
+                for (Bitu x=vga.draw.blocks;x>0;x--, vidstart++) {
+                        const uint8_t val = base[vidstart & (8 * 1024 -1)];
+                        *dst++=(val >> 7) & 1;
+                        *dst++=(val >> 6) & 1;
+                        *dst++=(val >> 5) & 1;
+                        *dst++=(val >> 4) & 1;
+                        *dst++=(val >> 3) & 1;
+                        *dst++=(val >> 2) & 1;
+                        *dst++=(val >> 1) & 1;
+                        *dst++=(val >> 0) & 1;
+                }
+        }
+        else {
+                uint32_t *draw = (uint32_t *)dst;
+                for (Bitu x=vga.draw.blocks;x>0;x--, vidstart++) {
+                        const uint8_t val = base[vidstart & (8 * 1024 -1)];
+                        *draw++=CGA_2_Table[val >> 4];
+                        *draw++=CGA_2_Table[val & 0xf];
+                }
+        }
+	return dst;
+}
 
-        tmp =   Expand16Table[0][(t1>>0)&0xFF] |
-                Expand16Table[1][(t1>>8)&0xFF] |
-                Expand16Table[2][(t1>>16)&0xFF] |
-                Expand16Table[3][(t1>>24)&0xFF];
-        draw[0] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>> 0ul)&0xFFul);
-        draw[1] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>> 8ul)&0xFFul);
-        draw[2] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>>16ul)&0xFFul);
-        draw[3] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>>24ul)&0xFFul);
-
-        tmp =   Expand16Table[0][(t2>>0)&0xFF] |
-                Expand16Table[1][(t2>>8)&0xFF] |
-                Expand16Table[2][(t2>>16)&0xFF] |
-                Expand16Table[3][(t2>>24)&0xFF];
-        draw[4] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>> 0ul)&0xFFul);
-        draw[5] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>> 8ul)&0xFFul);
-        draw[6] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>>16ul)&0xFFul);
-        draw[7] = InColor_Planar_Common_Block_xlat<MCH_HERC,uint8_t>((tmp>>24ul)&0xFFul);
-	draw += 8;
-    }
-    return TempLine;
+static void VGA_RawDraw_1BPP_Line(uint8_t *dst,Bitu vidstart, Bitu line) {
+	VGA_Draw_1BPP_Line_Common<MCH_RAW_SNAPSHOT,uint8_t>(dst,vidstart,line);
 }
 
 static uint8_t * VGA_Draw_1BPP_Line(Bitu vidstart, Bitu line) {
-    const uint8_t *base = vga.tandy.draw_base + ((line & vga.tandy.line_mask) << vga.tandy.line_shift);
-    uint32_t *draw = (uint32_t *)TempLine;
-    for (Bitu x=vga.draw.blocks;x>0;x--, vidstart++) {
-        const uint8_t val = base[vidstart & (8 * 1024 -1)];
-        *draw++=CGA_2_Table[val >> 4];
-        *draw++=CGA_2_Table[val & 0xf];
-    }
-    return TempLine;
+	return VGA_Draw_1BPP_Line_Common<MCH_CGA,uint8_t>(TempLine,vidstart,line);
 }
 
 static uint8_t * VGA_Draw_1BPP_Blend_Line(Bitu vidstart, Bitu line) {
@@ -521,29 +555,66 @@ static uint8_t * VGA_Draw_2BPP_Line_as_MCGA(Bitu vidstart, Bitu line) {
     return TempLine;
 }
 
+template <const unsigned int card,typename templine_type_t> static uint8_t * VGA_Draw_2BPP_Line_Common(uint8_t *dst,Bitu vidstart, Bitu line) {
+	const uint8_t *base = vga.tandy.draw_base + ((line & vga.tandy.line_mask) << vga.tandy.line_shift);
+	if (card == MCH_RAW_SNAPSHOT) {
+		for (unsigned int x=0;x < vga.draw.blocks;x++) {
+			uint8_t val = base[vidstart & vga.tandy.addr_mask];
+			vidstart++;
+			dst[0] = (val >> 6) & 3;
+			dst[1] = (val >> 4) & 3;
+			dst[2] = (val >> 2) & 3;
+			dst[3] = (val >> 0) & 3;
+			dst += 4;
+		}
+	}
+	else {
+		uint32_t * draw=(uint32_t *)dst;
+		for (Bitu x=0;x<vga.draw.blocks;x++) {
+			Bitu val = base[vidstart & vga.tandy.addr_mask];
+			vidstart++;
+			*draw++=CGA_4_Table[val];
+		}
+	}
+	return dst;
+}
+
+static void VGA_RawDraw_2BPP_Line(uint8_t *dst,Bitu vidstart, Bitu line) {
+	VGA_Draw_2BPP_Line_Common<MCH_RAW_SNAPSHOT,uint8_t>(dst,vidstart,line);
+}
+
 static uint8_t * VGA_Draw_2BPP_Line(Bitu vidstart, Bitu line) {
-    const uint8_t *base = vga.tandy.draw_base + ((line & vga.tandy.line_mask) << vga.tandy.line_shift);
-    uint32_t * draw=(uint32_t *)TempLine;
-    for (Bitu x=0;x<vga.draw.blocks;x++) {
-        Bitu val = base[vidstart & vga.tandy.addr_mask];
-        vidstart++;
-        *draw++=CGA_4_Table[val];
-    }
-    return TempLine;
+	return VGA_Draw_2BPP_Line_Common<MCH_CGA,uint8_t>(TempLine,vidstart,line);
+}
+
+extern uint32_t CGA_4_HiRes_TableNP[256];
+
+template <const unsigned int card,typename templine_type_t> static uint8_t * VGA_Draw_2BPPHiRes_Line_Common(uint8_t *dst,Bitu vidstart, Bitu line) {
+	const uint8_t *base = vga.tandy.draw_base + ((line & vga.tandy.line_mask) << vga.tandy.line_shift);
+	uint32_t * draw=(uint32_t *)dst;
+	for (Bitu x=0;x<vga.draw.blocks;x++) {
+		Bitu val1 = base[vidstart & vga.tandy.addr_mask];
+		++vidstart;
+		Bitu val2 = base[vidstart & vga.tandy.addr_mask];
+		++vidstart;
+		if (card == MCH_RAW_SNAPSHOT) {
+			*draw++=CGA_4_HiRes_TableNP[(val1>>4)|(val2&0xf0)];
+			*draw++=CGA_4_HiRes_TableNP[(val1&0x0f)|((val2&0x0f)<<4)];
+		}
+		else {
+			*draw++=CGA_4_HiRes_Table[(val1>>4)|(val2&0xf0)];
+			*draw++=CGA_4_HiRes_Table[(val1&0x0f)|((val2&0x0f)<<4)];
+		}
+	}
+	return dst;
+}
+
+static void VGA_RawDraw_2BPPHiRes_Line(uint8_t *dst,Bitu vidstart, Bitu line) {
+	VGA_Draw_2BPPHiRes_Line_Common<MCH_RAW_SNAPSHOT,uint8_t>(dst,vidstart,line);
 }
 
 static uint8_t * VGA_Draw_2BPPHiRes_Line(Bitu vidstart, Bitu line) {
-    const uint8_t *base = vga.tandy.draw_base + ((line & vga.tandy.line_mask) << vga.tandy.line_shift);
-    uint32_t * draw=(uint32_t *)TempLine;
-    for (Bitu x=0;x<vga.draw.blocks;x++) {
-        Bitu val1 = base[vidstart & vga.tandy.addr_mask];
-        ++vidstart;
-        Bitu val2 = base[vidstart & vga.tandy.addr_mask];
-        ++vidstart;
-        *draw++=CGA_4_HiRes_Table[(val1>>4)|(val2&0xf0)];
-        *draw++=CGA_4_HiRes_Table[(val1&0x0f)|((val2&0x0f)<<4)];
-    }
-    return TempLine;
+	return VGA_Draw_2BPPHiRes_Line_Common<MCH_TANDY,uint8_t>(TempLine,vidstart,line);
 }
 
 static Bitu temp[643]={0};
@@ -579,23 +650,37 @@ static uint8_t * VGA_Draw_CGA16_Line(Bitu vidstart, Bitu line) {
 #undef CGA16_READER
 }
 
-static uint8_t * VGA_Draw_4BPP_Line(Bitu vidstart, Bitu line) {
-    const uint8_t *base = vga.tandy.draw_base + ((line & vga.tandy.line_mask) << vga.tandy.line_shift);
-    uint8_t* draw=TempLine;
-    Bitu end = vga.draw.blocks*2;
-    while(end) {
-        uint8_t byte = base[vidstart & vga.tandy.addr_mask];
-        *draw++=vga.attr.palette[byte >> 4];
-        *draw++=vga.attr.palette[byte & 0x0f];
-        vidstart++;
-        end--;
-    }
-    return TempLine;
+template <const unsigned int card,typename templine_type_t> static uint8_t * VGA_Draw_4BPP_Line_Common(uint8_t *dst,Bitu vidstart, Bitu line) {
+	const uint8_t *base = vga.tandy.draw_base + ((line & vga.tandy.line_mask) << vga.tandy.line_shift);
+	uint8_t* draw=dst;
+	Bitu end = vga.draw.blocks*2;
+	while(end) {
+		uint8_t byte = base[vidstart & vga.tandy.addr_mask];
+		if (card == MCH_RAW_SNAPSHOT) {
+			*draw++=byte >> 4;
+			*draw++=byte & 0x0f;
+		}
+		else {
+			*draw++=vga.attr.palette[byte >> 4];
+			*draw++=vga.attr.palette[byte & 0x0f];
+		}
+		vidstart++;
+		end--;
+	}
+	return dst;
 }
 
-static uint8_t * VGA_Draw_4BPP_Line_Double(Bitu vidstart, Bitu line) {
+static void VGA_RawDraw_4BPP_Line(uint8_t *dst,Bitu vidstart, Bitu line) {
+	VGA_Draw_4BPP_Line_Common<MCH_RAW_SNAPSHOT,uint8_t>(dst,vidstart,line);
+}
+
+static uint8_t * VGA_Draw_4BPP_Line(Bitu vidstart, Bitu line) {
+	return VGA_Draw_4BPP_Line_Common<MCH_TANDY,uint8_t>(TempLine,vidstart,line);
+}
+
+template <const unsigned int card,typename templine_type_t> static uint8_t * VGA_Draw_4BPP_Line_Double_Common(uint8_t *dst,Bitu vidstart, Bitu line) {
     const uint8_t *base = vga.tandy.draw_base + ((line & vga.tandy.line_mask) << vga.tandy.line_shift);
-    uint8_t* draw=TempLine;
+    uint8_t* draw=dst;
     Bitu end = vga.draw.blocks;
     while(end) {
         uint8_t byte = base[vidstart & vga.tandy.addr_mask];
@@ -606,7 +691,15 @@ static uint8_t * VGA_Draw_4BPP_Line_Double(Bitu vidstart, Bitu line) {
         vidstart++;
         end--;
     }
-    return TempLine;
+    return dst;
+}
+
+static void VGA_RawDraw_4BPP_Line_Double(uint8_t *dst,Bitu vidstart, Bitu line) {
+	VGA_Draw_4BPP_Line_Double_Common<MCH_RAW_SNAPSHOT,uint8_t>(dst,vidstart,line);
+}
+
+static uint8_t * VGA_Draw_4BPP_Line_Double(Bitu vidstart, Bitu line) {
+	return VGA_Draw_4BPP_Line_Double_Common<MCH_TANDY,uint8_t>(TempLine,vidstart,line);
 }
 
 #if SDL_BYTEORDER == SDL_LIL_ENDIAN && defined(MACOSX) && !defined(C_SDL2) /* Mac OS X Intel builds use a weird RGBA order (alpha in the low 8 bits) */
@@ -2610,6 +2703,103 @@ extern uint8_t              pc98_pal_digital[8];    /* G R B    0x0..0x7 */
 extern bool                 pc98_256kb_boundary;
 extern bool                 gdc_5mhz_mode;
 
+// NTS: This code only renders the graphics layer. I don't think anyone particularly cares about getting
+//      a raw capture of the text layer.
+static void VGA_PC98_Xlat32_RawDraw_Line(uint8_t *dst,Bitu vidstart, Bitu /*line*/) {
+    uint8_t* draw = ((uint8_t*)dst);
+    Bitu blocks = vga.draw.blocks;
+    uint32_t vidmem = vidstart;
+    unsigned char foreground;
+    bool ok_raster = true;
+
+    // 200-line modes: The BIOS or DOS game can elect to hide odd raster lines
+    // NTS: Doublescan seems to be ignored in 256-color mode, thus the HACK! below, according to real hardware.
+    if (pc98_gdc[GDC_SLAVE].doublescan && pc98_graphics_hide_odd_raster_200line && pc98_allow_scanline_effect &&
+        /*HACK!*/(pc98_gdc_vramop & (1u << VOPBIT_VGA)) == 0)
+        ok_raster = (vga.draw.lines_done & 1) == 0;
+
+    // Generally the master and slave GDC are given the same active display area, timing, etc.
+    // however some games reprogram the slave (graphics) GDC to reduce the active display area.
+    //
+    // Without this consideration, graphics display will be incorrect relative to actual hardware.
+    //
+    // This will NOT cause correct display if other parameters like blanking area are changed!
+    //
+    // Examples:
+    //  - "First Queen" and "First Queen II" (reduces active lines count to 384 to display status bar at the bottom of the screen)
+    if (vga.draw.lines_done >= pc98_gdc[GDC_SLAVE].active_display_lines)
+        ok_raster = false;
+
+    // Graphic RAM layer (or blank)
+    // Think of it as a 3-plane GRB color graphics mode, each plane is 1 bit per pixel.
+    // G-RAM is addressed 16 bits per RAM cycle.
+    if (pc98_gdc[GDC_SLAVE].display_enable && ok_raster && pc98_display_enable) {
+        blocks = vga.draw.blocks;
+
+        if (pc98_gdc_vramop & (1 << VOPBIT_VGA)) {
+            /* WARNING: This code ASSUMES the port A4h page flip emulation will always
+             *          set current_display_page to the same base graphics memory address
+             *          when the 256KB boundary is enabled! If that assumption is WRONG,
+             *          this code will read 256KB past the end of the buffer and possibly
+             *          segfault. */
+            const unsigned long vmask = pc98_256kb_boundary ? 0x7FFFFu : 0x3FFFFu;
+
+            vidmem = (unsigned int)pc98_gdc[GDC_SLAVE].scan_address << (1u+3u); /* as if reading across bitplanes */
+
+            while (blocks--) {
+                const unsigned char *s = (const unsigned char*)(&pc98_pgraph_current_display_page[vidmem & vmask]);
+                for (unsigned char i=0;i < 8;i++) *draw++ = *s++;
+                vidmem += 8;
+            }
+        }
+        else {
+            /* NTS: It is the responsibility of the raw image palette setup to map the digital palette, analog palette,
+	     *      or modified digital palette in monochrome mode. We don't do that. We just provide the raw pixel
+	     *      values */
+            /* NTS: According to real hardware, the 128KB/256KB boundary control bit ONLY works in 256-color mode.
+             *      It has no effect in 8/16-color planar modes, which is probably why the BIOS on such systems
+             *      will not allow a 640x480 16-color mode since the VRAM required exceeds 32KB per bitplane. */
+            const unsigned long vmask = 0x7FFFu;
+
+            vidmem = (unsigned int)pc98_gdc[GDC_SLAVE].scan_address << 1u;
+
+            while (blocks--) {
+                // NTS: Testing on real hardware shows that, when you switch the GDC back to 8-color mode,
+                //      the 4th bitplane is no longer rendered.
+                uint8_t e8;
+
+                if (gdc_analog)
+                    e8 = pc98_pgraph_current_display_page[(vidmem & vmask) + pc98_pgram_bitplane_offset(3)];  /* E0000-E7FFF */
+                else
+                    e8 = 0x00;
+
+                uint8_t g8 = pc98_pgraph_current_display_page[(vidmem & vmask) + pc98_pgram_bitplane_offset(2)];      /* B8000-BFFFF */
+                uint8_t r8 = pc98_pgraph_current_display_page[(vidmem & vmask) + pc98_pgram_bitplane_offset(1)];      /* B0000-B7FFF */
+                uint8_t b8 = pc98_pgraph_current_display_page[(vidmem & vmask) + pc98_pgram_bitplane_offset(0)];      /* A8000-AFFFF */
+
+                for (unsigned char i=0;i < 8;i++) {
+                    foreground  = (e8 & 0x80) ? 8 : 0;
+                    foreground += (g8 & 0x80) ? 4 : 0;
+                    foreground += (r8 & 0x80) ? 2 : 0;
+                    foreground += (b8 & 0x80) ? 1 : 0;
+
+                    e8 <<= 1;
+                    g8 <<= 1;
+                    r8 <<= 1;
+                    b8 <<= 1;
+
+                    *draw++ = foreground;
+                }
+
+                vidmem++;
+            }
+        }
+    }
+    else {
+        memset(dst,0,8 * blocks);
+    }
+}
+
 static uint8_t* VGA_PC98_Xlat32_Draw_Line(Bitu vidstart, Bitu line) {
     // keep it aligned:
     uint32_t* draw = ((uint32_t*)TempLine);
@@ -4215,19 +4405,47 @@ void VGA_sof_debug_video_info(void) {
 	}
 	else if (vga.mode == M_TEXT || vga.mode == M_TANDY_TEXT || vga.mode == M_HERC_TEXT) {
 		unsigned int pixperclock = 8;
+		char *d = tmp;
 
 		if (machine == MCH_EGA || machine == MCH_VGA)
 			pixperclock = ((vga.seq.clocking_mode&1)?8:9);
 		else if (machine == MCH_HERC || machine == MCH_MDA)
 			pixperclock = vga.draw.char9dot ? 9 : 8;
 
-		sprintf(tmp,"T%ux%u>%ux%u",
+		d += sprintf(d,"T%ux%u>%ux%u",
 			(unsigned int)vga.draw.width / pixperclock,(unsigned int)vga.draw.height / (unsigned int)vga.draw.address_line_total,
 			(unsigned int)vga.draw.width,(unsigned int)vga.draw.height);
+
+		if (machine == MCH_HERC) {
+			if (hercCard >= HERC_InColor) {
+				if (	((vga.herc.exception & 0x10) && vga.mode == M_HERC_GFX)/*graphics mode and palette enable*/ ||
+					((vga.herc.exception & 0x30) == 0x10 && vga.mode == M_HERC_TEXT/*text mode, CGA attributes and palette enable*/)) {
+					d += sprintf(d," COLOR");
+					d += sprintf(d," PALETTE");
+				}
+				else if (vga.herc.exception & 0x10) {
+					d += sprintf(d," COLOR");
+					d += sprintf(d," PALETTE");
+				}
+				else {
+					if (vga.herc.exception & 0x20)
+						d += sprintf(d," MONO ");
+				}
+			}
+			if (vga.herc.xMode & 1) {
+				if (vga.herc.xMode & 4) {
+					d += sprintf(d," RAMFONT48");
+				}
+				else {
+					d += sprintf(d," RAMFONT");
+				}
+			}
+		}
 	}
 	else {
 		unsigned int rowdiv = (unsigned int)vga.draw.address_line_total;
 		unsigned int interleave_mul = 1;
+		char *d = tmp;
 
 		if (machine == MCH_CGA || machine == MCH_TANDY || machine == MCH_PCJR || machine == MCH_HERC || machine == MCH_AMSTRAD) {
 			if (rowdiv == 2 || rowdiv == 4) rowdiv = 1; /* CGA graphics use interleaving to accomplish 200 lines, Tandy and Hercules use 4-way interleaving in some modes */
@@ -4238,9 +4456,35 @@ void VGA_sof_debug_video_info(void) {
 			else if (vga.tandy.line_mask & 1) interleave_mul = 2;
 		}
 
-		sprintf(tmp,"G%ux%u>%ux%u",
+		d += sprintf(d,"G%ux%u>%ux%u",
 			(unsigned int)vga.draw.width,((unsigned int)vga.draw.height * interleave_mul) / rowdiv,
 			(unsigned int)vga.draw.width,(unsigned int)vga.draw.height);
+
+		if (machine == MCH_HERC) {
+			if (hercCard >= HERC_InColor) {
+				if (	((vga.herc.exception & 0x10) && vga.mode == M_HERC_GFX)/*graphics mode and palette enable*/ ||
+					((vga.herc.exception & 0x30) == 0x10 && vga.mode == M_HERC_TEXT/*text mode, CGA attributes and palette enable*/)) {
+					d += sprintf(d," COLOR");
+					d += sprintf(d," PALETTE");
+				}
+				else if (vga.herc.exception & 0x10) {
+					d += sprintf(d," COLOR");
+					d += sprintf(d," PALETTE");
+				}
+				else {
+					if (vga.herc.exception & 0x20)
+						d += sprintf(d," MONO ");
+				}
+			}
+			if (vga.herc.xMode & 1) {
+				if (vga.herc.xMode & 4) {
+					d += sprintf(d," RAMFONT48");
+				}
+				else {
+					d += sprintf(d," RAMFONT");
+				}
+			}
+		}
 	}
 	x = VGA_debug_screen_puts8(x,y,tmp,white) + 8;
 
@@ -4472,6 +4716,22 @@ void VGA_sof_debug_video_info(void) {
 					VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,0x8);
 					x += 8;
 				}
+			}
+
+			x += 8;
+		}
+	}
+	else if (machine == MCH_HERC && hercCard >= HERC_InColor) {
+		if (vga.draw.bpp == 8 && vga.mode != M_CGA16) { /* CGA emulation doesn't use anything else, and do not draw palette in "composite" mode */
+			x = VGA_debug_screen_puts8(x,y,"PAL:",white) + 8;
+			VGA_debug_screen_func->rect(x-1,y,x,y+7,0x8/*dkgray*/);
+
+			VGA_debug_screen_func->rect(x-1,y,x+(8*16),y+1,0x8);
+			VGA_debug_screen_func->rect(x-1,y+7,x+(8*16),y+8,0x8);
+			for (unsigned int c=0;c < 16;c++) {
+				VGA_debug_screen_func->rect(x,y+1,x+7,y+7,c);
+				VGA_debug_screen_func->rect(x+7,y+1,x+8,y+7,0x8);
+				x += 8;
 			}
 
 			x += 8;
@@ -4824,6 +5084,10 @@ static inline uint8_t dacexpand(const uint8_t v,const uint8_t dacshl,const uint8
 			uint8_t((unsigned int)v >> (unsigned int)dacshr);
 }
 
+extern uint8_t                     pc98_pal_vga[256*3];    /* G R B    0x0..0xFF */
+extern uint8_t                     pc98_pal_analog[256*3]; /* G R B    0x0..0xF */
+extern uint8_t                     pc98_pal_digital[8];    /* G R B    0x0..0x7 */
+
 void SetRawImagePalette(void) {
 	const uint8_t dacshift = vga_8bit_dac ? 0u : 2u;
 	const uint8_t dacshl = dacshift;
@@ -4862,16 +5126,104 @@ void SetRawImagePalette(void) {
 			rawshot.image_palette2[i*3+2] = dacexpand(vga.dac.rgb[t2].blue&dacmask,dacshl,dacshr);
 		}
 	}
+	else if (machine == MCH_PC98) {
+		// NTS: PC-98 palettes don't have translation layers like VGA.
+		//      The only exception here is 8-color mode which can be switched into a monochrome mode
+		//      by which after translation one bit becomes the monochrome output. The active PC-98
+		//      palette has already been programmed into vga.dac.rgb[] we just need to copy it out.
+		if (pc98_gdc_vramop & (1 << VOPBIT_VGA)) {
+			rawshot.allocpalette(256);
+		}
+		else if (pc98_gdc_vramop & (1 << VOPBIT_ANALOG)) {
+			rawshot.allocpalette(16);
+		}
+		else {
+			rawshot.allocpalette(8);
+		}
+
+		// TODO: If monochrome mode...
+		for (unsigned int i=0;i < rawshot.image_palette_size;i++) {
+			rawshot.image_palette[i*3+0] = dacexpand(vga.dac.rgb[i].red&dacmask,dacshl,dacshr);
+			rawshot.image_palette[i*3+1] = dacexpand(vga.dac.rgb[i].green&dacmask,dacshl,dacshr);
+			rawshot.image_palette[i*3+2] = dacexpand(vga.dac.rgb[i].blue&dacmask,dacshl,dacshr);
+		}
+	}
+	else if ((machine == MCH_TANDY || machine == MCH_PCJR) && vga.mode == M_TANDY16) {
+		rawshot.allocpalette(16); // raw image, translated palette
+
+		for (unsigned int i=0;i < 16;i++) {
+			const unsigned int ti = vga.attr.palette[i];
+
+			rawshot.image_palette[i*3+0] = dacexpand(vga.dac.rgb[ti].red&dacmask,dacshl,dacshr);
+			rawshot.image_palette[i*3+1] = dacexpand(vga.dac.rgb[ti].green&dacmask,dacshl,dacshr);
+			rawshot.image_palette[i*3+2] = dacexpand(vga.dac.rgb[ti].blue&dacmask,dacshl,dacshr);
+		}
+	}
+	else if (machine == MCH_CGA || machine == MCH_MDA || machine == MCH_HERC || machine == MCH_PCJR || machine == MCH_TANDY) {
+		if (vga.mode == M_CGA4 || vga.mode == M_TANDY4) {
+			rawshot.allocpalette(4); // raw image, translated palette
+
+			for (unsigned int i=0;i < 4;i++) {
+				const unsigned int ti = CGAPal4[i];
+
+				rawshot.image_palette[i*3+0] = dacexpand(vga.dac.rgb[ti].red&dacmask,dacshl,dacshr);
+				rawshot.image_palette[i*3+1] = dacexpand(vga.dac.rgb[ti].green&dacmask,dacshl,dacshr);
+				rawshot.image_palette[i*3+2] = dacexpand(vga.dac.rgb[ti].blue&dacmask,dacshl,dacshr);
+			}
+		}
+		else if (vga.mode == M_CGA2 || vga.mode == M_TANDY2) {
+			rawshot.allocpalette(2); // raw image, translated palette
+
+			for (unsigned int i=0;i < 2;i++) {
+				const unsigned int ti = CGAPal2[i];
+
+				rawshot.image_palette[i*3+0] = dacexpand(vga.dac.rgb[ti].red&dacmask,dacshl,dacshr);
+				rawshot.image_palette[i*3+1] = dacexpand(vga.dac.rgb[ti].green&dacmask,dacshl,dacshr);
+				rawshot.image_palette[i*3+2] = dacexpand(vga.dac.rgb[ti].blue&dacmask,dacshl,dacshr);
+			}
+		}
+		else if (vga.mode == M_HERC_GFX && machine == MCH_HERC && hercCard < HERC_InColor) {
+			rawshot.allocpalette(2); // raw image, translated palette
+
+			for (unsigned int i=0;i < 2;i++) {
+				rawshot.image_palette[i*3+0] = i*255;
+				rawshot.image_palette[i*3+1] = i*255;
+				rawshot.image_palette[i*3+2] = i*255;
+			}
+		}
+		else {
+			rawshot.allocpalette(16); // raw image, translated palette
+			rawshot.allocpalette2(16); // raw image, translated palette
+
+			for (unsigned int i=0;i < 16;i++) {
+				const unsigned int ti = vga.dac.combine[i];
+
+				rawshot.image_palette[i*3+0] = dacexpand(vga.dac.rgb[ti].red&dacmask,dacshl,dacshr);
+				rawshot.image_palette[i*3+1] = dacexpand(vga.dac.rgb[ti].green&dacmask,dacshl,dacshr);
+				rawshot.image_palette[i*3+2] = dacexpand(vga.dac.rgb[ti].blue&dacmask,dacshl,dacshr);
+
+				rawshot.image_palette2[i*3+0] = dacexpand(vga.dac.rgb[i].red&dacmask,dacshl,dacshr);
+				rawshot.image_palette2[i*3+1] = dacexpand(vga.dac.rgb[i].green&dacmask,dacshl,dacshr);
+				rawshot.image_palette2[i*3+2] = dacexpand(vga.dac.rgb[i].blue&dacmask,dacshl,dacshr);
+			}
+		}
+	}
 }
 
 void AllocateRawImage(void) {
 	switch (vga.mode) {
+		case M_TANDY16:
+		case M_HERC_GFX:
+		case M_TANDY2:
+		case M_CGA2:
+		case M_TANDY4:
 		case M_CGA4:
 		case M_VGA:
 		case M_LIN8:
 		case M_EGA:
 		case M_LIN4:
 		case M_TEXT:
+		case M_PC98:
 			rawshot.allocate(vga.draw.width,vga.draw.height,8);
 			break;
 		default:
@@ -6594,6 +6946,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
         }
         else {
             VGA_DrawLine=VGA_Draw_2BPP_Line;
+            VGA_DrawRawLine=VGA_RawDraw_2BPP_Line;
             vga.draw.blocks=width*2;
         }
         break;
@@ -6628,6 +6981,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
         }
         else {
             VGA_DrawLine=VGA_Draw_1BPP_Line;
+            VGA_DrawRawLine=VGA_RawDraw_1BPP_Line;
             vga.draw.blocks=width*2;
         }
         break;
@@ -6635,6 +6989,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
         vga.draw.blocks=width;
         vga.draw.char9dot = false;
         VGA_DrawLine=VGA_PC98_Xlat32_Draw_Line;
+        VGA_DrawRawLine=VGA_PC98_Xlat32_RawDraw_Line;
         bpp = 32;
         break;
     case M_TEXT:
@@ -6670,10 +7025,12 @@ void VGA_SetupDrawing(Bitu /*val*/) {
         vga.draw.blocks=width*2;
         if (hercCard >= HERC_InColor) {
             VGA_DrawLine=VGA_Draw_HercInColor_Mono_1BPP_Line;
+            VGA_DrawRawLine=VGA_RawDraw_HercInColor_Mono_1BPP_Line;
         }
         else {
             if (vga.herc.blend) VGA_DrawLine=VGA_Draw_1BPP_Blend_Line;
             else VGA_DrawLine=VGA_Draw_1BPP_Line;
+            VGA_DrawRawLine=VGA_RawDraw_1BPP_Line;
         }
         pix_per_char = 16;
         break;
@@ -6688,6 +7045,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
         }
 
         VGA_DrawLine=VGA_Draw_1BPP_Line;
+        VGA_DrawRawLine=VGA_RawDraw_1BPP_Line;
 
         /* MCGA CGA-compatible modes will always refer to the last half of the 64KB of RAM */
         if (machine == MCH_MCGA) {
@@ -6713,9 +7071,11 @@ void VGA_SetupDrawing(Bitu /*val*/) {
         if ((machine==MCH_TANDY && (vga.tandy.gfx_control & 0x8)) ||
             (machine==MCH_PCJR && (vga.tandy.mode_control==0x0b))) {
             VGA_DrawLine=VGA_Draw_2BPPHiRes_Line;
+            VGA_DrawRawLine=VGA_RawDraw_2BPPHiRes_Line;
         }
         else {
             VGA_DrawLine=VGA_Draw_2BPP_Line;
+            VGA_DrawRawLine=VGA_RawDraw_2BPP_Line;
         }
 
         /* MCGA CGA-compatible modes will always refer to the last half of the 64KB of RAM */
@@ -6737,10 +7097,12 @@ void VGA_SetupDrawing(Bitu /*val*/) {
                 pix_per_char = 4;
             }
             VGA_DrawLine=VGA_Draw_4BPP_Line;
+            VGA_DrawRawLine=VGA_RawDraw_4BPP_Line;
         } else {
             vga.draw.blocks=width*2;
             pix_per_char = 8;
             VGA_DrawLine=VGA_Draw_4BPP_Line_Double;
+            VGA_DrawRawLine=VGA_RawDraw_4BPP_Line_Double;
         }
         break;
     case M_TANDY_TEXT: /* Also CGA */
