@@ -2193,9 +2193,9 @@ struct first_equal {
     }
 };
 
-template <const unsigned int card,typename templine_type_t> static inline uint8_t* EGAVGA_TEXT_Combined_Draw_Line(Bitu vidstart,Bitu line) {
+template <const unsigned int card,typename templine_type_t> static inline uint8_t* EGAVGA_TEXT_Combined_Draw_Line(uint8_t *dst,Bitu vidstart,Bitu line) {
     // keep it aligned:
-    templine_type_t* draw = ((templine_type_t*)TempLine) + 16 - vga.draw.panning;
+    templine_type_t* draw = (card == MCH_RAW_SNAPSHOT) ? ((templine_type_t*)dst) : (((templine_type_t*)dst) + 16 - vga.draw.panning);
     const uint32_t* vidmem = VGA_Planar_Memwrap(vidstart); // pointer to chars+attribs
     Bitu blocks = vga.draw.blocks;
     if (vga.draw.panning) blocks++; // if the text is panned part of an 
@@ -2209,7 +2209,7 @@ template <const unsigned int card,typename templine_type_t> static inline uint8_
 #endif
                    && showdbcs) && CurMode && CurMode->type == M_TEXT && !dos_kernel_disabled && strcmp(RunningProgram, "LOADLIN"));
 
-    if (usedbcs && (vga.draw.height < 16u || vga.draw.width < 8u)) return TempLine;
+    if (usedbcs && (vga.draw.height < 16u || vga.draw.width < 8u)) return dst;
 
     unsigned int row = usedbcs ? ((vidstart - vga.config.real_start - vga.draw.bytes_skip) / vga.draw.address_add) : 0, col = 0;
     unsigned int rows = usedbcs ? ((vga.draw.height / 16u) - 1u) : 0, cols = usedbcs ? ((vga.draw.address_add / 2u) - 1u) : 0;
@@ -2282,27 +2282,18 @@ template <const unsigned int card,typename templine_type_t> static inline uint8_
                     }
                     int width = vga.draw.char9dot ? 9 : 8;
                     for (Bitu n = 0; n < width; n++) {
-                        if (card == MCH_VGA)
-                            *draw++ = vga.dac.xlat32[(font & (vga.draw.char9dot?0x100:0x80))? foreground : background];
-                        else
-                            *draw++ = vga.attr.palette[(font & (vga.draw.char9dot?0x100:0x80)) ? foreground : background];
+                        *draw++ = EGA_Planar_Common_Block_xlat<card,templine_type_t>((font & (vga.draw.char9dot?0x100:0x80))? foreground : background);
                         font <<= 1;
                     }
                     if (bsattr & 0x20) {
                         draw -= 8;
-                        if (card == MCH_VGA)
-                            *draw = vga.dac.xlat32[foreground];
-                        else
-                            *draw = vga.attr.palette[foreground];
+                        *draw = EGA_Planar_Common_Block_xlat<card,templine_type_t>(foreground);
                         draw += 8;
                     }
                     if (line == 18 && (bsattr & 0x10)) {
                         draw -= 8;
                         for (Bitu n = 0; n < 8; n++)
-                            if (card == MCH_VGA)
-                                *draw++ = vga.dac.xlat32[foreground];
-                            else
-                                *draw++ = vga.attr.palette[foreground];
+                            *draw++ = EGA_Planar_Common_Block_xlat<card,templine_type_t>(foreground);
                     }
                     chr_wide=false;
                 }
@@ -2327,7 +2318,7 @@ template <const unsigned int card,typename templine_type_t> static inline uint8_
                             else fline = fline >> 1;
                         }
                         bool is14 = false;
-                        uint8_t *f = IS_JEGA_ARCH || card == MCH_VGA ? GetDbcsFont(chr) : GetDbcs14Font(chr, is14);
+                        uint8_t *f = IS_JEGA_ARCH || machine == MCH_VGA ? GetDbcsFont(chr) : GetDbcs14Font(chr, is14);
                         if (exattr & 0x40) {
                             Bitu font = f[fline * 2];
                             if (!(exattr & 0x08))
@@ -2340,13 +2331,7 @@ template <const unsigned int card,typename templine_type_t> static inline uint8_
                             }
                             int width = vga.draw.char9dot ? 9 : 8;
                             for (Bitu n = 0; n < width; n++) {
-                                if (card == MCH_VGA) {
-                                    *draw++ = vga.dac.xlat32[(font & (vga.draw.char9dot?0x100:0x80)) ? foreground : background];
-                                    *draw++ = vga.dac.xlat32[(font & (vga.draw.char9dot?0x100:0x80)) ? foreground : background];
-                                } else {
-                                    *draw++ = vga.attr.palette[(font & (vga.draw.char9dot?0x100:0x80)) ? foreground : background];
-                                    *draw++ = vga.attr.palette[(font & (vga.draw.char9dot?0x100:0x80)) ? foreground : background];
-                                }
+                                *draw++ = EGA_Planar_Common_Block_xlat<card,templine_type_t>((font & (vga.draw.char9dot?0x100:0x80)) ? foreground : background);
                                 font <<= 1;
                             }
                         } else {
@@ -2367,38 +2352,23 @@ template <const unsigned int card,typename templine_type_t> static inline uint8_
                             }
                             int width = vga.draw.char9dot ? 9 : 8;
                             for (Bitu n = 0; n < width * 2; n++) {
-                                if (card == MCH_VGA)
-                                    *draw++ = vga.dac.xlat32[(font & (vga.draw.char9dot?0x10000:0x8000))? foreground : background];
-                                else
-                                    *draw++ = vga.attr.palette[(font & (vga.draw.char9dot?0x10000:0x8000)) ? foreground : background];
+                                *draw++ = EGA_Planar_Common_Block_xlat<card,templine_type_t>((font & (vga.draw.char9dot?0x10000:0x8000))? foreground : background);
                                 font <<= 1;
                             }
                         }
                     } else for (Bitu n = 0; n < 16; n++) {
-                        if (card == MCH_VGA)
-                            *draw++ = vga.dac.xlat32[background];
-                        else
-                            *draw++ = vga.attr.palette[background];
+                        *draw++ = EGA_Planar_Common_Block_xlat<card,templine_type_t>(background);
                     }
                 } else if (line == (17 + pad_y) && (bsattr & 0x10)) {
-                        for (Bitu n = 0; n < 16; n++) {
-                            if (card == MCH_VGA)
-                                *draw++ = vga.dac.xlat32[foreground];
-                            else
-                                *draw++ = vga.attr.palette[foreground];
-                        }
+                    for (Bitu n = 0; n < 16; n++) {
+                        *draw++ = EGA_Planar_Common_Block_xlat<card,templine_type_t>(foreground);
+                    }
                 } else for (Bitu n = 0; n < 16; n++) {
-                    if (card == MCH_VGA)
-                        *draw++ = vga.dac.xlat32[background];
-                    else
-                        *draw++ = vga.attr.palette[background];
+                    *draw++ = EGA_Planar_Common_Block_xlat<card,templine_type_t>(background);
                 }
                 if (bsattr & 0x20) {
                     draw -= 16;
-                    if (card == MCH_VGA)
-                        *draw = vga.dac.xlat32[foreground];
-                    else
-                        *draw = vga.attr.palette[foreground];
+                    *draw++ = EGA_Planar_Common_Block_xlat<card,templine_type_t>(foreground);
                     draw += 16;
                 }
                 chr_wide=false;
@@ -2432,20 +2402,12 @@ template <const unsigned int card,typename templine_type_t> static inline uint8_
                 if ((font&0x2) && (vga.attr.mode_control&0x04) &&
                     (chr>=0xc0) && (chr<=0xdf)) font |= 1;
                 for (Bitu n = 0; n < 9; n++) {
-                    if (card == MCH_VGA)
-                        *draw++ = vga.dac.xlat32[(font&0x100)? foreground:background];
-                    else /*MCH_EGA*/
-                        *draw++ = vga.attr.palette[(font&0x100)? foreground:background];
-
+                    *draw++ = EGA_Planar_Common_Block_xlat<card,templine_type_t>((font&0x100)? foreground:background);
                     font <<= 1;
                 }
             } else {
                 for (Bitu n = 0; n < 8; n++) {
-                    if (card == MCH_VGA)
-                        *draw++ = vga.dac.xlat32[(font&0x80)? foreground:background];
-                    else /*MCH_EGA*/
-                        *draw++ = vga.attr.palette[(font&0x80)? foreground:background];
-
+                    *draw++ = EGA_Planar_Common_Block_xlat<card,templine_type_t>((font&0x80)? foreground:background);
                     font <<= 1;
                 }
             }
@@ -2459,29 +2421,33 @@ template <const unsigned int card,typename templine_type_t> static inline uint8_
         Bits attr_addr = ((Bits)vga.draw.cursor.address - (Bits)vidstart) >> (Bits)vga.config.addr_shift; /* <- FIXME: This right? */
         if (attr_addr >= 0 && attr_addr < (Bits)vga.draw.blocks) {
             Bitu index = (Bitu)attr_addr * (vga.draw.char9dot ? 9u : 8u);
-            draw = (((templine_type_t*)TempLine) + index) + 16 - vga.draw.panning;
-            
+            draw = (card == MCH_RAW_SNAPSHOT) ? (((templine_type_t*)dst) + index) : ((((templine_type_t*)dst) + index) + 16 - vga.draw.panning);
+
             Bitu foreground = vga.tandy.draw_base[(vga.draw.cursor.address<<2ul)+1] & 0xf;
             for (Bitu i = 0; i < 8; i++) {
-                if (card == MCH_VGA)
-                    *draw++ = vga.dac.xlat32[foreground];
-                else /*MCH_EGA*/
-                    *draw++ = vga.attr.palette[foreground];
+                *draw++ = EGA_Planar_Common_Block_xlat<card,templine_type_t>(foreground);
             }
         }
     }
 
-    return TempLine+(16*sizeof(templine_type_t));
+    if (card != MCH_RAW_SNAPSHOT)
+        return dst+(16*sizeof(templine_type_t));
+    else
+        return NULL;
 }
 
 // combined 8/9-dot wide text mode 16bpp line drawing function
 static uint8_t* EGA_TEXT_Xlat8_Draw_Line(Bitu vidstart, Bitu line) {
-    return EGAVGA_TEXT_Combined_Draw_Line<MCH_EGA,uint8_t>(vidstart,line);
+    return EGAVGA_TEXT_Combined_Draw_Line<MCH_EGA,uint8_t>(TempLine,vidstart,line);
 }
 
 // combined 8/9-dot wide text mode 16bpp line drawing function
 static uint8_t* VGA_TEXT_Xlat32_Draw_Line(Bitu vidstart, Bitu line) {
-    return EGAVGA_TEXT_Combined_Draw_Line<MCH_VGA,uint32_t>(vidstart,line);
+    return EGAVGA_TEXT_Combined_Draw_Line<MCH_VGA,uint32_t>(TempLine,vidstart,line);
+}
+
+static void VGA_TEXT_Xlat32_RawDraw_Line(uint8_t *dst,Bitu vidstart, Bitu line) {
+    EGAVGA_TEXT_Combined_Draw_Line<MCH_RAW_SNAPSHOT,uint8_t>(dst,vidstart,line);
 }
 
 extern bool pc98_attr4_graphic;
@@ -4905,6 +4871,7 @@ void AllocateRawImage(void) {
 		case M_LIN8:
 		case M_EGA:
 		case M_LIN4:
+		case M_TEXT:
 			rawshot.allocate(vga.draw.width,vga.draw.height,8);
 			break;
 		default:
@@ -6690,10 +6657,12 @@ void VGA_SetupDrawing(Bitu /*val*/) {
          *        when KEYB or other utility changes code page, but it does not involve reading guest memory */
         if (IS_EGA_ARCH) {
             VGA_DrawLine = EGA_TEXT_Xlat8_Draw_Line;
+            VGA_DrawRawLine = VGA_TEXT_Xlat32_RawDraw_Line;
             bpp = 8;
         }
         else {
             VGA_DrawLine = VGA_TEXT_Xlat32_Draw_Line;
+            VGA_DrawRawLine = VGA_TEXT_Xlat32_RawDraw_Line;
             bpp = 32;
         }
         break;
