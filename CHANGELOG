@@ -1,4 +1,14 @@
-Next:
+2023.05.01
+  - PC-98 256-color mode will also trigger the auto mode of "render on
+    demand" for performance reasons because per-scanline raster effects
+    are very unlikely in that case (joncampbell123).
+  - When the DOS IDLE API is enabled (by default), limit STI+HLT to
+    occur on INT 28h only once after any call to read the CON device
+    or call to BIOS INT 16h to read the keyboard. This fixes stalls
+    and sluggish input problems with programs that like to call INT 28h
+    often like the Pacific C compiler PPD IDE interface. (joncampbell123).
+  - Hercules InColor machine type: Fixed attribute and RAMFONT handling
+    of 48K RAMFONT mode and added planar text rendering. (joncampbell123).
   - Write BIOS data area fields for number of rows, char height, etc.
     for MCGA machine type in addition to EGA/VGA machine types because
     IBM technical references suggest it's there for MCGA as well.
