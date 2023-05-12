@@ -82,7 +82,7 @@ jobs:
           $top/vs/tool/zip.exe -r -9 $top/dosbox-x-mingw-hx-dos-${{ env.timestamp }}.zip *
           cd $top
       - name: Download Windows build
-        uses: robinraju/release-downloader@v1.7
+        uses: robinraju/release-downloader@v1.8
         with:
           repository: "joncampbell123/dosbox-x"
           latest: true
@@ -91,7 +91,7 @@ jobs:
         shell: bash
         run: |
           top=`pwd`
-          $top/vs/tool/unzip.exe -o dosbox-x-vsbuild-win32-*.zip bin/Win32/Release/dosbox-x.*
+          $top/vs/tool/unzip.exe -n "dosbox-x-vsbuild-win32-*.zip" "bin/Win32/Release/dosbox-x.*"
           cp $top/package/dosbox-x.ref $top/hxdos.cfg
           echo mount b ..>>$top/hxdos.cfg
           echo "echo success>b:\SUCCESS.TXT">>$top/hxdos.cfg
