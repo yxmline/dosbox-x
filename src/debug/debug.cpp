@@ -391,7 +391,8 @@ uint64_t LinMakeProt(uint16_t selector, uint32_t offset)
 
     if (cpu.gdt.GetDescriptor(selector,desc)) {
         if (selector >= 8 && desc.Type() != 0) {
-            if (offset <= desc.GetLimit())
+            if ( (!desc.GetExpandDown() && offset <= desc.GetLimit()) ||
+                 ( desc.GetExpandDown() && offset >  desc.GetLimit()) )
                 return desc.GetBase()+(uint64_t)offset;
         }
     }
@@ -1294,7 +1295,12 @@ static void DrawCode(void) {
 		Bitu drawsize;
 
         if (start != mem_no_address) {
-            drawsize=size=DasmI386(dline, (PhysPt)start, disEIP, cpu.code.big);
+            Descriptor desc;
+
+            if (cpu.gdt.GetDescriptor(codeViewData.useCS, desc))
+                drawsize=size=DasmI386(dline, (PhysPt)start, disEIP, desc.saved.seg.big);
+            else
+                drawsize=size=DasmI386(dline, (PhysPt)start, disEIP, cpu.code.big);
         }
         else {
             drawsize=size=1;
