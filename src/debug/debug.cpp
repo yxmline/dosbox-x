@@ -302,6 +302,11 @@ static bool check_rescroll = false;
 
 static FPU_rec oldfpu;
 
+void VGA_DebugRedraw(void);
+
+void VGA_DebugOverrideStart(uint32_t ofs,bool sum);
+void VGA_ResetDebugOverrides(void);
+
 bool IsDebuggerActive(void) {
     return debugging;
 }
@@ -2793,6 +2798,11 @@ bool ParseCommand(char* str) {
         }
     }
 
+    if (command == "VRD") {
+        VGA_DebugRedraw();
+        return true;
+    }
+
     if (command == "VGA") {
         while (*found == ' ') found++;
         stream >> command;
@@ -2804,7 +2814,29 @@ bool ParseCommand(char* str) {
             return false;
         }
 
-	if (command == "FONTDUMP") { // Dump font RAM to file
+	if (command == "DS") {
+		std::string cmd2;
+		while (*found == ' ') found++;
+		stream >> cmd2;
+		while (*found != 0 && *found != ' ') found++;
+		while (*found == ' ') found++;
+
+		if (cmd2 == "START") {
+			bool sum = false;
+			if (*found == '+') { sum = true; found++; }
+			VGA_DebugOverrideStart(strtoul(found,NULL,16/*hexadecimal*/),sum);
+			VGA_DebugRedraw();
+		}
+		else if (cmd2 == "X") {
+			VGA_ResetDebugOverrides();
+			VGA_DebugRedraw();
+		}
+		else {
+			DEBUG_ShowMsg("Unknown VGA debug command");
+			return false;
+		}
+	}
+	else if (command == "FONTDUMP") { // Dump font RAM to file
 		/* Rule: If the file extension is .BIN, write the entire contents of bitplane 2 where the font resides (64KB).
 		 *       If the file extension is .BMP, write only the visible font characters in a neat 8x8 (256) matrix.
 		 *       If you run this when EGA/VGA graphics are active, you will get "jibberish" based on the graphics on
@@ -3545,6 +3577,7 @@ bool ParseCommand(char* str) {
 		DEBUG_ShowMsg("SV [filename]             - Save var list in file.\n");
 		DEBUG_ShowMsg("LV [filename]             - Load var list from file.\n");
 
+		DEBUG_ShowMsg("VRD                       - Redraw video.\n");
 		DEBUG_ShowMsg("VGA cmd                   - VGA related debugging commands.\n");
 		DEBUG_ShowMsg("PC98 cmd                  - PC98 related debugging commands.\n");
 		DEBUG_ShowMsg("EMU MEM/MACHINE           - Show emulator memory or machine info.\n");
