@@ -3999,10 +3999,9 @@ restart_int:
         // create the batch file
         if(t2 == "-bat") {
             if(temp_line.length() > 3) {
-                t2 = temp_line.substr(0,temp_line.length()-4);
-                t2 = t2.append(".bat");
+                t2 = temp_line.substr(0,temp_line.length()-4) + ".bat";
             } else {
-                t2 = temp_line.append(".bat");
+                t2 = temp_line + ".bat";
             }
             WriteOut("%s\n",t2.c_str());
             f = fopen(t2.c_str(),"wb+");
@@ -4014,7 +4013,12 @@ restart_int:
                 }
                 return;
             }
-            fprintf(f,"imgmount c %s -size 512,%u,%u,%u\r\n",temp_line.c_str(),s,h,c);
+
+            if (bootsect_pos < 0) /* -nofs */
+                fprintf(f,"imgmount 2 %s -size 512,%u,%u,%u\r\n",temp_line.c_str(),s,h,c);
+            else
+                fprintf(f,"imgmount c %s -size 512,%u,%u,%u\r\n",temp_line.c_str(),s,h,c);
+
             fclose(f);
         }
         if (setdir) {
