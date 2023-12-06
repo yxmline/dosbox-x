@@ -25,6 +25,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "control.h"
 #include "dosbox.h"
@@ -5351,6 +5352,19 @@ void DOS_Int21_71a6(const char *name1, const char *name2) {
 
 			if(status.st_mode & S_IFDIR) st = DOS_ATTR_DIRECTORY;
 			else st = DOS_ATTR_ARCHIVE;
+
+			/* Win32 stat() will not return the correct file size of a file open for writing */
+#if defined (WIN32)
+			if (Files[handle]->IsOpen())
+			{
+				Files[handle]->Flush();
+				uint32_t oldPos = Files[handle]->GetSeekPos();
+				uint32_t newPos = 0;
+				Files[handle]->Seek(&newPos, DOS_SEEK_END);
+				status.st_size = Files[handle]->GetSeekPos();
+				Files[handle]->Seek(&oldPos, DOS_SEEK_SET);
+			}
+#endif
 
 			memset(buf, 0, 52);
 			set_dword(buf, st);
