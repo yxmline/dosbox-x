@@ -2252,14 +2252,15 @@ uint8_t p7fd9_8255_mouse_latch = 0;
 uint8_t p7fd8_8255_mouse_int_enable = 0;
 
 void pc98_mouse_movement_apply(int x,int y) {
-    x += p7fd9_8255_mouse_x;
-    if (x < -128) x = -128;
-    if (x > 127) x = 127;
-    y += p7fd9_8255_mouse_y;
-    if (y < -128) y = -128;
-    if (y > 127) y = 127;
-    p7fd9_8255_mouse_x = (int8_t)x;
-    p7fd9_8255_mouse_y = (int8_t)y;
+    /* NTS: Contrary to initial impressions, bus mice do not clip
+     *      the counter values to stay within signed integer range,
+     *      they just count.
+     *
+     *      According to Nanshiki: [https://github.com/joncampbell123/dosbox-x/pull/4697]
+     *
+     *      -- 2023/12/21 J.C. */
+    p7fd9_8255_mouse_x += x;
+    p7fd9_8255_mouse_y += y;
 }
 
 unsigned int pc98_mouse_rate_hz = 120;

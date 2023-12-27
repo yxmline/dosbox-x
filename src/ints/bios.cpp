@@ -52,6 +52,7 @@ extern bool PS1AudioCard;
 #include "sdlmain.h"
 #include <time.h>
 #include <sys/stat.h>
+#include "version_string.h"
 
 #if defined(DB_HAVE_CLOCK_GETTIME) && ! defined(WIN32)
 //time.h is already included
@@ -509,7 +510,7 @@ void dosbox_integration_trigger_read() {
             dosbox_int_register = 0;
 #endif
             if (control->opt_securemode || control->SecureMode()) dosbox_int_register = 0;
-#if defined(_M_X64) || defined (_M_AMD64) || defined (_M_ARM64) || defined (_M_IA64) || defined(__ia64__) || defined(__LP64__) || defined(_WIN64) || defined(__x86_64__) || defined(__aarch64__) || defined(__powerpc64__)
+#if OS_BIT_INT == 64
             dosbox_int_register += 0x20; // 64-bit
 #else
             dosbox_int_register += 0x10; // 32-bit
@@ -5505,6 +5506,31 @@ static Bitu INTDC_PC98_Handler(void) {
                 INTDC_CL10h_AH09h(reg_dx);
                 goto done;
             }
+            else if (reg_ah == 0x0a) { /* CL=0x10 AH=0x0A DL=pattern Erase screen */
+                void INTDC_CL10h_AH0Ah(uint16_t pattern);
+                INTDC_CL10h_AH0Ah(reg_dx);
+                goto done;
+            }
+            else if (reg_ah == 0x0b) { /* CL=0x10 AH=0x0B DL=pattern Erase lines */
+                void INTDC_CL10h_AH0Bh(uint16_t pattern);
+                INTDC_CL10h_AH0Bh(reg_dx);
+                goto done;
+            }
+            else if (reg_ah == 0x0c) { /* CL=0x10 AH=0x0C DL=count Insert lines */
+                void INTDC_CL10h_AH0Ch(uint16_t count);
+                INTDC_CL10h_AH0Ch(reg_dx);
+                goto done;
+            }
+            else if (reg_ah == 0x0d) { /* CL=0x10 AH=0x0D DL=count Erase lines */
+                void INTDC_CL10h_AH0Dh(uint16_t count);
+                INTDC_CL10h_AH0Dh(reg_dx);
+                goto done;
+            }
+            else if (reg_ah == 0x0E) { /* CL=0x10 AH=0x0E DL=mode Change character mode */
+                void pc98_set_char_mode(bool mode);
+                pc98_set_char_mode(reg_dl == 0);
+                goto done;
+            }
             goto unknown;
         default: /* some compilers don't like not having a default case */
             goto unknown;
@@ -9228,12 +9254,7 @@ private:
         strcpy(logostr[3], "|  D O S B o x - X !  |");
         strcpy(logostr[4], "|                     |");
         sprintf(logostr[5],"|     %d-bit %s     |",
-#if defined(_M_X64) || defined (_M_AMD64) || defined (_M_ARM64) || defined (_M_IA64) || defined(__ia64__) || defined(__LP64__) || defined(_WIN64) || defined(__x86_64__) || defined(__aarch64__) || defined(__powerpc64__)^M
-        64
-#else
-        32
-#endif
-        , SDL_STRING);
+        OS_BIT_INT, SDL_STRING);
         sprintf(logostr[6], "| Version %10s  |", VERSION);
         strcpy(logostr[7], "+---------------------+");
 startfunction:
@@ -9945,7 +9966,8 @@ public:
                 else if (s == "false" || s == "0")
                     isa_memory_hole_15mb = false;
                 else if (IS_PC98_ARCH)
-                    isa_memory_hole_15mb = true; // For the sake of some DOS games, enable by default
+                    isa_memory_hole_15mb = true;
+ // For the sake of some DOS games, enable by default
                 else
                     isa_memory_hole_15mb = false;
             }
