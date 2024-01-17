@@ -656,8 +656,8 @@ void MenuBrowseImageFile(char drive, bool arc, bool boot, bool multiple) {
         lTheOpenFileName = tinyfd_openFileDialog(("Select an archive file for Drive "+str+":").c_str(),"",4,lFilterPatterns,lFilterDescription,0);
         if (lTheOpenFileName) fname = GetNewStr(lTheOpenFileName);
     } else {
-        const char *lFilterPatterns[] = {"*.ima","*.img","*.vhd","*.fdi","*.hdi","*.nfd","*.nhd","*.d88","*.iso","*.cue","*.bin","*.chd","*.mdf","*.gog","*.ins","*.IMA","*.IMG","*.VHD","*.FDI","*.HDI","*.NFD","*.NHD","*.D88","*.ISO","*.CUE","*.BIN","*.CHD","*.MDF","*.GOG","*.INS"};
-        const char *lFilterDescription = "Disk/CD image files (*.ima, *.img, *.vhd, *.fdi, *.hdi, *.nfd, *.nhd, *.d88, *.iso, *.cue, *.bin, *.chd, *.mdf, *.gog, *.ins)";
+        const char *lFilterPatterns[] = {"*.ima","*.img","*.vhd","*.fdi","*.hdi","*.nfd","*.nhd","*.d88","*.hdm","*.iso","*.cue","*.bin","*.chd","*.mdf","*.gog","*.ins","*.IMA","*.IMG","*.VHD","*.FDI","*.HDI","*.NFD","*.NHD","*.D88","*.HDM","*.ISO","*.CUE","*.BIN","*.CHD","*.MDF","*.GOG","*.INS"};
+        const char *lFilterDescription = "Disk/CD image files (*.ima, *.img, *.vhd, *.fdi, *.hdi, *.nfd, *.nhd, *.d88, *.hdm, *.iso, *.cue, *.bin, *.chd, *.mdf, *.gog, *.ins)";
         lTheOpenFileName = tinyfd_openFileDialog(((multiple?"Select image file(s) for Drive ":"Select an image file for Drive ")+str+":").c_str(),"",22,lFilterPatterns,lFilterDescription,multiple?1:0);
         if (lTheOpenFileName) fname = GetNewStr(lTheOpenFileName);
         if (multiple&&fname.size()) {
@@ -4817,8 +4817,13 @@ bool AttachToBiosByLetter(imageDisk* image, const char drive) {
                 return AttachToBiosByIndex(image, index);
             }
         }
+        LOG_MSG("BIOS: Warning: Four hard drives (Disk no. 2-5) attached to BIOS already. Drive %c not attached", drive);
     }
+#if 0
     else if (IS_PC98_ARCH) {
+        // FIX_ME: This code is not correct. PC-98 boots from Drive 2 only if Drive 1 is empty.
+        //         Currently disable this code since DOSBox-X supports only Drive A (Drive 1) as floppy boot drive anyway. 
+
         //for pc-98 machines, mount floppies at first available index
         for (int index = 0; index < 2; index++) {
             if (imageDiskList[index] == NULL) {
@@ -4826,6 +4831,7 @@ bool AttachToBiosByLetter(imageDisk* image, const char drive) {
             }
         }
     }
+#endif
     else if ((drive - 'A') < 2) {
         //for PCs, mount floppies only if A: or B: is specified, and then if so, at specified index
         return AttachToBiosByIndex(image, drive - 'A');
@@ -4841,22 +4847,29 @@ bool AttachToBiosAndIdeByLetter(imageDisk* image, const char drive, const unsign
                 return AttachToBiosAndIdeByIndex(image, index, ide_index, ide_slave);
             }
         }
+        LOG_MSG("BIOS: Warning: Four hard drives (Disk no. 2-5) attached to BIOS already. Drive %c not attached", drive);
     }
+#if 0
     else if (IS_PC98_ARCH) {
+        // FIX_ME: This code is not correct. PC-98 boots from Drive 2 only if Drive 1 is empty.
+        //         Currently disable this code since DOSBox-X supports only Drive A (Drive 1) as floppy boot drive anyway. 
+
         //for pc-98 machines, mount floppies at first available index
         for (int index = 0; index < 2; index++) {
             if (imageDiskList[index] == NULL) {
                 return AttachToBiosByIndex(image, index);
             }
         }
-    } else if ((drive - 'A') < 2) {
+    }
+#endif
+    else if ((drive - 'A') < 2) {
         //for PCs, mount floppies only if A: or B: is specified, and then if so, at specified index
         return AttachToBiosByIndex(image, drive - 'A');
     }
     return false;
 }
 
-char * GetIDEPosition(unsigned char bios_disk_index);
+std::string GetIDEPosition(unsigned char bios_disk_index);
 class IMGMOUNT : public Program {
 	public:
 		std::vector<std::string> options;
@@ -4912,7 +4925,7 @@ class IMGMOUNT : public Program {
 					}
 					if (!swaps) swaps=1;
 					sprintf(swapstr, "%d / %d", swaps==1?1:swapPosition+1, swaps);
-					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_STATUS_NUMBER_FORMAT"), std::to_string(index).c_str(), dynamic_cast<imageDiskElToritoFloppy *>(imageDiskList[index])!=NULL?"El Torito floppy drive":imageDiskList[index]->diskname.c_str(), GetIDEPosition(index), swapstr);
+					WriteOut(MSG_Get("PROGRAM_IMGMOUNT_STATUS_NUMBER_FORMAT"), std::to_string(index).c_str(), dynamic_cast<imageDiskElToritoFloppy *>(imageDiskList[index])!=NULL?"El Torito floppy drive":imageDiskList[index]->diskname.c_str(), GetIDEPosition(index).c_str(), swapstr);
 					none=false;
 				}
 			}
@@ -5052,7 +5065,6 @@ class IMGMOUNT : public Program {
 			if(isdigit(tdr) && tdr - '0' >= 2) { //Allocate to respective slots if drive number is specified
 				ide_index = (tdr - '2') / 2;     // Drive number 2 = 1m (index=0, slave=false), 3 = 1s (index=0, slave=true), ...
 				ide_slave = (tdr - '2') & 1 ? true : false;
-				LOG_MSG("IDE: index %d slave=%d", ide_index, ide_slave ? 1 : 0);
 			} else if(ideattach == "auto") {
 				//LOG_MSG("IDE: attach=auto type=%s", type);
 				if(type != "floppy") {
@@ -5063,13 +5075,11 @@ class IMGMOUNT : public Program {
 						}
 					}
 					if (ide_index < 0) IDE_Auto(ide_index, ide_slave);
-					LOG_MSG("IDE: index %d slave=%d", ide_index, ide_slave ? 1 : 0);
 				}
 			}
 			else if (ideattach != "none" && isdigit(ideattach[0]) && ideattach[0] > '0') { /* takes the form [controller]<m/s> such as: 1m for primary master */
 				ide_index = ideattach[0] - '1';
 				if (ideattach.length() >= 2) ide_slave = (ideattach[1] == 's');
-				LOG_MSG("IDE: index %d slave=%d",ide_index,ide_slave?1:0);
 			}
 
 			//if floppy, don't attach to ide controller
@@ -5177,7 +5187,6 @@ class IMGMOUNT : public Program {
                                     ide_slave = false;
                                 }
                                 else IDE_Auto(ide_index, ide_slave);
-                                LOG_MSG("IDE: index %d slave=%d", ide_index, ide_slave ? 1 : 0);
                             }
                         } else if (!strcasecmp(ext, ".ima")) {
                             type="floppy";
@@ -5255,7 +5264,7 @@ class IMGMOUNT : public Program {
 				else {
 					if (AttachToBiosAndIdeByIndex(newImage, (unsigned char)driveIndex, (unsigned char)ide_index, ide_slave)) {
 						WriteOut(MSG_Get("PROGRAM_IMGMOUNT_MOUNT_NUMBER"), drive - '0', (!paths.empty()) ? (wpcolon&&paths[0].length()>1&&paths[0].c_str()[0]==':'?paths[0].c_str()+1:paths[0].c_str()) : (el_torito != ""?"El Torito floppy drive":(type == "ram"?"RAM drive":"-")));
-						const char *ext = strrchr(paths[0].c_str(), '.');
+                        const char *ext = strrchr(paths[0].c_str(), '.');
 						if (ext != NULL) {
 							if ((!IS_PC98_ARCH && strcasecmp(ext,".img") && strcasecmp(ext,".ima") && strcasecmp(ext,".vhd") && strcasecmp(ext,".qcow2")) ||
 								(IS_PC98_ARCH && strcasecmp(ext,".hdi") && strcasecmp(ext,".nhd") && strcasecmp(ext,".img") && strcasecmp(ext,".ima"))){
