@@ -1,4 +1,50 @@
 Next:
+  - Undo the "no parition offset" change. DOOM II for PC-9821 requires it to work
+    else the page flipping fails and sprites and rendering flickers as you play.
+    (joncampbell123).
+  - Allow text layer to appear in PC-98 256-color mode. Even though I was unable
+    to enable it on real hardware, "Shamat, The Holy Circlet" requires having
+    the text layer visible on top of 640x400 256-color mode for the introductory
+    scrolling text to appear on screen. So for now, just allow it. (joncampbell123).
+  - The reason some PC-9821 games have been giving bad PITCH values (double the
+    correct value) to the GDC in 256-color mode has been determined. They read
+    port 9A0h to determine if the GDC is running at 5MHz or not. That port 9A0h
+    index was not implemented and therefore gave the game the impression it was
+    running at 5MHz when it was not, therefore the doubled PITCH value. This fix
+    corrects the squeezed 256-color mode and allows it to appear properly.
+    (joncampbell123).
+  - IMGMOUNT: If the file extension is HDI, assume a hard disk image even if the
+    image file is small enough to qualify as a floppy disk image. There is an
+    HDI image of PC-98 game "D.O. Doki Doki Disk 8" that is 2.2MB, small enough
+    to be mistaken as a 2.88MB IBM PC floppy disk and therefore fail to mount
+    as an HDI image, this change fixes it. (joncampbell123).
+  - Emulate PEGC PC-98 linear framebuffer at both 0xF00000-0xF7FFFF (at 15MB
+    memory mark) but also make it appear at top of memory below BIOS (normally
+    at 0xFFF00000-0xFFF7FFFF). Some 32-bit PC-9821 CD-ROM MS-DOS games assume
+    the top of memory alias and will fail to show anything on screen without
+    it (unless, alternatively, the memalias setting is set to emulate 24 address
+    lines like a 386SX). Now to figure out why these same games are programming
+    a GDC PITCH value that's double what it should be... (joncampbell123).
+  - PC-98 GDC scan offset no longer pays attention to scan offset of data
+    partition in 256-color mode. Required to help fix broken 256-color graphics
+    for some PC-98 CD-ROM games. (joncampbell123).
+  - Refuse to enable ISA 15MB-16MB memory hole if memalias is set to 24 bits or
+    less. Not only is it redundant to do that but it also causes the BIOS to
+    immediately crash on startup. (joncampbell123).
+  - IDE ATAPI CD-ROM emulation: In PC-98 mode when emulating a NEC CD-ROM drive,
+    also limit sector reads to one CD-ROM sector per DRQ because the MS-DOS driver
+    assumes that behavior. The driver will stall and error out if it requests a
+    multi-sector read and the drive does NOT limit transfers to one sector at a
+    time per IDE data transfer. This is in line with my experience writing the
+    DOSLIB IDE testing program and laptops from the 1990s with IDE ATAPI CD-ROM
+    drives, so it's understandable. (joncampbell123).
+  - The reason the CD-ROM driver in PC-98 game HDI images refused to talk to our
+    IDE CD-ROM emulation is... (drumroll) we didn't report ourself as an NEC
+    CD-ROM drive when given the MMC INQUIRY command. Yes, really. The OAK CD-ROM
+    driver in these HDI images really does care whether or the drive is an NEC
+    brand drive. What a stupid reason not to talk to a CD-ROM drive. Add code to
+    default to "NEC" "CD-ROM DRIVE" as the INQUIRY result if running in PC-98 mode.
+    (joncampbell123).
   - Add basic rudimentary support for CloneCD (*.ccd *.img) images. It might not
     work with more complex arrangements but it is enough for most CD-ROM PC-98
     games so far. (joncampbell123).
@@ -75,6 +121,9 @@ Next:
   - Fixed attribute copy behavior of FreeDOS XCOPY.exe to match genuine DOS (maron2000)
   - Added Russian translation (Lartenik)
   - Fixed COPY/XCOPY command fails to recognize 2GB+ free disk space (maron2000)
+  - Enable FONTX2 files in PC-98 mode (nanshiki)
+  - Fix codepage switching when loading lang files (maron2000)
+  - Add missing quotation marks in vcxproj (bredbored)
 
 2023.10.06
   - Add "VRD" debugger command to force redraw of the VGA screen. (joncampbell123)

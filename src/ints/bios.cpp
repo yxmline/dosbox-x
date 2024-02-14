@@ -3610,7 +3610,18 @@ static Bitu INT18_PC98_Handler(void) {
         //       (Something to do with the buffer [https://ia801305.us.archive.org/8/items/PC9800TechnicalDataBookBIOS1992/PC-9800TechnicalDataBook_BIOS_1992_text.pdf])
         //       Neko Project is also unaware of such a call.
         case 0x0C: /* text layer enable */
-            if (pc98_gdc_vramop & (1u << VOPBIT_VGA)) {
+	    /* PROBLEM: Okay, so it's unclear when text layer is or is not allowed.
+             *          I was unable to turn on the text layer with this BIOS call on real PC-9821 hardware, so I believed that it did not allow it.
+             *
+             *          But PC-9821 CD-ROM game "Shamat, The Holy Circlet" expects to turn on the text layer in 640x400 256-color PEGC mode,
+             *          because it displays graphics in the background while scrolling Japanese text up over it, and if sound hardware is available,
+             *          plays a voice reading the text synchronized to it.
+             *
+             *          Perhaps in my case it was 640x480 256-color mode, not 640x400 256-color mode, but then, 640x480 also enables a text mode with
+             *          either more rows or a taller character cell which is apparently recognized by the MS-DOS console driver.
+             *
+             *          So then, what exactly decides whether or not to allow this call to enable the text layer? */
+            if (pc98_gdc_vramop & (1u << VOPBIT_VGA) && 0/*DISABLED*/) {
                /* NTS: According to tests on real PC-9821 hardware, you can't turn on the text layer in 256-color mode, at least through the BIOS. */
                /* FIXME: Is this a restriction imposed by the BIOS, or the hardware itself? */
                LOG_MSG("INT 18h: Attempt to turn on text layer in 256-color mode");
@@ -9974,13 +9985,20 @@ public:
             {
                 std::string s = section->Get_string("isa memory hole at 15mb");
 
-                if (s == "true" || s == "1")
+                // Do NOT emulate the memory hole if emulating 24 or less address bits! BIOS crashes will result at startup!
+                // The whole point of the 15MB memory hole is to emulate a hole into hardware as if a 24-bit 386SX. A memalias
+                // setting of 24 makes it redundant. Furthermore memalias=24 and 15MB memory hole prevents the BIOS from
+                // mapping correctly and crashes immediately at startup. This is especially necessary for PC-98 mode where
+		// memalias==24 and memory hole enabled for the PEGC linear framebuffer prevents booting.
+
+                if (MEM_get_address_bits() <= 24)
+                    isa_memory_hole_15mb = false;
+                else if (s == "true" || s == "1")
                     isa_memory_hole_15mb = true;
                 else if (s == "false" || s == "0")
                     isa_memory_hole_15mb = false;
                 else if (IS_PC98_ARCH)
-                    isa_memory_hole_15mb = true;
- // For the sake of some DOS games, enable by default
+                    isa_memory_hole_15mb = true; // For the sake of some PC-98 DOS games, enable by default
                 else
                     isa_memory_hole_15mb = false;
             }
