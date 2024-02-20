@@ -1378,31 +1378,33 @@ fatDrive::fatDrive(const char* sysFilename, uint32_t bytesector, uint32_t cylsec
 		}
 
 		const char *ext = strrchr(sysFilename,'.');
+        bool is_hdd = false;
+        if((ext != NULL) && (!strcasecmp(ext, ".hdi") || !strcasecmp(ext, ".nhd"))) is_hdd = true;
 
 		if (ext != NULL && !strcasecmp(ext, ".d88")) {
 			fseeko64(diskfile, 0L, SEEK_END);
 			filesize = (uint32_t)(ftello64(diskfile) / 1024L);
-			loadedDisk = new imageDiskD88(diskfile, fname, filesize, (filesize > 2880));
+			loadedDisk = new imageDiskD88(diskfile, fname, filesize, false);
 		}
 		else if (!memcmp(bootcode,"VFD1.",5)) { /* FDD files */
 			fseeko64(diskfile, 0L, SEEK_END);
 			filesize = (uint32_t)(ftello64(diskfile) / 1024L);
-			loadedDisk = new imageDiskVFD(diskfile, fname, filesize, (filesize > 2880));
+			loadedDisk = new imageDiskVFD(diskfile, fname, filesize, false);
 		}
 		else if (!memcmp(bootcode,"T98FDDIMAGE.R0\0\0",16)) {
 			fseeko64(diskfile, 0L, SEEK_END);
 			filesize = (uint32_t)(ftello64(diskfile) / 1024L);
-			loadedDisk = new imageDiskNFD(diskfile, fname, filesize, (filesize > 2880), 0);
+			loadedDisk = new imageDiskNFD(diskfile, fname, filesize, false, 0);
 		}
 		else if (!memcmp(bootcode,"T98FDDIMAGE.R1\0\0",16)) {
 			fseeko64(diskfile, 0L, SEEK_END);
 			filesize = (uint32_t)(ftello64(diskfile) / 1024L);
-			loadedDisk = new imageDiskNFD(diskfile, fname, filesize, (filesize > 2880), 1);
+			loadedDisk = new imageDiskNFD(diskfile, fname, filesize, false, 1);
 		}
 		else {
 			fseeko64(diskfile, 0L, SEEK_END);
 			filesize = (uint32_t)(ftello64(diskfile) / 1024L);
-			loadedDisk = new imageDisk(diskfile, fname, filesize, (filesize > 2880));
+			loadedDisk = new imageDisk(diskfile, fname, filesize, (is_hdd | (filesize > 2880)));
 		}
 	}
 
@@ -1531,6 +1533,11 @@ void fatDrive::fatDriveInit(const char *sysFilename, uint32_t bytesector, uint32
 	bool pc98_512_to_1024_allow = false;
 	int opt_partition_index = -1;
 	bool is_hdd = (filesize > 2880);
+    if(!is_hdd) {
+        char* ext = strrchr((char*)sysFilename, '.');
+        if(ext != NULL && (!strcasecmp(ext, ".hdi") || !strcasecmp(ext, ".nhd"))) is_hdd = true;
+    }
+    //LOG_MSG("is_hdd = %s", is_hdd ? "true" : "false");
 
 	physToLogAdj = 0;
 	req_ver_major = req_ver_minor = 0;
@@ -1941,7 +1948,7 @@ void fatDrive::fatDriveInit(const char *sysFilename, uint32_t bytesector, uint32
 				loadedDisk->Read_AbsoluteSector(1,&sectorBuffer);
 				uint8_t mdesc = sectorBuffer[0];
 
-				if (mdesc >= 0xf8) {
+				if (mdesc >= 0xf8 && !IS_PC98_ARCH) {
 					/* DOS 1.x format, create BPB for 160kB floppy */
 					bootbuffer.bpb.v.BPB_BytsPerSec = 512;
 					bootbuffer.bpb.v.BPB_SecPerClus = 1;
@@ -1968,7 +1975,7 @@ void fatDrive::fatDriveInit(const char *sysFilename, uint32_t bytesector, uint32
 						bootbuffer.bpb.v.BPB_TotSec16 *= 2;
 						bootbuffer.bpb.v.BPB_NumHeads = 2;
 					}
-				} else {
+				} else if (!IS_PC98_ARCH) {
 					/* Unknown format */
 					created_successfully = false;
 					return;
@@ -2102,9 +2109,57 @@ void fatDrive::fatDriveInit(const char *sysFilename, uint32_t bytesector, uint32
 	 * 17        17 & 16       10001 AND 10000     RESULT: 10000 (16) */
 	if (BPB.v.BPB_BytsPerSec < 128 || BPB.v.BPB_BytsPerSec > SECTOR_SIZE_MAX ||
 		(BPB.v.BPB_BytsPerSec & (BPB.v.BPB_BytsPerSec - 1)) != 0/*not a power of 2*/) {
-		LOG_MSG("FAT bytes/sector value %u not supported",BPB.v.BPB_BytsPerSec);
-		created_successfully = false;
-		return;
+        if(IS_PC98_ARCH && ((bytesector == 1024)||(bytesector == 512))) {
+            LOG_MSG("Experimental: PC-98 autodetect BPB parameters when it is corrupted");
+            BPB.v.BPB_BytsPerSec = bytesector;
+            BPB.v.BPB_SecPerClus = 1;
+            BPB.v.BPB_RsvdSecCnt = 1;
+            BPB.v.BPB_NumFATs = 2;
+            BPB.v.BPB_SecPerTrk = cylsector;
+            BPB.v.BPB_NumHeads = headscyl;
+			if((bytesector == 1024) && (cylsector == 8) && (cylinders == 77)) { // PC-98 2HD 1.25MB
+				BPB.v.BPB_RootEntCnt = 0xc0;
+				BPB.v.BPB_TotSec16 = 0x4d0;
+				BPB.v.BPB_FATSz16 = 2;
+				BPB.v.BPB_Media = 0xfe;
+			}
+			else if((bytesector == 512) && (cylsector == 15) && (cylinders == 80)) { // PC-98 2HC 1.21MB
+                BPB.v.BPB_RootEntCnt = 0xe0;
+                BPB.v.BPB_TotSec16 = 0x960;
+                BPB.v.BPB_FATSz16 = 7;
+                BPB.v.BPB_Media = 0xf9;
+			}
+			else if((bytesector == 512) && (cylsector == 18) && (cylinders == 80)) { // PC-98 2HD 1.44MB
+                BPB.v.BPB_RootEntCnt = 0xe0;
+                BPB.v.BPB_TotSec16 = 0xb40;
+                BPB.v.BPB_FATSz16 = 9;
+                BPB.v.BPB_Media = 0xf0;
+			}
+			else if((bytesector == 512) && (cylsector == 8) && (cylinders == 80)) { // PC-98 2DD 640kB
+				BPB.v.BPB_RootEntCnt = 0x70;
+				BPB.v.BPB_TotSec16 = 0x500;
+				BPB.v.BPB_FATSz16 = 2;
+				BPB.v.BPB_Media = 0xfb;
+			}
+			else if((bytesector == 512) && (cylsector == 9) && (cylinders == 80)) { // PC-98 2DD 720kB
+				BPB.v.BPB_RootEntCnt = 0x70;
+				BPB.v.BPB_TotSec16 = 0x5a0;
+				BPB.v.BPB_FATSz16 = 3;
+				BPB.v.BPB_Media = 0xf9;
+			}
+			else {
+				LOG_MSG("Experimental: PC-98 assuming BPB parameters to be 1.25MB 2HD floppy, this may not work.");
+				BPB.v.BPB_RootEntCnt = 0xc0;
+				BPB.v.BPB_TotSec16 = 0x4d0;
+				BPB.v.BPB_Media = 0xfe;
+				BPB.v.BPB_FATSz16 = 2;
+			}
+        }
+        else {
+            LOG_MSG("FAT bytes/sector value %u not supported", BPB.v.BPB_BytsPerSec);
+            created_successfully = false;
+            return;
+        }
 	}
 
 	/* another fault of this code is that it assumes the sector size of the medium matches
