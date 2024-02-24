@@ -594,8 +594,8 @@ void MenuBrowseFDImage(char drive, int num, int type) {
     getcwd(Temp_CurrentDir, 512);
     char const * lTheOpenFileName;
     std::string files="", fname="";
-    const char *lFilterPatterns[] = {"*.ima","*.img","*.fdi","*.nfd","*.d88","*.IMA","*.IMG","*.FDI", "*.NFD", "*.D88"};
-    const char *lFilterDescription = "Floppy image files (*.ima, *.img, *.fdi, *.nfd, *.d88)";
+    const char *lFilterPatterns[] = {"*.ima","*.img","*.xdf","*.fdi","*.hdm","*.nfd","*.d88","*.IMA","*.IMG","*.XDF","*.FDI","*.HDM","*.NFD","*.D88"};
+    const char *lFilterDescription = "Floppy image files (*.ima, *.img, *.xdf, *.fdi, *.hdm, *.nfd, *.d88)";
     lTheOpenFileName = tinyfd_openFileDialog("Select a floppy image file","",4,lFilterPatterns,lFilterDescription,0);
 
     if (lTheOpenFileName) {
@@ -656,8 +656,8 @@ void MenuBrowseImageFile(char drive, bool arc, bool boot, bool multiple) {
         lTheOpenFileName = tinyfd_openFileDialog(("Select an archive file for Drive "+str+":").c_str(),"",4,lFilterPatterns,lFilterDescription,0);
         if (lTheOpenFileName) fname = GetNewStr(lTheOpenFileName);
     } else {
-        const char *lFilterPatterns[] = {"*.ima","*.img","*.vhd","*.fdi","*.hdi","*.nfd","*.nhd","*.d88","*.hdm","*.iso","*.cue","*.bin","*.chd","*.mdf","*.gog","*.ins","*.IMA","*.IMG","*.VHD","*.FDI","*.HDI","*.NFD","*.NHD","*.D88","*.HDM","*.ISO","*.CUE","*.BIN","*.CHD","*.MDF","*.GOG","*.INS"};
-        const char *lFilterDescription = "Disk/CD image files (*.ima, *.img, *.vhd, *.fdi, *.hdi, *.nfd, *.nhd, *.d88, *.hdm, *.iso, *.cue, *.bin, *.chd, *.mdf, *.gog, *.ins)";
+        const char *lFilterPatterns[] = {"*.ima","*.img","*.vhd","*.fdi","*.hdi","*.nfd","*.nhd","*.d88","*.hdm","*.xdf","*.iso","*.cue","*.bin","*.chd","*.mdf","*.gog","*.ins","*.IMA","*.IMG","*.VHD","*.FDI","*.HDI","*.NFD","*.NHD","*.D88","*.HDM","*.XDF","*.ISO","*.CUE","*.BIN","*.CHD","*.MDF","*.GOG","*.INS"};
+        const char *lFilterDescription = "Disk/CD image files";
         lTheOpenFileName = tinyfd_openFileDialog(((multiple?"Select image file(s) for Drive ":"Select an image file for Drive ")+str+":").c_str(),"",22,lFilterPatterns,lFilterDescription,multiple?1:0);
         if (lTheOpenFileName) fname = GetNewStr(lTheOpenFileName);
         if (multiple&&fname.size()) {
@@ -1637,6 +1637,9 @@ static void CFGTOOL_ProgramStart(Program * * make) {
 }
 
 extern bool custom_bios;
+extern size_t custom_bios_image_size;
+extern Bitu custom_bios_image_offset;
+extern unsigned char *custom_bios_image;
 extern uint32_t floppytype;
 extern bool boot_debug_break;
 extern Bitu BIOS_bootfail_code_offset;
@@ -2005,43 +2008,53 @@ public:
             Bitu segbase = 0x100000 - loadsz;
             LOG_MSG("Loading BIOS image %s to 0x%lx, 0x%lx bytes",bios.c_str(),(unsigned long)segbase,(unsigned long)loadsz);
             fseek(romfp, 0, SEEK_SET);
-            size_t readResult = fread(GetMemBase()+segbase,loadsz,1,romfp);
+
+            // To avoid crashes should any interrupt be called on the way to running the BIOS,
+            // don't actually map it in until it's good and ready to go.
+            if (custom_bios_image != NULL) delete[] custom_bios_image;
+            custom_bios_image_size = loadsz;
+            custom_bios_image_offset = segbase;
+            custom_bios_image = new unsigned char[custom_bios_image_size];
+
+            size_t readResult = fread(custom_bios_image,loadsz,1,romfp);
             fclose(romfp);
             if (readResult != 1) {
                 LOG(LOG_IO, LOG_ERROR) ("Reading error in Run\n");
                 return;
             }
 
-            // The PC-98 BIOS has a bank switching system where at least the last 32KB
-            // can be switched to an Initial Firmware Test BIOS, which initializes the
-            // system then switches back to the full 96KB visible during runtime.
-            //
-            // We can emulate the same if a file named ITF.ROM exists in the same directory
-            // as the BIOS image we were given.
-            //
-            // To enable multiple ITFs per ROM image, we first try <bios filename>.itf.rom
-            // before trying itf.rom, for the user's convenience.
-            FILE *itffp;
+            if (IS_PC98_ARCH) {
+                // The PC-98 BIOS has a bank switching system where at least the last 32KB
+                // can be switched to an Initial Firmware Test BIOS, which initializes the
+                // system then switches back to the full 96KB visible during runtime.
+                //
+                // We can emulate the same if a file named ITF.ROM exists in the same directory
+                // as the BIOS image we were given.
+                //
+                // To enable multiple ITFs per ROM image, we first try <bios filename>.itf.rom
+                // before trying itf.rom, for the user's convenience.
+                FILE *itffp;
 
-                               itffp = getFSFile((bios + ".itf.rom").c_str(), &isz1, &isz2);
-            if (itffp == NULL) itffp = getFSFile((bios + ".ITF.ROM").c_str(), &isz1, &isz2);
-            if (itffp == NULL) itffp = getFSFile("itf.rom", &isz1, &isz2);
-            if (itffp == NULL) itffp = getFSFile("ITF.ROM", &isz1, &isz2);
+                                   itffp = getFSFile((bios + ".itf.rom").c_str(), &isz1, &isz2);
+                if (itffp == NULL) itffp = getFSFile((bios + ".ITF.ROM").c_str(), &isz1, &isz2);
+                if (itffp == NULL) itffp = getFSFile("itf.rom", &isz1, &isz2);
+                if (itffp == NULL) itffp = getFSFile("ITF.ROM", &isz1, &isz2);
 
-            if (itffp != NULL && isz2 <= 0x8000ul) {
-                LOG_MSG("Found ITF (initial firmware test) BIOS image (0x%lx bytes)",(unsigned long)isz2);
+                if (itffp != NULL && isz2 <= 0x8000ul) {
+                    LOG_MSG("Found ITF (initial firmware test) BIOS image (0x%lx bytes)",(unsigned long)isz2);
 
-                memset(PC98_ITF_ROM,0xFF,sizeof(PC98_ITF_ROM));
-                readResult = fread(PC98_ITF_ROM,isz2,1,itffp);
-                fclose(itffp);
-                if (readResult != 1) {
-                    LOG(LOG_IO, LOG_ERROR) ("Reading error in Run\n");
-                    return;
+                    memset(PC98_ITF_ROM,0xFF,sizeof(PC98_ITF_ROM));
+                    readResult = fread(PC98_ITF_ROM,isz2,1,itffp);
+                    fclose(itffp);
+                    if (readResult != 1) {
+                        LOG(LOG_IO, LOG_ERROR) ("Reading error in Run\n");
+                        return;
+                    }
+                    PC98_ITF_ROM_init = true;
                 }
-                PC98_ITF_ROM_init = true;
-            }
 
-            IO_RegisterWriteHandler(0x43D,pc98_43d_write,IO_MB);
+                IO_RegisterWriteHandler(0x43D,pc98_43d_write,IO_MB);
+            }
 
             custom_bios = true;
 
