@@ -3503,21 +3503,38 @@ again:
              *
              *          For this reason, this code never uses the data pointer, it requires an offset relative to TempLine to avoid this
              *          weird flaw. */
-            if (video_debug_overlay && vga.draw.width < render.src.width) {
-                if (data >= TempLine && data < (TempLine+(64*4))) {
-                    VGA_DrawDebugLine(TempLine+size_t(data-TempLine)+(vga.draw.width*((vga.draw.bpp+7u)>>3u)),render.src.width-vga.draw.width);
+
+            /* NTS: SVGA modes M_LIN15/16/24/32 DrawLine(), if not rendering the hardware cursor, often point directly at video RAM!
+             *      Rendering past it will just corrupt video RAM! Make a copy if any such overlays will occur! */
+            bool renderOK = true;
+
+            if (!(data >= TempLine && data < (TempLine+(64*4)))) {
+                renderOK = false;
+
+                if (video_debug_overlay || vga_page_flip_occurred || vga_3da_polled) {
+                   memcpy(TempLine,data,vga.draw.width*((vga.draw.bpp+7u)>>3u));
+                   data = TempLine;
+                   renderOK = true;
                 }
-	    }
-            if (vga_page_flip_occurred) {
-                memxor(data,0xFF,vga.draw.width*(vga.draw.bpp>>3));
-                vga_page_flip_occurred = false;
             }
-            if (vga_3da_polled) {
-                if (vga.draw.bpp==32)
-                    memxor_greendotted_32bpp((uint32_t*)data,(vga.draw.width>>1)*(vga.draw.bpp>>3),vga.draw.lines_done);
-                else
-                    memxor_greendotted_16bpp((uint16_t*)data,(vga.draw.width>>1)*(vga.draw.bpp>>3),vga.draw.lines_done);
-                vga_3da_polled = false;
+
+            if (renderOK) {
+                if (video_debug_overlay && vga.draw.width < render.src.width)
+                    VGA_DrawDebugLine(TempLine+size_t(data-TempLine)+(vga.draw.width*((vga.draw.bpp+7u)>>3u)),render.src.width-vga.draw.width);
+
+                if (vga_page_flip_occurred) {
+                    memxor(data,0xFF,vga.draw.width*(vga.draw.bpp>>3));
+                    vga_page_flip_occurred = false;
+                }
+
+                if (vga_3da_polled) {
+                    if (vga.draw.bpp==32)
+                        memxor_greendotted_32bpp((uint32_t*)data,(vga.draw.width>>1)*(vga.draw.bpp>>3),vga.draw.lines_done);
+                    else
+                        memxor_greendotted_16bpp((uint16_t*)data,(vga.draw.width>>1)*(vga.draw.bpp>>3),vga.draw.lines_done);
+
+                    vga_3da_polled = false;
+                }
             }
 
             if (VGA_IsCaptureEnabled())
@@ -4020,6 +4037,7 @@ static void VGA_debug_screen_alloc(size_t w,size_t h,size_t bpp) {
 		case 8:
 			VGA_debug_screen_func = &VGA_debug_screen_funcs8;
 			break;
+		case 15:
 		case 16:
 			VGA_debug_screen_func = &VGA_debug_screen_funcs16;
 			break;
@@ -4103,12 +4121,20 @@ void VGA_DebugAddEvent(debugline_event &ev) {
 			case DBGEV_SPLIT:
 				if (vga.draw.bpp == 8)
 					ev.colorline = is_ega64 ? 0x12 : 0x0A;
+				else if (vga.draw.bpp == 15)
+					ev.colorline = 0x1Fu << 5u;
+				else if (vga.draw.bpp == 16)
+					ev.colorline = 0x3Fu << 5u;
 				else
 					ev.colorline = GFX_Gmask;
 				break;
 			default:
 				if (vga.draw.bpp == 8)
 					ev.colorline = is_ega64 ? 0x3F : 0x0F;
+				else if (vga.draw.bpp == 15)
+					ev.colorline = 0x7FFFu;
+				else if (vga.draw.bpp == 16)
+					ev.colorline = 0xFFFFu;
 				else
 					ev.colorline = GFX_Rmask | GFX_Gmask | GFX_Bmask;
 				break;
@@ -4208,6 +4234,12 @@ void VGA_DrawDebugLine(uint8_t *line,unsigned int w) {
 				white = 0xF;
 			}
 			break;
+		case 15:
+			white = 0x7FFFu;
+			break;
+		case 16:
+			white = 0xFFFFu;
+			break;
 		case 32: // VGA/MCGA/SVGA/PC98
 			white = GFX_Bmask | GFX_Gmask | GFX_Rmask;
 			break;
@@ -4266,7 +4298,24 @@ void VGA_DrawDebugLine(uint8_t *line,unsigned int w) {
 		}
 	}
 	else if (machine == MCH_VGA) {
-		if (vga.draw.bpp == 32) { /* Doesn't use anything else */
+		if (vga.draw.bpp == 15 || vga.draw.bpp == 16) {
+			uint16_t *draw = (uint16_t*)line;
+			unsigned int dw = w;
+
+			if (dw <= 4) return;
+			for (unsigned int c=0;c < 4;c++) {
+				*draw++ = 0;
+				dw--;
+			}
+
+			minw = (unsigned int)(draw+4-(uint16_t*)line);
+
+			while (dw > 0) {
+				*draw++ = 0;
+				dw--;
+			}
+		}
+		else if (vga.draw.bpp == 32) { /* Doesn't use anything else */
 			uint32_t *draw = (uint32_t*)line;
 			unsigned int dw = w;
 
@@ -4290,16 +4339,18 @@ void VGA_DrawDebugLine(uint8_t *line,unsigned int w) {
 				}
 			}
 
-			if (dw <= 16) return;
-			for (unsigned int c=0;c < 16;c++) {
-				const unsigned int idx = vga.dac.combine[c]; /* vga_dac.cpp considers color select */
-				const unsigned int color = SDL_MapRGB(
-					sdl.surface->format,
-					((vga.dac.rgb[idx].red << dacshift) & 0xFF),
-					((vga.dac.rgb[idx].green << dacshift) & 0xFF),
-					((vga.dac.rgb[idx].blue << dacshift) & 0xFF));
-				*draw++ = color;
-				dw--;
+			if (!(vga.mode == M_LIN15 || vga.mode == M_LIN16 || vga.mode == M_LIN24 || vga.mode == M_LIN32)) {
+				if (dw <= 16) return;
+				for (unsigned int c=0;c < 16;c++) {
+					const unsigned int idx = vga.dac.combine[c]; /* vga_dac.cpp considers color select */
+					const unsigned int color = SDL_MapRGB(
+							sdl.surface->format,
+							((vga.dac.rgb[idx].red << dacshift) & 0xFF),
+							((vga.dac.rgb[idx].green << dacshift) & 0xFF),
+							((vga.dac.rgb[idx].blue << dacshift) & 0xFF));
+					*draw++ = color;
+					dw--;
+				}
 			}
 
 			if (dw <= 4) return;
@@ -4397,6 +4448,26 @@ void VGA_DrawDebugLine(uint8_t *line,unsigned int w) {
 							}
 						}
 					}
+					else if (vga.draw.bpp == 15 || vga.draw.bpp == 16) {
+						if ((ev.x+ev.w) <= w) {
+							uint16_t *dp = (uint16_t*)line+ev.x;
+							const char *str = ev.text[ev.tline].c_str();
+							unsigned int dw = ev.w;
+							while (*str != 0 && dw >= 8) {
+								unsigned char c = (unsigned char)(*str++);
+								unsigned char b = int10_font_08[(c*8)+ev.trow];
+								for (unsigned int x=0;x < 8;x++) {
+									*dp++ = (b & 0x80) ? 0 : ev.colorline;
+									b <<= 1u;
+								}
+								dw -= 8;
+							}
+							while (dw >= 8) {
+								for (unsigned int x=0;x < 8;x++) *dp++ = ev.colorline;
+								dw -= 8;
+							}
+						}
+					}
 					else if (vga.draw.bpp == 32) {
 						if ((ev.x+ev.w) <= w) {
 							uint32_t *dp = (uint32_t*)line+ev.x;
@@ -4458,6 +4529,14 @@ void VGA_sof_debug_video_info(void) {
 				white = 0xF;
 				green = 0xA; /* xxxxIRGB */
 			}
+			break;
+		case 15:
+			green = 0x1Fu << 5u;
+			white = 0x7FFFu;
+			break;
+		case 16:
+			green = 0x3Fu << 5u;
+			white = 0xFFFFu;
 			break;
 		case 32: // VGA/MCGA/SVGA/PC98
 			green = GFX_Gmask;
