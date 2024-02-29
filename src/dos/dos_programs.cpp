@@ -1685,7 +1685,7 @@ bool MEM_map_ROM_physmem(Bitu start,Bitu end);
 PageHandler &Get_ROM_page_handler(void);
 
 // Normal BIOS is in the BIOS memory area
-// ITF is in it's own buffer, served by mem_itf_rom
+// ITF is in its own buffer, served by mem_itf_rom
 void PC98_BIOS_Bank_Switch(void) {
     if (PC98_BANK_Select == 0x00) {
         MEM_RegisterHandler(0xF8,&mem_itf_rom,0x8);
@@ -2557,7 +2557,7 @@ public:
             extern const char* RunningProgram;
 
             if (max_seg < 0x0800) {
-                /* TODO: For the adventerous, add a configuration option or command line switch to "BOOT"
+                /* TODO: For the adventurous, add a configuration option or command line switch to "BOOT"
                  *       that allows us to boot the guest OS anyway in a manner that is non-standard. */
                 if (!quiet) WriteOut("32KB of RAM is required to boot a guest OS\n");
                 return;
@@ -4994,6 +4994,7 @@ class IMGMOUNT : public Program {
 			//initialize more variables
 			unsigned long el_torito_floppy_base=~0UL;
 			unsigned char el_torito_floppy_type=0xFF;
+			bool empty_drive = false;
 			bool ide_slave = false;
 			signed char ide_index = -1;
 			char el_torito_cd_drive = 0;
@@ -5003,6 +5004,9 @@ class IMGMOUNT : public Program {
 			uint8_t tdr = 0;
 			std::string bdisk;
 			int bdisk_number=-1;
+
+			if (cmd->FindExist("-empty",true))
+				empty_drive = true;
 
 			//this code simply sets default type to "floppy" if mounting at A: or B: --- nothing else
 			// get first parameter - which is probably the drive letter to mount at (A-Z or A:-Z:) - and check it if is A or B or A: or B:
@@ -5174,7 +5178,7 @@ class IMGMOUNT : public Program {
 			}
 
 			// find all file parameters, assuming that all option parameters have been removed
-			bool removed=ParseFiles(temp_line, paths, el_torito != "" || type == "ram" || bdisk != "");
+			bool removed=ParseFiles(temp_line, paths, el_torito != "" || type == "ram" || bdisk != "", empty_drive);
 
 			// some generic checks
 			if (el_torito != "") {
@@ -5188,6 +5192,19 @@ class IMGMOUNT : public Program {
 			else if (type == "ram") {
 				if (paths.size() != 0) {
 					WriteOut("Do not specify files when mounting RAM drives\n");
+					return;
+				}
+			}
+			else if (empty_drive) {
+				if (paths.size() != 0) {
+					WriteOut("Image list cannot be specified with -empty\n");
+					return;
+				}
+				if (type == "iso" && fstype == "iso") {
+					/* OK */
+				}
+				else if (fstype != "none") {
+					WriteOut("-empty must be combined with -fs none\n");
 					return;
 				}
 			}
@@ -5246,7 +5263,7 @@ class IMGMOUNT : public Program {
 					return;
 				}
 				//supports multiple files
-				if (!MountIso(drive, paths, ide_index, ide_slave)) return;
+				if (!MountIso(drive, paths, ide_index, ide_slave, empty_drive)) return;
 				if (removed && !exist && i_drive < DOS_DRIVES && i_drive >= 0 && Drives[i_drive]) DOS_SetDefaultDrive(i_drive);
 			} else if (fstype=="none") {
 				unsigned char driveIndex = drive - '0';
@@ -5265,7 +5282,10 @@ class IMGMOUNT : public Program {
 					}
 				}
 
-				if (el_torito != "") {
+				if (empty_drive) {
+					newImage = new imageDiskEmptyDrive();
+				}
+				else if (el_torito != "") {
 					newImage = new imageDiskElToritoFloppy((unsigned char)el_torito_cd_drive, el_torito_floppy_base, el_torito_floppy_type);
 				}
 				else if (type == "ram") {
@@ -5281,6 +5301,10 @@ class IMGMOUNT : public Program {
 				}
 				else if (!newImage->hardDrive && (driveIndex >= 2)) {
 					WriteOut("Cannot mount floppy in hard drive position.\n");
+				}
+				else if (empty_drive) {
+    					if (AttachToBiosByIndex(newImage, (unsigned char)driveIndex)) {
+					}
 				}
 				else {
 					if (AttachToBiosAndIdeByIndex(newImage, (unsigned char)driveIndex, (unsigned char)ide_index, ide_slave)) {
@@ -5415,14 +5439,14 @@ class IMGMOUNT : public Program {
 			}
 			return true;
 		}
-		bool ParseFiles(std::string &commandLine, std::vector<std::string> &paths, bool nodef) {
+		bool ParseFiles(std::string &commandLine, std::vector<std::string> &paths, bool nodef, bool empty_drive) {
 			char drive=commandLine[0];
 			bool nocont=false;
 			int num = 0;
 			while (!nocont&&cmd->FindCommand((unsigned int)(paths.size() + 1 - num), commandLine)) {
 				bool usedef=false;
 				if (!cmd->FindCommand((unsigned int)(paths.size() + 2 - num), commandLine) || !commandLine.size()) {
-					if (!nodef && !paths.size()) {
+					if (!nodef && !empty_drive && !paths.size()) {
 						commandLine="IMGMAKE.IMG";
 						usedef=true;
 					}
@@ -6387,7 +6411,7 @@ class IMGMOUNT : public Program {
 			return false;
 		}
 
-		bool MountIso(const char drive, const std::vector<std::string> &paths, const signed char ide_index, const bool ide_slave) {
+		bool MountIso(const char drive, const std::vector<std::string> &paths, const signed char ide_index, const bool ide_slave, const bool empty_drive) {
 			//mount cdrom
 			if (Drives[drive - 'A']) {
 				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_ALREADY_MOUNTED"));
@@ -6422,6 +6446,12 @@ class IMGMOUNT : public Program {
 					return false;
 				}
 			}
+			if (empty_drive) {
+				std::vector<std::string> options2 = options;
+				int error = -1;
+				options2.push_back("empty");
+				isoDisks.push_back(new isoDrive(drive, "empty", mediaid, error, options2));
+			}
 			// Update DriveManager
 			for (ct = 0; ct < isoDisks.size(); ct++) {
 				DriveManager::AppendDisk(drive - 'A', isoDisks[ct]);
@@ -6437,12 +6467,17 @@ class IMGMOUNT : public Program {
 
 			// Print status message (success)
 			if (!qmount) WriteOut(MSG_Get("MSCDEX_SUCCESS"));
-			std::string tmp(wpcolon&&paths[0].length()>1&&paths[0].c_str()[0]==':'?paths[0].substr(1):paths[0]);
-			for (i = 1; i < paths.size(); i++) {
-				tmp += "; " + (wpcolon&&paths[i].length()>1&&paths[i].c_str()[0]==':'?paths[i].substr(1):paths[i]);
+			if (!paths.empty()) {
+				std::string tmp(wpcolon&&paths[0].length()>1&&paths[0].c_str()[0]==':'?paths[0].substr(1):paths[0]);
+				for (i = 1; i < paths.size(); i++) {
+					tmp += "; " + (wpcolon&&paths[i].length()>1&&paths[i].c_str()[0]==':'?paths[i].substr(1):paths[i]);
+				}
+				lastmount = drive;
+				if (!qmount) WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"), drive, tmp.c_str());
 			}
-			lastmount = drive;
-			if (!qmount) WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"), drive, tmp.c_str());
+			else {
+				lastmount = drive;
+			}
 			return true;
 		}
 
@@ -6581,7 +6616,7 @@ class IMGMOUNT : public Program {
 				sizes[3]/*cylinders*/ = (Bitu)((uint64_t)sectors / (uint64_t)sizes[2]/*heads*/ / (uint64_t)sizes[1]/*sectors/track*/);
 
 				if (IS_PC98_ARCH) {
-					/* TODO: PC-98 has it's own issues with a 4096-cylinder limit */
+					/* TODO: PC-98 has its own issues with a 4096-cylinder limit */
 				}
 				else {
 					/* INT 13h mapping, deal with 1024-cyl limit */
@@ -9280,7 +9315,6 @@ void DOS_SetupPrograms(void) {
         "\033[32;1mInformation:\033[0m\n\n"
         "For information about basic mount, type \033[34;1mintro mount\033[0m\n"
         "For information about CD-ROM support, type \033[34;1mintro cdrom\033[0m\n"
-        "For information about special keys, type \033[34;1mintro special\033[0m\n"
         "For information about usage, type \033[34;1mintro usage\033[0m\n\n"
         "For the latest version of DOSBox-X, go to its homepage:\033[34;1m\n"
         "\n"

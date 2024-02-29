@@ -1694,7 +1694,7 @@ void imageDisk::Set_Geometry(uint32_t setHeads, uint32_t setCyl, uint32_t setSec
     Bitu bigdisk_shift = 0;
 
     if (IS_PC98_ARCH) {
-        /* TODO: PC-98 has it's own 4096 cylinder limit */
+        /* TODO: PC-98 has its own 4096 cylinder limit */
     }
     else {
         if(setCyl > 16384) LOG_MSG("Warning: This disk image is too big.");
@@ -1896,7 +1896,7 @@ static Bitu INT13_DiskHandler(void) {
 
         /* INT 13h is limited to 512 bytes/sector (as far as I know).
          * The sector buffer in this function is limited to 512 bytes/sector,
-         * so this is also a protection against overruning the stack if you
+         * so this is also a protection against overrunning the stack if you
          * mount a PC-98 disk image (1024 bytes/sector) and try to read it with INT 13h. */
         if (imageDiskList[drivenum]->sector_size > sizeof(sectbuf)) {
             LOG(LOG_MISC,LOG_DEBUG)("INT 13h: Read failed because disk bytes/sector on drive %c is too large",(char)drivenum+'A');
@@ -1957,7 +1957,7 @@ static Bitu INT13_DiskHandler(void) {
 
         /* INT 13h is limited to 512 bytes/sector (as far as I know).
          * The sector buffer in this function is limited to 512 bytes/sector,
-         * so this is also a protection against overruning the stack if you
+         * so this is also a protection against overrunning the stack if you
          * mount a PC-98 disk image (1024 bytes/sector) and try to read it with INT 13h. */
         if (imageDiskList[drivenum]->sector_size > sizeof(sectbuf)) {
             LOG(LOG_MISC,LOG_DEBUG)("INT 13h: Write failed because disk bytes/sector on drive %c is too large",(char)drivenum+'A');
@@ -3611,5 +3611,33 @@ void LogPrintPartitionTable(const std::vector<partTable::partentry_t> &parts) {
 			(unsigned long long)part.absSectStart,
 			(unsigned long long)part.partSize);
 	}
+}
+
+
+uint8_t imageDiskEmptyDrive::Read_Sector(uint32_t /*head*/,uint32_t /*cylinder*/,uint32_t /*sector*/,void * /*data*/,unsigned int /*req_sector_size*/) {
+	return 0x05;
+}
+
+uint8_t imageDiskEmptyDrive::Write_Sector(uint32_t /*head*/,uint32_t /*cylinder*/,uint32_t /*sector*/,const void * /*data*/,unsigned int /*req_sector_size*/) {
+	return 0x05;
+}
+
+uint8_t imageDiskEmptyDrive::Read_AbsoluteSector(uint32_t /*sectnum*/, void * /*data*/) {
+	return 0x05;
+}
+
+uint8_t imageDiskEmptyDrive::Write_AbsoluteSector(uint32_t /*sectnum*/, const void * /*data*/) {
+	return 0x05;
+}
+
+imageDiskEmptyDrive::imageDiskEmptyDrive() : imageDisk(ID_EMPTY_DRIVE) {
+	active = true;
+	sector_size = 512;
+	heads = 2;
+	cylinders = 80;
+	sectors = 18;
+}
+
+imageDiskEmptyDrive::~imageDiskEmptyDrive() {
 }
 

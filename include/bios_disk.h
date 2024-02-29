@@ -51,7 +51,8 @@ class imageDisk {
 			ID_MEMORY,
 			ID_VHD,
 			ID_D88,
-			ID_NFD
+			ID_NFD,
+			ID_EMPTY_DRIVE
 		};
 
 		virtual uint8_t Read_Sector(uint32_t head,uint32_t cylinder,uint32_t sector,void * data,unsigned int req_sector_size=0);
@@ -128,6 +129,17 @@ class imageDisk {
 
 			return false;
 		}
+};
+
+class imageDiskEmptyDrive : public imageDisk {
+public:
+	virtual uint8_t Read_Sector(uint32_t head,uint32_t cylinder,uint32_t sector,void * data,unsigned int req_sector_size=0);
+	virtual uint8_t Write_Sector(uint32_t head,uint32_t cylinder,uint32_t sector,const void * data,unsigned int req_sector_size=0);
+	virtual uint8_t Read_AbsoluteSector(uint32_t sectnum, void * data);
+	virtual uint8_t Write_AbsoluteSector(uint32_t sectnum, const void * data);
+
+	imageDiskEmptyDrive();
+	virtual ~imageDiskEmptyDrive();
 };
 
 class imageDiskD88 : public imageDisk {
@@ -240,7 +252,7 @@ public:
 	virtual uint8_t Write_AbsoluteSector(uint32_t sectnum, const void * data);
 	virtual uint8_t GetBiosType(void);
 	virtual void Set_Geometry(uint32_t setHeads, uint32_t setCyl, uint32_t setSect, uint32_t setSectSize);
-	// Parition and format the ramdrive
+	// Partition and format the ramdrive
 	virtual uint8_t Format();
 
 	// Create a hard drive image of a specified size; automatically select c/h/s
