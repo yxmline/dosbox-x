@@ -656,7 +656,7 @@ void MenuBrowseImageFile(char drive, bool arc, bool boot, bool multiple) {
         lTheOpenFileName = tinyfd_openFileDialog(("Select an archive file for Drive "+str+":").c_str(),"",4,lFilterPatterns,lFilterDescription,0);
         if (lTheOpenFileName) fname = GetNewStr(lTheOpenFileName);
     } else {
-        const char *lFilterPatterns[] = {"*.ima","*.img","*.vhd","*.fdi","*.hdi","*.nfd","*.nhd","*.d88","*.hdm","*.xdf","*.iso","*.cue","*.bin","*.chd","*.mdf","*.gog","*.ins","*.IMA","*.IMG","*.VHD","*.FDI","*.HDI","*.NFD","*.NHD","*.D88","*.HDM","*.XDF","*.ISO","*.CUE","*.BIN","*.CHD","*.MDF","*.GOG","*.INS"};
+        const char *lFilterPatterns[] = {"*.ima","*.img","*.vhd","*.fdi","*.hdi","*.nfd","*.nhd","*.d88","*.hdm","*.xdf","*.iso","*.cue","*.bin","*.chd","*.mdf","*.gog","*.ins","*.ccd","*.IMA","*.IMG","*.VHD","*.FDI","*.HDI","*.NFD","*.NHD","*.D88","*.HDM","*.XDF","*.ISO","*.CUE","*.BIN","*.CHD","*.MDF","*.GOG","*.INS", "*.CCD"};
         const char *lFilterDescription = "Disk/CD image files";
         lTheOpenFileName = tinyfd_openFileDialog(((multiple?"Select image file(s) for Drive ":"Select an image file for Drive ")+str+":").c_str(),"",22,lFilterPatterns,lFilterDescription,multiple?1:0);
         if (lTheOpenFileName) fname = GetNewStr(lTheOpenFileName);
@@ -6613,7 +6613,9 @@ class IMGMOUNT : public Program {
 			/* auto-fill: head/cylinder count */
 			if (sizes[3]/*cylinders*/ == 0 && sizes[2]/*heads*/ == 0) {
 				sizes[2] = 16; /* typical hard drive, unless a very old drive */
-				sizes[3]/*cylinders*/ = (Bitu)((uint64_t)sectors / (uint64_t)sizes[2]/*heads*/ / (uint64_t)sizes[1]/*sectors/track*/);
+				sizes[3]/*cylinders*/ =
+					(Bitu)(((uint64_t)sectors + ((uint64_t)sizes[2]/*heads*/ * (uint64_t)sizes[1]/*sectors/track*/) - (uint64_t)1u) /
+					((uint64_t)sizes[2]/*heads*/ * (uint64_t)sizes[1]/*sectors/track*/));
 
 				if (IS_PC98_ARCH) {
 					/* TODO: PC-98 has its own issues with a 4096-cylinder limit */
@@ -6628,7 +6630,9 @@ class IMGMOUNT : public Program {
 						if (sizes[2] >= 256) sizes[2] = 255;
 
 						/* and recompute cylinders */
-						sizes[3]/*cylinders*/ = (Bitu)((uint64_t)sectors / (uint64_t)sizes[2]/*heads*/ / (uint64_t)sizes[1]/*sectors/track*/);
+						sizes[3]/*cylinders*/ =
+							(Bitu)(((uint64_t)sectors + ((uint64_t)sizes[2]/*heads*/ * (uint64_t)sizes[1]/*sectors/track*/) - (uint64_t)1u) /
+							((uint64_t)sizes[2]/*heads*/ * (uint64_t)sizes[1]/*sectors/track*/));
 					}
 				}
 			}
