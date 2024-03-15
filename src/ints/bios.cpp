@@ -78,8 +78,8 @@ extern bool PS1AudioCard;
 unsigned char ACPI_ENABLE_CMD = 0xA1;
 unsigned char ACPI_DISABLE_CMD = 0xA0;
 unsigned int ACPI_PM1A_EVT_BLK = 0x820;
-unsigned int ACPI_PM1A_CNT_BLK = 0x830;
-unsigned int ACPI_PM_TMR_BLK = 0x840;
+unsigned int ACPI_PM1A_CNT_BLK = 0x824;
+unsigned int ACPI_PM_TMR_BLK = 0x830;
 
 std::string ibm_rom_basic;
 size_t ibm_rom_basic_size = 0;
@@ -8110,7 +8110,7 @@ unsigned char* ACPISysDescTableWriter::getptr(size_t ofs,size_t sz) {
 
 unsigned char *ACPISysDescTableWriter::finish(void) {
 	if (base != NULL) {
-		unsigned char *ret = base;
+		unsigned char *ret = base + tablesize;
 
 		assert((base+tablesize) <= f);
 		assert(tablesize >= 36);
@@ -8130,6 +8130,99 @@ unsigned char *ACPISysDescTableWriter::finish(void) {
 	}
 
 	return NULL;
+}
+
+enum class ACPIRegionSpace {
+	SystemMemory=0,
+	SystemIO=1,
+	PCIConfig=2,
+	EmbeddedControl=3,
+	SMBus=4
+};
+
+class ACPIAMLWriter {
+	public:
+		ACPIAMLWriter();
+		~ACPIAMLWriter();
+	public:
+		unsigned char* writeptr(void) const;
+		void begin(unsigned char *n_w,unsigned char *n_f);
+	public:
+		ACPIAMLWriter &NameOp(const char *name);
+		ACPIAMLWriter &ByteOp(const unsigned char v);
+		ACPIAMLWriter &WordOp(const unsigned int v);
+		ACPIAMLWriter &DwordOp(const unsigned long v);
+		ACPIAMLWriter &StringOp(const char *str);
+		ACPIAMLWriter &OpRegionOp(const char *name,const ACPIRegionSpace regionspace);
+	public:
+		ACPIAMLWriter &Name(const char *name);
+	private:
+		unsigned char*		w=NULL,*f=NULL;
+};
+
+ACPIAMLWriter &ACPIAMLWriter::NameOp(const char *name) {
+	*w++ = 0x08; // NameOp
+	Name(name);
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::Name(const char *name) {
+	for (unsigned int i=0;i < 4;i++) {
+		if (*name) *w++ = *name++;
+		else *w++ = '_';
+	}
+
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::ByteOp(const unsigned char v) {
+	*w++ = 0x0A; // ByteOp
+	*w++ = v;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::WordOp(const unsigned int v) {
+	*w++ = 0x0B; // WordOp
+	host_writew(w,v); w += 2;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::DwordOp(const unsigned long v) {
+	*w++ = 0x0C; // DwordOp
+	host_writed(w,v); w += 4;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::StringOp(const char *str) {
+	/* WARNING: Strings are only supposed to have ASCII 0x01-0x7F */
+	*w++ = 0x0D; // StringOp
+	while (*str != 0) *w++ = *str++;
+	*w++ = 0x00;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::OpRegionOp(const char *name,const ACPIRegionSpace regionspace) {
+	*w++ = 0x5B;
+	*w++ = 0x80;
+	Name(name);
+	*w++ = (unsigned char)regionspace;
+	// and then the caller must write the RegionAddress and RegionLength
+	return *this;
+}
+
+ACPIAMLWriter::ACPIAMLWriter() {
+}
+
+ACPIAMLWriter::~ACPIAMLWriter() {
+}
+
+unsigned char* ACPIAMLWriter::writeptr(void) const {
+	return w;
+}
+
+void ACPIAMLWriter::begin(unsigned char *n_w,unsigned char *n_f) {
+	w = n_w;
+	f = n_f;
 }
 
 void BuildACPITable(void) {
@@ -8163,6 +8256,67 @@ void BuildACPITable(void) {
 	unsigned int rsdt_tw_ofs = 36;
 	// leave open for adding one DWORD per table to the end as we go... this is why RSDT is written to the END of the ACPI region.
 
+	/* FACP, which does not have a checksum and does not follow the normal format */
+	unsigned char *facs = w;
+	size_t facs_size = 64;
+	w += facs_size;
+	{
+		assert(w <= f);
+		memset(facs,0,facs_size);
+		memcpy(facs+0x00,"FACS",4);
+		host_writed(facs+0x04,facs_size);
+		host_writed(facs+0x08,0x12345678UL); // hardware signature
+		host_writed(facs+0x0C,0); // firmware waking vector
+		host_writed(facs+0x10,0); // global lock
+		host_writed(facs+0x14,0); // S4BIOS_REQ not supported
+		LOG(LOG_MISC,LOG_DEBUG)("ACPI: FACS at 0x%lx len 0x%lx",(unsigned long)acpiofs2phys( acpiptr2ofs( facs ) ),(unsigned long)facs_size);
+	}
+
+	unsigned char *dsdt_base = w;
+	{
+		ACPISysDescTableWriter dsdt;
+		ACPIAMLWriter aml;
+
+		dsdt.begin(w,f).setSig("DSDT").setRev(1);
+		aml.begin(dsdt.getptr()+dsdt.get_tablesize(),f);
+
+		/* WARNING: To simplify this code, you are responsible for writing the AML in the syntax required.
+		 *          See the ACPI BIOS specification for more details.
+		 *
+		 * For reference:
+		 *
+		 * Name := [LeadNameChar NameChar NameChar NameChar] |
+		 *         [LeadNameChar NameChar NameChar '_'] |
+		 *         [LeadNameChar NameChar '_' '_'] |
+		 *         [LeadNameChar '_' '_' '_']
+		 *
+		 * DefName := NameOp Name DataTerm
+		 *     NameOp => 0x08
+		 *     Data := DataTerm [DataTerm ...]
+		 *     DataTerm := DataItem | DefPackage
+		 *     DataItem := DefBuffer | DefNum | DefString
+		 *
+		 *     How to write: ACPIAML1_NameOp(Name) followed by the necessary functions to write the buffer, string, etc. for the name. */
+		/* Name(TST1,0xAB) */
+		aml.NameOp("TST1").ByteOp(0xAB);
+		/* Name(TST2,0x1234) */
+		aml.NameOp("TST2").WordOp(0x1234);
+		/* Name(TST3,0x12345678) */
+		aml.NameOp("TST3").DwordOp(0x12345678);
+		/* Name(TST4,"Hello ACPI BIOS") */
+		aml.NameOp("TST4").StringOp("Hello ACPI BIOS");
+		/* OperationRegion(ABC,SystemMemory,0xAABB0000,0x4100) */
+		aml.OpRegionOp("ABC",ACPIRegionSpace::SystemMemory).DwordOp(0xAABB0000).WordOp(0x4100);
+		/* OperationRegion(ABC2,SystemIO,0x880,0x18) */
+		aml.OpRegionOp("ABC2",ACPIRegionSpace::SystemIO).WordOp(0x880).WordOp(0x18);
+
+		assert(aml.writeptr() >= (dsdt.getptr()+dsdt.get_tablesize()));
+		assert(aml.writeptr() <= f);
+		dsdt.expandto((size_t)(aml.writeptr() - dsdt.getptr()));
+		LOG(LOG_MISC,LOG_DEBUG)("ACPI: DSDT at 0x%lx len 0x%lx",(unsigned long)acpiofs2phys( acpiptr2ofs( dsdt_base ) ),(unsigned long)dsdt.get_tablesize());
+		w = dsdt.finish();
+	}
+
 	{
 		ACPISysDescTableWriter facp;
 		const PhysPt facp_offset = acpiofs2phys( acpiptr2ofs( w ) );
@@ -8171,8 +8325,8 @@ void BuildACPITable(void) {
 		rsdt_tw_ofs += 4;
 
 		facp.begin(w,f,116).setSig("FACP").setRev(1);
-		// TODO: FIRMWARE_CTRL (FACS)
-		// TODO: DSDT
+		host_writed(w+36,acpiofs2phys( acpiptr2ofs( facs ) ) ); // FIRMWARE_CTRL (FACS table)
+		host_writed(w+40,acpiofs2phys( acpiptr2ofs( dsdt_base ) ) ); // DSDT
 		w[44] = 0; // dual PIC PC-AT type implementation
 		host_writew(w+46,ACPI_IRQ); // SCI_INT
 		host_writed(w+48,ACPI_SMI_CMD); // SCI_CMD (I/O port)
@@ -8183,8 +8337,8 @@ void BuildACPITable(void) {
 		host_writed(w+64,ACPI_PM1A_CNT_BLK); // PM1a_CNT_BLK control register block
 		host_writed(w+76,ACPI_PM_TMR_BLK); // PM_TMR_BLK power management timer control register block
 		w[88] = 4; // PM1_EVT_LEN
-		w[89] = 1; // PM1_CNT_LEN
-		w[90] = 1; // PM2_CNT_LEN
+		w[89] = 2; // PM1_CNT_LEN
+		w[90] = 0; // PM2_CNT_LEN
 		w[91] = 4; // PM_TM_LEN
 		host_writed(w+112,(1u << 0u)/*WBINVD*/);
 		LOG(LOG_MISC,LOG_DEBUG)("ACPI: FACP at 0x%lx len 0x%lx",(unsigned long)facp_offset,(unsigned long)facp.get_tablesize());
