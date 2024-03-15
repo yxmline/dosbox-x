@@ -8140,7 +8140,45 @@ enum class ACPIRegionSpace {
 	SMBus=4
 };
 
+namespace ACPIFieldFlag {
+	namespace AccessType {
+		enum {
+			AnyAcc=0,
+			ByteAcc=1,
+			WordAcc=2,
+			DwordAcc=3,
+			BlockAcc=4,
+			SMBSendRevAcc=5,
+			SMBQuickAcc=6
+		};
+	}
+	namespace LockRule {
+		enum {
+			NoLock=(0 << 4),
+			Lock=(1 << 4)
+		};
+	}
+	namespace UpdateRule {
+		enum {
+			Preserve=(0 << 5),
+			WriteAsOnes=(1 << 5),
+			WriteAsZeros=(2 << 5)
+		};
+	}
+}
+
+#include <stack>
+
 class ACPIAMLWriter {
+	public:
+		static constexpr unsigned int MaxPkgSize = 0xFFFFFFFu;
+	public:
+		struct pkg_t {
+			unsigned char*	pkg_len = NULL;
+			unsigned char*	pkg_data = NULL;
+			unsigned int	element_count = 0;
+		};
+		std::stack<pkg_t> pkg_stack;
 	public:
 		ACPIAMLWriter();
 		~ACPIAMLWriter();
@@ -8154,11 +8192,36 @@ class ACPIAMLWriter {
 		ACPIAMLWriter &DwordOp(const unsigned long v);
 		ACPIAMLWriter &StringOp(const char *str);
 		ACPIAMLWriter &OpRegionOp(const char *name,const ACPIRegionSpace regionspace);
+		ACPIAMLWriter &FieldOp(const char *name,const unsigned int pred_size,const unsigned int fieldflag);
+		ACPIAMLWriter &FieldOpEnd(void);
+		ACPIAMLWriter &ScopeOp(const char *name,const unsigned int pred_size);
+		ACPIAMLWriter &ScopeOpEnd(void);
+		ACPIAMLWriter &PackageOp(const unsigned int pred_size);
+		ACPIAMLWriter &PackageOpEnd(void);
+		ACPIAMLWriter &ZeroOp(void);
+		ACPIAMLWriter &OneOp(void);
+	public:// ONLY for writing fields!
+		ACPIAMLWriter &FieldOpElement(const char *name,const unsigned int bits);
 	public:
+		ACPIAMLWriter &PkgLength(const unsigned int len,unsigned char* &wp,const unsigned int minlen=1);
+		ACPIAMLWriter &PkgLength(const unsigned int len,const unsigned int minlen=1);
 		ACPIAMLWriter &Name(const char *name);
+		ACPIAMLWriter &BeginPkg(const unsigned int pred_length=MaxPkgSize);
+		ACPIAMLWriter &EndPkg(void);
+		ACPIAMLWriter &CountElement(void);
 	private:
 		unsigned char*		w=NULL,*f=NULL;
 };
+
+ACPIAMLWriter &ACPIAMLWriter::ZeroOp(void) {
+	*w++ = 0x00;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::OneOp(void) {
+	*w++ = 0x01;
+	return *this;
+}
 
 ACPIAMLWriter &ACPIAMLWriter::NameOp(const char *name) {
 	*w++ = 0x08; // NameOp
@@ -8207,6 +8270,127 @@ ACPIAMLWriter &ACPIAMLWriter::OpRegionOp(const char *name,const ACPIRegionSpace 
 	Name(name);
 	*w++ = (unsigned char)regionspace;
 	// and then the caller must write the RegionAddress and RegionLength
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::FieldOp(const char *name,const unsigned int pred_size,const unsigned int fieldflag) {
+	*w++ = 0x5B;
+	*w++ = 0x81;
+	BeginPkg(pred_size);
+	Name(name);
+	*w++ = fieldflag;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::FieldOpEnd(void) {
+	EndPkg();
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::ScopeOp(const char *name,const unsigned int pred_size) {
+	*w++ = 0x10;
+	BeginPkg(pred_size);
+	Name(name);
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::ScopeOpEnd(void) {
+	EndPkg();
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::PackageOp(const unsigned int pred_size) {
+	*w++ = 0x12;
+	BeginPkg(pred_size);
+	*w++ = 0x00; // placeholder for element count
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::PackageOpEnd(void) {
+	assert(!pkg_stack.empty());
+
+	pkg_t &ent = pkg_stack.top();
+
+	if (ent.element_count > 255u) E_Exit("ACPI AML writer too many elements in package");
+	*ent.pkg_data = ent.element_count; /* element count follows PkgLength */
+
+	EndPkg();
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::PkgLength(const unsigned int len,const unsigned int minlen) {
+	return PkgLength(len,w,minlen);
+}
+
+ACPIAMLWriter &ACPIAMLWriter::PkgLength(const unsigned int len,unsigned char* &wp,const unsigned int minlen) {
+	if (len >= 0x10000000 || minlen > 4) {
+		E_Exit("ACPI AML writer PkgLength value too large");
+	}
+	else if (len >= 0x100000 || minlen >= 4) {
+		*wp++ = (unsigned char)( len        & 0x0F) | 0xC0;
+		*wp++ = (unsigned char)((len >>  4) & 0xFF);
+		*wp++ = (unsigned char)((len >> 12) & 0xFF);
+		*wp++ = (unsigned char)((len >> 20) & 0xFF);
+	}
+	else if (len >= 0x1000 || minlen >= 3) {
+		*wp++ = (unsigned char)( len        & 0x0F) | 0x80;
+		*wp++ = (unsigned char)((len >>  4) & 0xFF);
+		*wp++ = (unsigned char)((len >> 12) & 0xFF);
+	}
+	else if (len >= 0x40 || minlen >= 2) {
+		*wp++ = (unsigned char)( len        & 0x0F) | 0x40;
+		*wp++ = (unsigned char)((len >>  4) & 0xFF);
+	}
+	else {
+		*wp++ = (unsigned char)len;
+	}
+
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::FieldOpElement(const char *name,const unsigned int bits) {
+	if (*name != 0)
+		Name(name);
+	else
+		*w++ = 0;
+
+	PkgLength(bits);
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::BeginPkg(const unsigned int pred_length) {
+	pkg_t ent;
+
+	/* WARNING: Specify a size large enough. Once written, it cannot be extended if
+	 *          needed. By default, this code writes an overlarge field to make sure
+	 *          it can always update */
+
+	if (pkg_stack.size() >= 32) E_Exit("ACPI AML writer BeginPkg too much recursion");
+
+	ent.pkg_len = w;
+	PkgLength(MaxPkgSize);//placeholder
+	ent.pkg_data = w;
+
+	pkg_stack.push(std::move(ent));
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::EndPkg(void) {
+	if (pkg_stack.empty()) E_Exit("ACPI AML writer EndPkg with empty stack");
+
+	pkg_t &ent = pkg_stack.top();
+
+	const unsigned long len = (unsigned long)(w - ent.pkg_len);
+	const unsigned int lflen = (unsigned int)(ent.pkg_data - ent.pkg_len);
+	PkgLength(len,ent.pkg_len,lflen);
+	if (ent.pkg_len != ent.pkg_data) E_Exit("ACPI AML writer length update exceeds pkglength field");
+	pkg_stack.pop();
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::CountElement(void) {
+	if (pkg_stack.empty()) E_Exit("ACPI AML writer counting elements not supported unless within package");
+	pkg_stack.top().element_count++;
 	return *this;
 }
 
@@ -8309,6 +8493,34 @@ void BuildACPITable(void) {
 		aml.OpRegionOp("ABC",ACPIRegionSpace::SystemMemory).DwordOp(0xAABB0000).WordOp(0x4100);
 		/* OperationRegion(ABC2,SystemIO,0x880,0x18) */
 		aml.OpRegionOp("ABC2",ACPIRegionSpace::SystemIO).WordOp(0x880).WordOp(0x18);
+		/* Field(ABC2,AnyAcc,Lock,Preserve) which also calls BeginPkg(), FieldOpEnd calls EndPkg(). Use only Field writing functions! */
+		aml.FieldOp("ABC2",ACPIAMLWriter::MaxPkgSize,ACPIFieldFlag::AccessType::AnyAcc|ACPIFieldFlag::LockRule::Lock|ACPIFieldFlag::UpdateRule::Preserve);
+		aml.FieldOpElement("AF00",1);
+		aml.FieldOpElement("AF01",3);
+		aml.FieldOpElement("",2);
+		aml.FieldOpElement("AF02",2);
+		aml.FieldOpElement("AF03",3);
+		aml.FieldOpElement("",5+8);
+		aml.FieldOpElement("AF04",8);
+		aml.FieldOpEnd();
+		/* Scope */
+		aml.ScopeOp("_SB",ACPIAMLWriter::MaxPkgSize);
+		aml.NameOp("TST1").DwordOp(0xABCDEF);
+		/* Package ABCD */
+		aml.NameOp("ABCD").PackageOp(ACPIAMLWriter::MaxPkgSize);
+		/* Package contents. YOU MUST COUNT ELEMENTS MANUALLY */
+		aml.DwordOp(0xABCDEF).CountElement();
+		aml.DwordOp(0x1234).CountElement();
+		aml.ZeroOp().CountElement();
+		aml.OneOp().CountElement();
+		aml.PackageOp(ACPIAMLWriter::MaxPkgSize);
+		aml.StringOp("Hello world");
+		aml.DwordOp(0xABCD1234);
+		aml.PackageOpEnd();
+		/* Package end */
+		aml.PackageOpEnd();
+		/* end scope */
+		aml.ScopeOpEnd();
 
 		assert(aml.writeptr() >= (dsdt.getptr()+dsdt.get_tablesize()));
 		assert(aml.writeptr() <= f);
