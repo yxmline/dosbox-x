@@ -3434,6 +3434,173 @@ static const uint8_t pc98_katakana6x8_font[] = {
 	0x20,0x10,0x40,0x20,0x00,0x00,0x00,0x00,0x00,0x20,0x50,0x20,0x00,0x00,0x00,0x00
 };
 
+unsigned char byte_reverse(unsigned char c);
+
+static void PC98_INT18_DrawShape(void)
+{
+	PhysPt ucw;
+	uint8_t type, dir;
+	uint16_t x1, y1;
+	uint16_t ead, dad;
+	uint16_t dc, d, d2, dm;
+
+	ucw = SegPhys(ds) + reg_bx;
+	type = mem_readb(ucw + 0x28);
+	dir = mem_readb(ucw + 0x03);
+	x1 = mem_readw(ucw + 0x08);
+	y1 = mem_readw(ucw + 0x0a);
+	if((reg_ch & 0xc0) == 0x40) {
+		y1 += 200;
+	}
+	ead = (y1 * 40) + (x1 >> 4);
+	dad = x1 % 16;
+	// line pattern
+	pc98_gdc[GDC_SLAVE].set_textw(((uint16_t)byte_reverse(mem_readb(ucw + 0x20)) << 8) | byte_reverse(mem_readb(ucw + 0x21)));
+	if(type == 0x04) {
+		// arc
+		dc = mem_readw(ucw + 0x0c);
+		d = mem_readw(ucw + 0x1c) - 1;
+		d2 = d >> 1;
+		dm = mem_readw(ucw + 0x1a);
+		if((reg_ch & 0x30) == 0x30) {
+			uint8_t plane = mem_readb(ucw + 0x00);
+			uint32_t offset = 0x4000;
+			for(uint8_t bit = 1 ; bit <= 4 ; bit <<= 1) {
+				pc98_gdc[GDC_SLAVE].set_mode((plane & bit) ? 0x03 : 0x02);
+				pc98_gdc[GDC_SLAVE].set_vectw(0x20, dir, dc, d, d2, 0x3fff, dm);
+				pc98_gdc[GDC_SLAVE].set_csrw(offset + ead, dad);
+				pc98_gdc[GDC_SLAVE].exec(0x6c);
+				offset += 0x4000;
+			}
+		} else {
+			pc98_gdc[GDC_SLAVE].set_mode(mem_readb(ucw + 0x02));
+			pc98_gdc[GDC_SLAVE].set_vectw(0x20, dir, dc, d, d2, 0x3fff, dm);
+			pc98_gdc[GDC_SLAVE].set_csrw(0x4000 + ((reg_ch & 0x30) << 10) + ead, dad);
+			pc98_gdc[GDC_SLAVE].exec(0x6c);
+		}
+	} else {
+		uint16_t x2, y2, temp;
+		x2 = mem_readw(ucw + 0x16);
+		y2 = mem_readw(ucw + 0x18);
+		if(type == 0x01) {
+			// line
+			if((reg_ch & 0x30) == 0x30) {
+				uint8_t plane = mem_readb(ucw + 0x00);
+				uint32_t offset = 0x4000;
+				for(uint8_t bit = 1 ; bit <= 4 ; bit <<= 1) {
+					pc98_gdc[GDC_SLAVE].set_mode((plane & bit) ? 0x03 : 0x02);
+					pc98_gdc[GDC_SLAVE].set_vectl(x1, y1, x2, y2);
+					pc98_gdc[GDC_SLAVE].set_csrw(offset + ead, dad);
+					pc98_gdc[GDC_SLAVE].exec(0x6c);
+					offset += 0x4000;
+				}
+			} else {
+				pc98_gdc[GDC_SLAVE].set_mode(mem_readb(ucw + 0x02));
+				pc98_gdc[GDC_SLAVE].set_vectl(x1, y1, x2, y2);
+				pc98_gdc[GDC_SLAVE].set_csrw(0x4000 + ((reg_ch & 0x30) << 10) + ead, dad);
+				pc98_gdc[GDC_SLAVE].exec(0x6c);
+			}
+		} else if(type == 0x02) {
+			// box
+			uint16_t dx, dy;
+			if(x1 > x2) {
+				temp = x2; x2 = x1; x1 = temp;
+			}
+			if(y1 > y2) {
+				temp = y2; y2 = y1; y1 = temp;
+			}
+			dx = x2 - x1;
+			dy = y2 - y1;
+			switch(dir & 3) {
+			case 0:
+				d = dy;
+				d2 = dx;
+				break;
+			case 1:
+				d2 = dx + dy;
+				d2 >>= 1;
+				d = dx - dy;
+				d = (d >> 1) & 0x3fff;
+				break;
+			case 2:
+				d = dx;
+				d2 = dy;
+				break;
+			case 3:
+				d2 = dx + dy;
+				d2 >>= 1;
+				d = dy - dx;
+				d = (d >> 1) & 0x3fff;
+				break;
+			}
+			if((reg_ch & 0x30) == 0x30) {
+				uint8_t plane = mem_readb(ucw + 0x00);
+				uint32_t offset = 0x4000;
+				for(uint8_t bit = 1 ; bit <= 4 ; bit <<= 1) {
+					pc98_gdc[GDC_SLAVE].set_mode((plane & bit) ? 0x03 : 0x02);
+					pc98_gdc[GDC_SLAVE].set_vectw(0x40, dir, 3, d, d2, 0xffff, d);
+					pc98_gdc[GDC_SLAVE].set_csrw(offset + ead, dad);
+					pc98_gdc[GDC_SLAVE].exec(0x6c);
+					offset += 0x4000;
+				}
+			} else {
+				pc98_gdc[GDC_SLAVE].set_mode(mem_readb(ucw + 0x02));
+				pc98_gdc[GDC_SLAVE].set_vectw(0x40, dir, 3, d, d2, 0xffff, d);
+				pc98_gdc[GDC_SLAVE].set_csrw(0x4000 + ((reg_ch & 0x30) << 10) + ead, dad);
+				pc98_gdc[GDC_SLAVE].exec(0x6c);
+			}
+		}
+	}
+}
+
+static void PC98_INT18_DrawText(void)
+{
+	PhysPt ucw;
+	uint8_t dir;
+	uint8_t tile[8];
+    uint16_t len;
+	uint16_t x1, y1;
+	uint16_t ead, dad;
+	uint16_t dc, d;
+
+	ucw = SegPhys(ds) + reg_bx;
+	for(uint8_t i = 0 ; i < 8 ; i++) {
+		tile[i] = byte_reverse(mem_readb(ucw + 0x20 + i));
+	}
+	pc98_gdc[GDC_SLAVE].set_textw(tile, 8);
+	len = mem_readw(ucw + 0x0c);
+	if(len > 0) {
+		d = len;
+		dc = (mem_readw(ucw + 0x1e) - 1) & 0x3fff;
+	} else {
+		d = 8;
+		dc = 7;
+	}
+	dir = mem_readb(ucw + 0x03);
+	x1 = mem_readw(ucw + 0x08);
+	y1 = mem_readw(ucw + 0x0a);
+	if((reg_ch & 0xc0) == 0x40) {
+		y1 += 200;
+	}
+	ead = (y1 * 40) + (x1 >> 4);
+	dad = x1 % 16;
+	if((reg_ch & 0x30) == 0x30) {
+		uint8_t plane = mem_readb(ucw + 0x00);
+		uint32_t offset = 0x4000;
+		for(uint8_t bit = 1 ; bit <= 4 ; bit <<= 1) {
+			pc98_gdc[GDC_SLAVE].set_mode((plane & bit) ? 0x03 : 0x02);
+			pc98_gdc[GDC_SLAVE].set_vectw(0x10, dir, dc, d, 0, 0, 0);
+			pc98_gdc[GDC_SLAVE].set_csrw(offset + ead, dad);
+			pc98_gdc[GDC_SLAVE].exec(0x68);
+			offset += 0x4000;
+		}
+	} else {
+		pc98_gdc[GDC_SLAVE].set_mode(mem_readb(ucw + 0x02));
+		pc98_gdc[GDC_SLAVE].set_vectw(0x10, dir, dc, d, 0, 0, 0);
+		pc98_gdc[GDC_SLAVE].set_csrw(0x4000 + ((reg_ch & 0x30) << 10) + ead, dad);
+       	pc98_gdc[GDC_SLAVE].exec(0x68);
+	}
+}
 
 /* TODO: The text and graphics code that talks to the GDC will need to be converted
  *       to CPU I/O read and write calls. I think the reason Windows 3.1's 16-color
@@ -4131,6 +4298,13 @@ static Bitu INT18_PC98_Handler(void) {
                 LOG_MSG("PC-98 INT 18 AH=43h CX=0x%04X DS=0x%04X", reg_cx, SegValue(ds));
                 break;
             }
+        case 0x47:	// Line, Box
+        case 0x48:	// Arc
+            PC98_INT18_DrawShape();
+            break;
+        case 0x49:	// Text
+            PC98_INT18_DrawText();
+            break;
         case 0x4D:  // 256-color enable
             if (reg_ch == 1) {
                 void pc98_port6A_command_write(unsigned char b);
@@ -8200,6 +8374,10 @@ class ACPIAMLWriter {
 		ACPIAMLWriter &PackageOpEnd(void);
 		ACPIAMLWriter &ZeroOp(void);
 		ACPIAMLWriter &OneOp(void);
+		ACPIAMLWriter &AliasOp(const char *what,const char *to_what);
+		ACPIAMLWriter &BufferOp(const unsigned char *data,const size_t datalen);
+		ACPIAMLWriter &DeviceOp(const char *name,const unsigned int pred_size);
+		ACPIAMLWriter &DeviceOpEnd(void);
 	public:// ONLY for writing fields!
 		ACPIAMLWriter &FieldOpElement(const char *name,const unsigned int bits);
 	public:
@@ -8220,6 +8398,30 @@ ACPIAMLWriter &ACPIAMLWriter::ZeroOp(void) {
 
 ACPIAMLWriter &ACPIAMLWriter::OneOp(void) {
 	*w++ = 0x01;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::BufferOp(const unsigned char *data,const size_t datalen) {
+	/* Notice this OP was obviously invented by the Department of Redundant Redundancy somewhere deep within Microsoft.
+	 * This op stores both a PkgLength containing the overall buffer data and then the first bytes are a ByteOp encoding the length of the buffer.
+	 * So basically it stores the length twice. What? Why? */
+	*w++ = 0x11;
+	BeginPkg(datalen+8/*Byte/Word/DwordOp*/);
+	if (datalen >= 0x10000) DwordOp(datalen);
+	else if (datalen >= 0x100) WordOp(datalen);
+	else ByteOp(datalen);
+	if (datalen > 0) {
+		memcpy(w,data,datalen);
+		w += datalen;
+	}
+	EndPkg();
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::AliasOp(const char *what,const char *to_what) {
+	*w++ = 0x06;
+	Name(what);
+	Name(to_what);
 	return *this;
 }
 
@@ -8270,6 +8472,19 @@ ACPIAMLWriter &ACPIAMLWriter::OpRegionOp(const char *name,const ACPIRegionSpace 
 	Name(name);
 	*w++ = (unsigned char)regionspace;
 	// and then the caller must write the RegionAddress and RegionLength
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::DeviceOp(const char *name,const unsigned int pred_size) {
+	*w++ = 0x5B;
+	*w++ = 0x82;
+	BeginPkg(pred_size);
+	Name(name);
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::DeviceOpEnd(void) {
+	EndPkg();
 	return *this;
 }
 
@@ -8520,6 +8735,16 @@ void BuildACPITable(void) {
 		/* Package end */
 		aml.PackageOpEnd();
 		/* end scope */
+		aml.AliasOp("TST1","ATS1");
+		aml.AliasOp("TST2","ATS2");
+		aml.AliasOp("TST3","ATS3");
+		{
+			static const unsigned char dept_of_redundant_redundancy[] = {0x11,0x22,0x33,0xAA,0xBB,0xCC};
+			aml.NameOp("DORR").BufferOp(dept_of_redundant_redundancy,sizeof(dept_of_redundant_redundancy));
+		}
+		aml.DeviceOp("PCI0",ACPIAMLWriter::MaxPkgSize);
+		aml.NameOp("DUH").DwordOp(0xABCD1234);
+		aml.DeviceOpEnd();
 		aml.ScopeOpEnd();
 
 		assert(aml.writeptr() >= (dsdt.getptr()+dsdt.get_tablesize()));
