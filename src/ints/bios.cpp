@@ -8314,6 +8314,16 @@ enum class ACPIRegionSpace {
 	SMBus=4
 };
 
+namespace ACPIMethodFlags {
+	static constexpr unsigned char ArgCount(const unsigned c) {
+		return c&3u;
+	}
+	enum {
+		NotSerialized=(0 << 3),
+		Serialized=(1 << 3)
+	};
+};
+
 namespace ACPIFieldFlag {
 	namespace AccessType {
 		enum {
@@ -8343,6 +8353,10 @@ namespace ACPIFieldFlag {
 
 #include <stack>
 
+/* ACPI AML (ACPI Machine Language) writer.
+ * See also ACPI Specification 1.0b [http://hackipedia.org/browse.cgi/Computer/Platform/PC%2c%20IBM%20compatible/BIOS/ACPI%2c%20Advanced%20Configuration%20and%20Power%20Interface/Advanced%20Configuration%20and%20Power%20Interface%20Specification%20%281999%2d02%2d02%29%20v1%2e0b%2epdf].
+ *
+ * WARNING: The 1.0 specification [http://hackipedia.org/browse.cgi/Computer/Platform/PC%2c%20IBM%20compatible/BIOS/ACPI%2c%20Advanced%20Configuration%20and%20Power%20Interface/Advanced%20Configuration%20and%20Power%20Interface%20Specification%20%281996%2d12%2d22%29%20v1%2e0%2epdf] seems to have some mistakes in a few opcodes in how they are defined, which probably means if your BIOS is from 1996-1998 it might have those few erroneous AML opcodes. */
 class ACPIAMLWriter {
 	public:
 		static constexpr unsigned int MaxPkgSize = 0xFFFFFFFu;
@@ -8368,16 +8382,35 @@ class ACPIAMLWriter {
 		ACPIAMLWriter &OpRegionOp(const char *name,const ACPIRegionSpace regionspace);
 		ACPIAMLWriter &FieldOp(const char *name,const unsigned int pred_size,const unsigned int fieldflag);
 		ACPIAMLWriter &FieldOpEnd(void);
-		ACPIAMLWriter &ScopeOp(const char *name,const unsigned int pred_size);
+		ACPIAMLWriter &ScopeOp(const char *name,const unsigned int pred_size=MaxPkgSize);
 		ACPIAMLWriter &ScopeOpEnd(void);
-		ACPIAMLWriter &PackageOp(const unsigned int pred_size);
+		ACPIAMLWriter &PackageOp(const unsigned int pred_size=MaxPkgSize);
 		ACPIAMLWriter &PackageOpEnd(void);
+		ACPIAMLWriter &NothingOp(void);
 		ACPIAMLWriter &ZeroOp(void);
 		ACPIAMLWriter &OneOp(void);
 		ACPIAMLWriter &AliasOp(const char *what,const char *to_what);
 		ACPIAMLWriter &BufferOp(const unsigned char *data,const size_t datalen);
-		ACPIAMLWriter &DeviceOp(const char *name,const unsigned int pred_size);
+		ACPIAMLWriter &DeviceOp(const char *name,const unsigned int pred_size=MaxPkgSize);
 		ACPIAMLWriter &DeviceOpEnd(void);
+		ACPIAMLWriter &MethodOp(const char *name,const unsigned int pred_size,const unsigned int methodflags);
+		ACPIAMLWriter &MethodOpEnd(void);
+		ACPIAMLWriter &ReturnOp(void);
+		ACPIAMLWriter &IfOp(const unsigned int pred_size=MaxPkgSize);
+		ACPIAMLWriter &IfOpEnd(void);
+		ACPIAMLWriter &ElseOp(const unsigned int pred_size=MaxPkgSize);
+		ACPIAMLWriter &ElseOpEnd(void);
+		ACPIAMLWriter &LEqualOp(void);
+		ACPIAMLWriter &LNotEqualOp(void);
+		ACPIAMLWriter &LNotOp(void);
+		ACPIAMLWriter &LAndOp(void);
+		ACPIAMLWriter &AndOp(void);
+		ACPIAMLWriter &ArgOp(const unsigned int arg); /* Arg0 through Arg6 */
+		ACPIAMLWriter &LocalOp(const unsigned int l); /* Local0 through Local7 */
+		ACPIAMLWriter &StoreOp(void);
+		ACPIAMLWriter &NOrOp(void);
+		ACPIAMLWriter &OrOp(void);
+		ACPIAMLWriter &NAndOp(void);
 	public:// ONLY for writing fields!
 		ACPIAMLWriter &FieldOpElement(const char *name,const unsigned int bits);
 	public:
@@ -8391,6 +8424,49 @@ class ACPIAMLWriter {
 		unsigned char*		w=NULL,*f=NULL;
 };
 
+/* StoreOp Operand Supername: Store Operand into Supername */
+ACPIAMLWriter &ACPIAMLWriter::StoreOp(void) {
+	*w++ = 0x70;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::LocalOp(const unsigned int l) {
+	if (l <= 7)
+		*w++ = 0x60 + l; /* 0x60..0x67 -> Local0..Local7 */
+	else
+		E_Exit("ACPI AML writer LocalOp out of range");
+
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::ArgOp(const unsigned int arg) {
+	if (arg <= 6)
+		*w++ = 0x68 + arg; /* 0x68..0x6E -> Arg0..Arg6 */
+	else
+		E_Exit("ACPI AML writer ArgOp out of range");
+
+	return *this;
+}
+
+/* Binary operators like And and Xor are Operand1 Operand2 Target, and the return value
+ * of the operator is the result. What the ACPI specification is very unclear about, but
+ * hints at from a sample bit of ASL concerning PowerResource(), is that if you just
+ * want to evaluate the operator and do not care to store the result anywhere you can just
+ * set Target to Zero.
+ *
+ * This example doesn't make sense unless you consider that this is how you encode "Nothing"
+ * in the example on that page in spec 1.0b:
+ *
+ * Method(_STA) {
+ *   Return (Xor (GIO.IDEI, One, Zero)) // inverse of isolation
+ * }
+ *
+ * See what they did there? */
+ACPIAMLWriter &ACPIAMLWriter::NothingOp(void) {
+	ZeroOp();
+	return *this;
+}
+
 ACPIAMLWriter &ACPIAMLWriter::ZeroOp(void) {
 	*w++ = 0x00;
 	return *this;
@@ -8398,6 +8474,58 @@ ACPIAMLWriter &ACPIAMLWriter::ZeroOp(void) {
 
 ACPIAMLWriter &ACPIAMLWriter::OneOp(void) {
 	*w++ = 0x01;
+	return *this;
+}
+
+/* LEqual Operand1 Operand2 */
+ACPIAMLWriter &ACPIAMLWriter::LEqualOp(void) {
+	*w++ = 0x93;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::LNotOp(void) {
+	*w++ = 0x92;
+	return *this;
+}
+
+/* LAndOp Operand1 Operand2 == Operand1 && Operand2 */
+ACPIAMLWriter &ACPIAMLWriter::LAndOp(void) {
+	*w++ = 0x90;
+	return *this;
+}
+
+/* NAndOp Operand1 Operand2 Target -> Target = Operand1 & Operand2 */
+ACPIAMLWriter &ACPIAMLWriter::NAndOp(void) {
+	*w++ = 0x7C;
+	return *this;
+}
+
+/* AndOp Operand1 Operand2 Target -> Target = Operand1 & Operand2 */
+ACPIAMLWriter &ACPIAMLWriter::AndOp(void) {
+	*w++ = 0x7B;
+	return *this;
+}
+
+/* NOrOp Operand1 Operand2 Target -> Target = Operand1 & Operand2 */
+ACPIAMLWriter &ACPIAMLWriter::NOrOp(void) {
+	*w++ = 0x7E;
+	return *this;
+}
+
+/* OrOp Operand1 Operand2 Target -> Target = Operand1 & Operand2 */
+ACPIAMLWriter &ACPIAMLWriter::OrOp(void) {
+	*w++ = 0x7D;
+	return *this;
+}
+
+/* This makes sense if you think of an AML interpreter as something which encounters a LNotOp()
+ * and then runs the interpreter to parse the following token(s) to evaluate an int so it can
+ * do a logical NOT on the result of the evaluation. In other words this isn't like x86 assembly
+ * which you follow instruction by instruction but more like how you parse and evaluate expressions
+ * such as "4+5*3" properly. */
+ACPIAMLWriter &ACPIAMLWriter::LNotEqualOp(void) {
+	LNotOp();
+	LEqualOp();
 	return *this;
 }
 
@@ -8422,6 +8550,33 @@ ACPIAMLWriter &ACPIAMLWriter::AliasOp(const char *what,const char *to_what) {
 	*w++ = 0x06;
 	Name(what);
 	Name(to_what);
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::ReturnOp(void) {
+	*w++ = 0xA4;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::IfOp(const unsigned int pred_size) {
+	*w++ = 0xA0;
+	BeginPkg(pred_size);
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::IfOpEnd(void) {
+	EndPkg();
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::ElseOp(const unsigned int pred_size) {
+	*w++ = 0xA1;
+	BeginPkg(pred_size);
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::ElseOpEnd(void) {
+	EndPkg();
 	return *this;
 }
 
@@ -8484,6 +8639,19 @@ ACPIAMLWriter &ACPIAMLWriter::DeviceOp(const char *name,const unsigned int pred_
 }
 
 ACPIAMLWriter &ACPIAMLWriter::DeviceOpEnd(void) {
+	EndPkg();
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::MethodOp(const char *name,const unsigned int pred_size,const unsigned int methodflags) {
+	*w++ = 0x14;
+	BeginPkg(pred_size);
+	Name(name);
+	*w++ = (unsigned char)methodflags;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::MethodOpEnd(void) {
 	EndPkg();
 	return *this;
 }
@@ -8719,22 +8887,21 @@ void BuildACPITable(void) {
 		aml.FieldOpElement("AF04",8);
 		aml.FieldOpEnd();
 		/* Scope */
-		aml.ScopeOp("_SB",ACPIAMLWriter::MaxPkgSize);
+		aml.ScopeOp("_SB");
 		aml.NameOp("TST1").DwordOp(0xABCDEF);
 		/* Package ABCD */
-		aml.NameOp("ABCD").PackageOp(ACPIAMLWriter::MaxPkgSize);
+		aml.NameOp("ABCD").PackageOp();
 		/* Package contents. YOU MUST COUNT ELEMENTS MANUALLY */
 		aml.DwordOp(0xABCDEF).CountElement();
 		aml.DwordOp(0x1234).CountElement();
 		aml.ZeroOp().CountElement();
 		aml.OneOp().CountElement();
-		aml.PackageOp(ACPIAMLWriter::MaxPkgSize);
+		aml.PackageOp();
 		aml.StringOp("Hello world");
 		aml.DwordOp(0xABCD1234);
 		aml.PackageOpEnd();
 		/* Package end */
 		aml.PackageOpEnd();
-		/* end scope */
 		aml.AliasOp("TST1","ATS1");
 		aml.AliasOp("TST2","ATS2");
 		aml.AliasOp("TST3","ATS3");
@@ -8742,10 +8909,50 @@ void BuildACPITable(void) {
 			static const unsigned char dept_of_redundant_redundancy[] = {0x11,0x22,0x33,0xAA,0xBB,0xCC};
 			aml.NameOp("DORR").BufferOp(dept_of_redundant_redundancy,sizeof(dept_of_redundant_redundancy));
 		}
-		aml.DeviceOp("PCI0",ACPIAMLWriter::MaxPkgSize);
+		/* device PCI0 */
+		aml.DeviceOp("PCI0");
 		aml.NameOp("DUH").DwordOp(0xABCD1234);
+		aml.NameOp("NDUH").ZeroOp();
+		/* method KICK */
+		aml.MethodOp("KICK",ACPIAMLWriter::MaxPkgSize,ACPIMethodFlags::ArgCount(2)|ACPIMethodFlags::Serialized);
+		aml.StoreOp().DwordOp(0x12345678).LocalOp(0); /* Local0 = 0x12345678 */
+		aml.AndOp().LocalOp(0).DwordOp(0xF0F0F0F0).LocalOp(0); /* Local0 &= 0xF0F0F0F0 (literally: Op1 = Local0 Op2 = 0xF0F0F0F0 Target = Local0) */
+		aml.StoreOp()./*(*/AndOp().LocalOp(0).DwordOp(0xFF00FF00).NothingOp()/*)*/.LocalOp(1); /* Local1 = Local0 & 0xFF00FF00 */
+		aml.StoreOp()./*(*/OrOp()./*(*/AndOp().LocalOp(0).DwordOp(0xCECECECE).NothingOp()/*)*/.DwordOp(0x03030303).NothingOp()/*)*/.LocalOp(2); /* Local2 = (Local0 & 0xFF00FF00) | 0x03030303 */
+		aml.IfOp().LEqualOp().Name("DUH").DwordOp(0xABCD1234); /* if (DUH == 0xABCD1234) { */
+			aml.ReturnOp().DwordOp(6); /* return 6; */
+		aml.IfOpEnd(); /* } (/if) */
+		aml.ElseOp(); /* else { */
+			aml.IfOp().LAndOp().Name("DUH").Name("NDUH"); /* if (DUH && NDUH) { */
+				aml.ReturnOp().DwordOp(77); /* return 77; */
+			aml.IfOpEnd(); /* } (/if) */
+			aml.IfOp().AndOp().Name("DUH").DwordOp(0x40103).NothingOp(); /* if (DUH & 0x40103) {    (note AndOp Op1 Op2 Target == "DUH" 0x40103 Nothing) */
+				aml.ReturnOp().DwordOp(77); /* return 79; */
+			aml.IfOpEnd(); /* } (/if) */
+		aml.ElseOpEnd(); /* } (/else) */
+
+		aml.IfOp().Name("DUH"); /* if (DUH) { */
+			aml.ReturnOp().DwordOp(3); /* return 3; */
+		aml.IfOpEnd(); /* } (/if) */
+		aml.ElseOp(); /* else { */
+			aml.IfOp().Name("NDUH"); /* if (NDUH) { */
+				aml.ReturnOp().OneOp(); /* return 1; */
+			aml.IfOpEnd(); /* } (/if) */
+			aml.ElseOp(); /* else { */
+				aml.IfOp().LNotEqualOp().Name("NDUH").DwordOp(52); /* if (NDUH != 52) { */
+					aml.ReturnOp().DwordOp(666); /* return 666; */
+				aml.IfOpEnd(); /* } (/if) */
+				aml.ElseOp(); /* else { */
+					aml.ReturnOp().ZeroOp(); /* return 0; */
+				aml.ElseOpEnd(); /* } (/else) */
+			aml.ElseOpEnd(); /* } (/else) */
+		aml.ElseOpEnd(); /* } (/else) */
+		aml.MethodOpEnd();
+		/* end method */
 		aml.DeviceOpEnd();
+		/* end device */
 		aml.ScopeOpEnd();
+		/* end scope */
 
 		assert(aml.writeptr() >= (dsdt.getptr()+dsdt.get_tablesize()));
 		assert(aml.writeptr() <= f);
@@ -8836,6 +9043,10 @@ private:
 			}
 			else if (MEM_get_address_bits() < 32) {
 				/* I doubt any 486DX systems with less than 32 address bits has ACPI */
+			}
+			else if (CPU_ArchitectureType < CPU_ARCHTYPE_386) {
+				/* Your 286 does not have ACPI and it never will.
+				 * Your 386 as well, but the 386 is 32-bit and the user might change it to 486 or higher later though, so we'll allow that */
 			}
 			else if (s == "1.0") {
 				ACPI_version = 0x100;
