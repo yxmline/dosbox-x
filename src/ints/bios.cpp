@@ -217,7 +217,27 @@ static void ACPI_OnGuestGlobalRelease(void) {
 	LOG(LOG_MISC,LOG_DEBUG)("ACPI GBL_RLS event. Global lock = %lx",ACPI_FACS_GlobalLockValue());
 }
 
-static void acpi_cb_port_smi_cmd_w(Bitu port,Bitu val,Bitu iolen) {
+bool ACPI_GuestEnabled(void) {
+	return ACPI_SCI_EN;
+}
+
+static void ACPI_SCI_Check(void) {
+	if (ACPI_SCI_EN) {
+		if (ACPI_PM1_Status & ACPI_PM1_Enable) {
+			LOG(LOG_MISC,LOG_DEBUG)("ACPI SCI interrupt");
+			PIC_ActivateIRQ(ACPI_IRQ);
+		}
+	}
+}
+
+void ACPI_PowerButtonEvent(void) {
+	if (ACPI_SCI_EN) {
+		ACPI_PM1_Status |= ACPI_PM1_Enable_PWRBTN_EN;
+		ACPI_SCI_Check();
+	}
+}
+
+static void acpi_cb_port_smi_cmd_w(Bitu /*port*/,Bitu val,Bitu /*iolen*/) {
 	/* 8-bit SMI_CMD port */
 	LOG(LOG_MISC,LOG_DEBUG)("ACPI SMI_CMD %x",(unsigned int)val);
 
@@ -225,6 +245,7 @@ static void acpi_cb_port_smi_cmd_w(Bitu port,Bitu val,Bitu iolen) {
 		if (!ACPI_SCI_EN) {
 			LOG(LOG_MISC,LOG_DEBUG)("Guest enabled ACPI");
 			ACPI_SCI_EN = true;
+			ACPI_SCI_Check();
 		}
 	}
 	else if (val == ACPI_DISABLE_CMD) {
@@ -245,44 +266,64 @@ static Bitu acpi_cb_port_cnt_blk_r(Bitu port,Bitu /*iolen*/) {
 	/* TODO: SLP_TYPx */
 	/* SLP_EN is write-only */
 
-	ret >>= (Bitu)((port & 1u) * 8u);
 	LOG(LOG_MISC,LOG_DEBUG)("ACPI_PM1_CNT_BLK read port %x ret %x",(unsigned int)port,(unsigned int)ret);
 	return ret;
 }
 
 static void acpi_cb_port_cnt_blk_w(Bitu port,Bitu val,Bitu iolen) {
 	/* 16-bit register (PM1_CNT_LEN == 2) */
-	const unsigned int pmask = ((1u << (unsigned int)iolen) - 1u) << ((unsigned int)port & 1u);/*which bits are actually updated*/
-	LOG(LOG_MISC,LOG_DEBUG)("ACPI_PM1_CNT_BLK write port %x val %x iolen %x pmask %x",(unsigned int)port,(unsigned int)val,(unsigned int)iolen,pmask);
+	LOG(LOG_MISC,LOG_DEBUG)("ACPI_PM1_CNT_BLK write port %x val %x iolen %x",(unsigned int)port,(unsigned int)val,(unsigned int)iolen);
 
-	if (pmask & 1) {
-		/* BIOS controls SCI_EN and therefore guest cannot change it */
-		ACPI_BM_RLD = !!(val & (1u << 1u));
-		/* GLB_RLS is write only and triggers an SMI interrupt to pass execution to the BIOS, usually to indicate a release of the global lock and set of pending bit */
-		if (val & (1u << 2u)/*GBL_RLS*/) ACPI_OnGuestGlobalRelease();
-	}
+	/* BIOS controls SCI_EN and therefore guest cannot change it */
+	ACPI_BM_RLD = !!(val & (1u << 1u));
+	/* GLB_RLS is write only and triggers an SMI interrupt to pass execution to the BIOS, usually to indicate a release of the global lock and set of pending bit */
+	if (val & (1u << 2u)/*GBL_RLS*/) ACPI_OnGuestGlobalRelease();
 	/* TODO: bits 3-8 are "reserved by the ACPI driver"? So are they writeable then? */
 	/* TODO: SLP_TYPx */
 	/* SLP_EN is write-only */
+}
+
+static Bitu acpi_cb_port_evtst_blk_r(Bitu port,Bitu /*iolen*/) {
+	/* 16-bit register (PM1_EVT_LEN/2 == 2) */
+	Bitu ret = ACPI_PM1_Status;
+	LOG(LOG_MISC,LOG_DEBUG)("ACPI_PM1_EVT_BLK(status) read port %x ret %x",(unsigned int)port,(unsigned int)ret);
+	return ret;
+}
+
+static void acpi_cb_port_evtst_blk_w(Bitu port,Bitu val,Bitu iolen) {
+	/* 16-bit register (PM1_EVT_LEN/2 == 2) */
+	LOG(LOG_MISC,LOG_DEBUG)("ACPI_PM1_EVT_BLK(status) write port %x val %x iolen %x",(unsigned int)port,(unsigned int)val,(unsigned int)iolen);
+	ACPI_PM1_Status &= (~val);
+	ACPI_SCI_Check();
+}
+
+static Bitu acpi_cb_port_evten_blk_r(Bitu port,Bitu /*iolen*/) {
+	/* 16-bit register (PM1_EVT_LEN/2 == 2) */
+	Bitu ret = ACPI_PM1_Enable;
+	LOG(LOG_MISC,LOG_DEBUG)("ACPI_PM1_EVT_BLK(enable) read port %x ret %x",(unsigned int)port,(unsigned int)ret);
+	return ret;
+}
+
+static void acpi_cb_port_evten_blk_w(Bitu port,Bitu val,Bitu iolen) {
+	/* 16-bit register (PM1_EVT_LEN/2 == 2) */
+	LOG(LOG_MISC,LOG_DEBUG)("ACPI_PM1_EVT_BLK(enable) write port %x val %x iolen %x",(unsigned int)port,(unsigned int)val,(unsigned int)iolen);
+	ACPI_PM1_Enable = val;
+	ACPI_SCI_Check();
 }
 
 static IO_ReadHandler* acpi_cb_port_r(IO_CalloutObject &co,Bitu port,Bitu iolen) {
 	(void)co;
 	(void)iolen;
 
-	if ((port & (~3u)) == ACPI_PM1A_EVT_BLK) {
-		LOG(LOG_MISC,LOG_DEBUG)("read ACPI_PM1A_EVT_BLK port=0x%x iolen=%u",(unsigned int)port,(unsigned int)iolen);
-	}
-	else if ((port & (~1u)) == ACPI_PM1A_CNT_BLK)
+	if ((port & (~1u)) == (ACPI_PM1A_EVT_BLK+0) && iolen >= 2)
+		return acpi_cb_port_evtst_blk_r;
+	else if ((port & (~1u)) == (ACPI_PM1A_EVT_BLK+2) && iolen >= 2)
+		return acpi_cb_port_evten_blk_r;
+	else if ((port & (~1u)) == ACPI_PM1A_CNT_BLK && iolen >= 2)
 		return acpi_cb_port_cnt_blk_r;
-	else if ((port & (~3u)) == ACPI_SMI_CMD) {
-		LOG(LOG_MISC,LOG_DEBUG)("read ACPI_SMI_CMD port=0x%x iolen=%u",(unsigned int)port,(unsigned int)iolen);
-	}
+	/* The ACPI specification says nothing about reading SMI_CMD so assume that means write only */
 	else if ((port & (~3u)) == ACPI_PM_TMR_BLK) {
 		LOG(LOG_MISC,LOG_DEBUG)("read ACPI_PM_TMR_BLK port=0x%x iolen=%u",(unsigned int)port,(unsigned int)iolen);
-	}
-	else {
-		LOG(LOG_MISC,LOG_DEBUG)("read ACPI_??? port=0x%x iolen=%u",(unsigned int)port,(unsigned int)iolen);
 	}
 
 	return NULL;
@@ -292,18 +333,16 @@ static IO_WriteHandler* acpi_cb_port_w(IO_CalloutObject &co,Bitu port,Bitu iolen
 	(void)co;
 	(void)iolen;
 
-	if ((port & (~3u)) == ACPI_PM1A_EVT_BLK) {
-		LOG(LOG_MISC,LOG_DEBUG)("write ACPI_PM1A_EVT_BLK port=0x%x iolen=%u",(unsigned int)port,(unsigned int)iolen);
-	}
-	else if ((port & (~1u)) == ACPI_PM1A_CNT_BLK)
+	if ((port & (~1u)) == (ACPI_PM1A_EVT_BLK+0) && iolen >= 2)
+		return acpi_cb_port_evtst_blk_w;
+	else if ((port & (~1u)) == (ACPI_PM1A_EVT_BLK+2) && iolen >= 2)
+		return acpi_cb_port_evten_blk_w;
+	else if ((port & (~1u)) == ACPI_PM1A_CNT_BLK && iolen >= 2)
 		return acpi_cb_port_cnt_blk_w;
 	else if ((port & (~3u)) == ACPI_SMI_CMD)
 		return acpi_cb_port_smi_cmd_w;
 	else if ((port & (~3u)) == ACPI_PM_TMR_BLK) {
 		LOG(LOG_MISC,LOG_DEBUG)("write ACPI_PM_TMR_BLK port=0x%x iolen=%u",(unsigned int)port,(unsigned int)iolen);
-	}
-	else {
-		LOG(LOG_MISC,LOG_DEBUG)("write ACPI_??? port=0x%x iolen=%u",(unsigned int)port,(unsigned int)iolen);
 	}
 
 	return NULL;
@@ -380,6 +419,9 @@ static Bitu APM_SuspendedLoopFunc(void) {
 bool PowerManagementEnabledButton() {
 	if (IS_PC98_ARCH) /* power management not yet known or implemented */
 		return false;
+
+	if (ACPI_GuestEnabled())
+		ACPI_PowerButtonEvent();
 
 	if (apm_realmode_connected) /* guest has connected to the APM BIOS */
 		return true;
@@ -5997,7 +6039,7 @@ static Bitu INT11_Handler(void) {
 #define DOSBOX_CLOCKSYNC 0
 #endif
 
-uint32_t BIOS_HostTimeSync(uint32_t ticks) {
+uint32_t BIOS_HostTimeSync(uint32_t /*ticks*/) {
 #if 0//DISABLED TEMPORARILY
     uint32_t milli = 0;
 #if defined(DB_HAVE_CLOCK_GETTIME) && ! defined(WIN32)
@@ -8861,7 +8903,7 @@ ACPIAMLWriter &ACPIAMLWriter::FieldOpElement(const char *name,const unsigned int
 	return *this;
 }
 
-ACPIAMLWriter &ACPIAMLWriter::BeginPkg(const unsigned int pred_length) {
+ACPIAMLWriter &ACPIAMLWriter::BeginPkg(const unsigned int /*pred_length*/) {
 	pkg_t ent;
 
 	/* WARNING: Specify a size large enough. Once written, it cannot be extended if
@@ -9018,9 +9060,9 @@ void BuildACPITable(void) {
 		aml.ZeroOp().CountElement();
 		aml.OneOp().CountElement();
 		aml.PackageOp();
-		aml.StringOp("Hello world");
-		aml.DwordOp(0xABCD1234);
-		aml.PackageOpEnd();
+		aml.StringOp("Hello world").CountElement();
+		aml.DwordOp(0xABCD1234).CountElement();
+		aml.PackageOpEnd().CountElement();
 		/* Package end */
 		aml.PackageOpEnd();
 		aml.AliasOp("TST1","ATS1");
