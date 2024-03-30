@@ -164,9 +164,13 @@ public:
 			}
 			break;
 		default:
+#if 0 // DISABLED: This is causing a segfault in ALSA libasound. For whatever reason, snd_seq_event_output() segfaults if you try to send OSS or RESET events.
 			//Maybe filter out FC as it leads for at least one user to crash, but the entire midi stream has not yet been checked.
 			LOG(LOG_MISC,LOG_DEBUG)("ALSA:Unknown Command: %02X %02X %02X", msg[0],msg[1],msg[2]);
 			send_event(1);
+#else
+			LOG(LOG_MISC,LOG_DEBUG)("ALSA:Unknown Command: %02X %02X %02X (ignored)", msg[0],msg[1],msg[2]);
+#endif
 			break;
 		}
 	}	
@@ -174,6 +178,32 @@ public:
 	void Close(void) override {
 		if (seq_handle)
 			snd_seq_close(seq_handle);
+	}
+
+	void log_list_alsa_seqclient(void) {
+		snd_seq_client_info_t *sscit = NULL;
+		int status;
+
+		if (snd_seq_client_info_malloc(&sscit) >= 0) {
+			if ((status=snd_seq_get_any_client_info(seq_handle,0,sscit)) >= 0) {
+				do {
+					const int id = snd_seq_client_info_get_client(sscit);
+					const char *name = snd_seq_client_info_get_name(sscit);
+					const int ports = snd_seq_client_info_get_num_ports(sscit);
+
+					const char *ct_str = "?";
+					const snd_seq_client_type_t ct = snd_seq_client_info_get_type(sscit);
+					switch (ct) {
+						case SND_SEQ_KERNEL_CLIENT:	ct_str = "kernel"; break;
+						case SND_SEQ_USER_CLIENT:	ct_str = "user"; break;
+						default:			break;
+					};
+
+					LOG_MSG("ALSA seq enum: id=%d name=\"%s\" ports=%d type=\"%s\"",id,name,ports,ct_str);
+				} while ((status=snd_seq_query_next_client(seq_handle,sscit)) >= 0);
+			}
+			snd_seq_client_info_free(sscit);
+		}
 	}
 
 	bool Open(const char * conf) override {
@@ -200,7 +230,13 @@ public:
 			LOG(LOG_MISC,LOG_WARN)("ALSA:Can't open sequencer");
 			return false;
 		}
-	
+
+		// Not many people know how to get the magic numbers needed for this ALSA output to send MIDI
+		// to a hardware device (hint: modprobe snd-seq-midi and then aconnect -l) so to assist users,
+		// enumerate all ALSA sequencer clients (these are client numbers) and list them in the log file.
+		// In the same way NE2000 emulation lists all pcap interfaces for your reference.
+		log_list_alsa_seqclient();
+
 		my_client = snd_seq_client_id(seq_handle);
 		snd_seq_set_client_name(seq_handle, "DOSBOX-X");
 		snd_seq_set_client_group(seq_handle, "input");

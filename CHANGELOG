@@ -1,4 +1,20 @@
 Next:
+  - Update Configuration GUI to use radio buttons for selection, meaning the
+    circular buttons that resemble those in Windows, not the check boxes.
+    The GUI toolkit had them all along, the Configuration GUI was using
+    check boxes for that for some reason. (joncampbell123).
+  - Linux ALSA MIDI output: Any attempt to send RESET or other Fx commands
+    to the ALSA library causes a segfault. This is a strange segfault in
+    the ALSA library. Work around it by not sending those messages at all,
+    which means those messages do not get sent but DOSBox-X should stop
+    crashing with ALSA MIDI output now. (joncampbell123).
+  - Linux ALSA MIDI output: Add code to list and enumerate the MIDI sequencer
+    devices available so the user can use it to determine what magic numbers
+    to put into the midiconfig setting, especially if the user wants to send
+    MIDI to an external synthesizer. (joncampbell123).
+  - Suddenly Mac OS 14 and XCode consider the "id" and "int" datatypes
+    different and assigning or returning one to the other is now a compiler
+    error. Add typecast to enable compile on latest XCode. (joncampbell123)
   - INT 33 mouse emulation: Add dosbox.conf options to force a specific
     coordinate system for the DOS game with respect to host/guest mouse
     cursor integration (getting the DOS cursor to match the host cursor

@@ -746,7 +746,7 @@ public:
 class ShowOptions : public GUI::MessageBox2 {
 protected:
     GUI::Input *name, *inp;
-    GUI::Checkbox *opt[200];
+    GUI::Radiobox *opt[200];
     std::vector<Value> pv;
     std::vector<GUI::Char> cfg_sname;
     GUI::WindowInWindow * wiw = NULL;
@@ -763,7 +763,7 @@ public:
             wiw = new GUI::WindowInWindow(this, 5, 80, 290, scroll_h);
             bool found = false;
             for(k = 0; k < pv.size(); k++) if (pv[k].ToString().size()) {
-                opt[k] = new GUI::Checkbox(wiw, 5, j*20+5, pv[k].ToString().c_str());
+                opt[k] = new GUI::Radiobox(wiw, 5, j*20+5, pv[k].ToString().c_str());
                 if (GUI::String(pv[k].ToString())==inp->getText()) {
                     found = true;
                     opt[k]->setChecked(true);
@@ -789,6 +789,24 @@ public:
             close->move(155,scroll_h+90);
             resize(310, scroll_h+156);
             move(parent->getWidth()>this->getWidth()?(parent->getWidth()-this->getWidth())/2:0,parent->getHeight()>this->getHeight()?(parent->getHeight()-this->getHeight())/2:0);
+
+            /* first child is first tabbable */
+            if (pv.size() > 0) {
+                Window *w = opt[0];
+                if (w) w->first_tabbable = true;
+            }
+
+            /* last child is first tabbable */
+            if (pv.size() > 0) {
+                Window *w = opt[pv.size()-1];
+                if (w) w->last_tabbable = true;
+            }
+
+            /* the FIRST field needs to come first when tabbed to */
+            if (pv.size() > 0) {
+                Window *w = opt[0];
+                if (w) w->raise();
+            }
     }
 
     void actionExecuted(GUI::ActionEventSource *b, const GUI::String &arg) override {

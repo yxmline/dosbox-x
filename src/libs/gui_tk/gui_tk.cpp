@@ -987,27 +987,27 @@ bool Window::mouseDownOutside(MouseButton button) {
 bool Window::mouseDown(int x, int y, MouseButton button)
 {
 	std::list<Window *>::reverse_iterator i = children.rbegin();
-    bool handled = false;
-    bool doraise = !(button == GUI::WheelUp || button == GUI::WheelDown); /* do not raise if the scroll wheel */
+	bool handled = false;
+	bool doraise = !(button == GUI::WheelUp || button == GUI::WheelDown); /* do not raise if the scroll wheel */
 	Window *last = NULL;
 
 	while (i != children.rend()) {
 		Window *w = *i;
 
 		if (w->visible && x >= w->x && x < (w->x+w->width) && y >= w->y && y < (w->y+w->height)) {
-            if (handled) {
-                mouseChild = NULL;
-                return true;
-            }
+			if (handled) {
+				mouseChild = NULL;
+				return true;
+			}
 			mouseChild = last = w;
 			if (w->mouseDown(x-w->x, y-w->y, button)) {
-                if (doraise) w->raise();
+				if (doraise) w->raise();
 				return true;
 			}
 		}
-        else if (w->transient) {
-            handled |= w->mouseDownOutside(button);
-        }
+		else if (w->transient) {
+			handled |= w->mouseDownOutside(button);
+		}
 
 		++i;
 	}
@@ -1440,17 +1440,19 @@ void Checkbox::paint(Drawable &d) const
 	d.drawLine(2,(height/2)+5,14,(height/2)+5);
 	d.drawLine(14,(height/2)-7,14,(height/2)+5);
 
-	d.setColor(Color::EditableBackground);
-	d.fillRect(4,(height/2)-5,9,9);
+	if (!pressed) {
+		d.setColor(Color::EditableBackground);
+		d.fillRect(4,(height/2)-5,9,9);
+	}
 
 	d.setColor(Color::Border);
 	d.drawLine(3,(height/2)-6,12,(height/2)-6);
 	d.drawLine(3,(height/2)-6,3,(height/2)+4);
 
-    if (hasFocus()) {
-        d.setColor(Color::Black);
-        d.drawDotRect(1,(height/2)-8,14,14);
-    }
+	if (hasFocus()) {
+		d.setColor(Color::Black);
+		d.drawDotRect(1,(height/2)-8,14,14);
+	}
 
 	if (checked) {
 		d.setColor(Color::Text);
@@ -1463,9 +1465,8 @@ void Checkbox::paint(Drawable &d) const
 	}
 }
 
-Radiobox::Radiobox(Frame *parent, int x, int y, int w, int h) : BorderedWindow(static_cast<Window *>(parent),x,y,w,h,16,0,0,0), ActionEventSource("GUI::Radiobox"), checked(0)
+Radiobox::Radiobox(Window *parent, int x, int y, int w, int h) : BorderedWindow(parent,x,y,w,h,16,0,0,0), ActionEventSource("GUI::Radiobox"), checked(0), pressed(0)
 {
-	 addActionHandler(parent);
 }
 
 bool Radiobox::keyDown(const Key &key)
@@ -1515,10 +1516,15 @@ void Radiobox::paint(Drawable &d) const
 	d.drawLine(3,(height/2)-1,3,(height/2)+2);
 	d.drawLine(4,(height/2)-3,4,(height/2)+3);
 
-	d.setColor(Color::EditableBackground);
+	d.setColor(pressed ? Color::Background3D : Color::EditableBackground); // do not omit this draw, doing so makes the radio button look a little crappy
 	d.fillRect(5,(height/2)-2,6,6);
 	d.fillRect(4,(height/2)-1,8,4);
 	d.fillRect(6,(height/2)-3,4,8);
+
+	if (hasFocus()) {
+		d.setColor(Color::Black);
+		d.drawDotRect(1,(height/2)-6,13,13);
+	}
 
 	if (checked) {
 		d.setColor(Color::Text);
