@@ -1,4 +1,24 @@
 Next:
+  - INT 21h: If a DOS program frees a memory block, and then resizes the
+    freed memory block, reassign ownership of that block to the program
+    as if allocated. This is apparently canonical MS-DOS behavior. Added
+    dosbox.conf option to control whether resizing a freed block silently
+    assigns ownership (default setting) or whether it returns an error.
+    DOS resize memory function for the most part DID assign ownership but
+    not in the case where the size of the MCB was exactly the size requested
+    to resize to. (joncampbell123).
+  - Sound Blaster: Fix bug where "force autoinit" prevented Sound Blaster
+    playback from working at all, fix for "Jump" by Public NMI (joncampbell123).
+  - Debugger UI now shows PIC_FullIndex() and whether or not the CPU is
+    in the HLT state. Single stepping does not do anything when the CPU is
+    in the HLT state, so at least let the user know (joncampbell123).
+  - Keyboard controller (IBM PC): Cancel the IRQ signal upon reading I/O
+    port 60h. The reason for the IRQ, the pending data, was just read, so
+    now there is no point in keeping the IRQ signal up. This fixes Escape
+    key problems with "Cronologia" by Cascada that causes part 3 "Time"
+    to immediately exit and continue to the credits. Part 1 and 2 are not
+    affected by the pending IRQ because those parts mask IRQ 1 and poll
+    the keyboard controller directly. (joncampbell123).
   - Fix complexity test code to determine when Odd/Even mode is enabled
     in all cases and to resolve a problem with garbled scrolling text
     in the "Vectorballs" part of "Unreal" (joncampbell123).
