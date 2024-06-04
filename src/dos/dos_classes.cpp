@@ -126,43 +126,46 @@ void DOS_InfoBlock::SetLocation(uint16_t segment) {
 	sSave(sDIB,nulString[6],(uint8_t)0x20);
 	sSave(sDIB,nulString[7],(uint8_t)0x20);
 
-#if 1 // FIXME: The new code imported from DOSBox Staging is causing Windows 3.1 to crash on exit, so this old code remains active until that can be fixed
-    /* Create a fake SFT, so programs think there are 100 file handles */
-	uint16_t sftOffset=offsetof(sDIB,firstFileTable)+0xa2;
+	/* Create a fake SFT, so programs think there are 100 file handles.
+	 * NTS: The INFO block is only given 0x20 paragraphs (0x200 = 512 bytes) which is only enough for a 5-entry SFT table,
+	 *      however that's what MS-DOS does anyway. For any value of FILES you specify, the first SFT is 5 entries and the
+	 *      second table is N - 5 entries. Maybe this is why MS-DOS doesn't let you specify a number below, I think, 6? in
+	 *      FILES= under CONFIG.SYS.
+	 *
+	 *      The table must be 5, or else it extends into other DOS kernel structures and memory corruption might happen. */
+	if (DOS_FILES < 6) E_Exit("[dos] files= setting is too small");
+
+	/* Secondary table */
+	unsigned int tbl2_seg = DOS_GetMemory((SftHeaderSize+(SftEntrySize*(DOS_FILES-5))+0xFu)/16u,"SFT secondary table");
+
+	uint16_t sftOffset=0xCC; /* this offset is fixed according to MS-DOS 5.0, MS-DOS 6.22, Windows 95, etc. */
+
+	/* zero out the table */
+	for (unsigned int i=sftOffset;i < 0x200;i++) real_writeb(segment,i,0);
+
 	sSave(sDIB,firstFileTable,RealMake(segment,sftOffset));
-	real_writed(segment,sftOffset+0x00,RealMake(segment+0x26,0));	//Next File Table
-	real_writew(segment,sftOffset+0x04,DOS_FILES/2);	//File Table supports DOS_FILES/2 files
-	real_writed(segment+0x26,0x00,0xffffffff);		//Last File Table
-	real_writew(segment+0x26,0x04,DOS_FILES-DOS_FILES/2);	//File Table supports DOS_FILES/2 files
-#else
-    /* Imported from dosbox-staging/dosbox-staging#3680 */
-    constexpr int FakeHandles = 100;
+	real_writed(segment,sftOffset+0x00,RealMake(tbl2_seg,0));	//Next File Table
+	real_writew(segment,sftOffset+0x04,5);				//File Table supports 5 files
 
-    constexpr uint32_t EndPointer = 0xffffffff;
-    constexpr uint16_t NextTableOffset = 0x0;
-    constexpr uint16_t NumberOfFilesOffset = 0x04;
+	if ((sftOffset+SftHeaderSize+(5*SftEntrySize)) > 0x200) E_Exit("Primary SFT is too big");
 
-    // We only need to actually allocate enough space for 16 handles
-    // This is the maximum that will get written to by DOS_MultiplexFunctions() in dos_misc.cpp
-    constexpr int BytesPerPage = 16;
-    constexpr int TotalBytes = SftHeaderSize + (SftEntrySize * SftNumEntries);
-    constexpr int NumPages = (TotalBytes / BytesPerPage) + (TotalBytes % BytesPerPage > 0 ? 1 : 0);
+	/* Windows 3.1 appears to REP SCAS for "CON" in the SFT tables and it will claim that your
+	 * version of MS-DOS is unsupported if it doesn't see it 3 times in the SFT. Why 3?
+	 * Well, think about it: CON for STDIN, CON for STDOUT, and CON for STDERR. Of course, right?
+	 *
+	 * Anyway Windows 3.1 doesn't appear to care exactly where "CON" appears, only that it appears 3 times,
+	 * so this code writes it out in a manner matching real MS-DOS and according to the Ralph Brown Interrupt List
+	 * concerning MS-DOS 4.0 to MS-DOS 6.0. Write out the other default handles for good measure. */
+	real_writed(segment,sftOffset+SftHeaderSize+(SftEntrySize*0)+0x20,0x204e4f43); // CON
+	real_writed(segment,sftOffset+SftHeaderSize+(SftEntrySize*1)+0x20,0x204e4f43); // CON
+	real_writed(segment,sftOffset+SftHeaderSize+(SftEntrySize*2)+0x20,0x204e4f43); // CON
+	real_writed(segment,sftOffset+SftHeaderSize+(SftEntrySize*3)+0x20,0x20585541); // AUX
+	real_writed(segment,sftOffset+SftHeaderSize+(SftEntrySize*4)+0x20,0x204e5250); // PRN
 
-    const uint16_t first_sft_segment = DOS_GetMemory(NumPages);
-    const RealPt first_sft_addr = RealMake(first_sft_segment, 0);
-    SSET_DWORD(sDIB, firstFileTable, first_sft_addr);
-
-    // Windows for Workgroups requires a 2nd linked SFT table
-    // This one only needs to allocate the header
-    const uint16_t second_sft_segment = DOS_GetMemory(1);
-    const RealPt second_sft_addr = RealMake(second_sft_segment, 0);
-
-    real_writed(first_sft_segment, NextTableOffset, second_sft_addr);
-    real_writew(first_sft_segment, NumberOfFilesOffset, FakeHandles);
-
-    real_writed(second_sft_segment, NextTableOffset, EndPointer);
-    real_writew(second_sft_segment, NumberOfFilesOffset, FakeHandles);
-#endif
+	/* zero out the table */
+	for (unsigned int i=0;i < (SftHeaderSize+(SftEntrySize*(DOS_FILES-5)));i++) real_writeb(tbl2_seg,i,0);
+	real_writed(tbl2_seg,0x00,0xFFFFFFFFu);
+	real_writew(tbl2_seg,0x04,DOS_FILES-5);
 }
 
 void DOS_InfoBlock::SetFirstMCB(uint16_t _firstmcb) {

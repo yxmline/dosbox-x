@@ -1,4 +1,20 @@
 Next:
+  - DOS kernel: Remove fixed hacks for SFT and dynamically allocate the
+    second SFT table for the last N - 5 file handles. Add code to zero
+    SFT table memory to ensure that random data doesn't cause issues.
+    Windows 3.1 is still perfectly fine with it, so the SFT table update
+    and cleanup is complete. (joncampbell123).
+  - DOS kernel: Move the magic "CON" strings into the first SFT and
+    mimic the 5 default open file handles that every DOS process starts
+    with: CON CON CON AUX PRN. Windows 3.1 is still happy with it, which
+    is good. (joncampbell123).
+  - DOS kernel: Put the CON driver somewhere else because allowing it
+    to overlap the SFT is messy. Fix SFT generation to match the way that
+    MS-DOS 5.0 does it where the first table is always 5 entries and the
+    second table is always N - 5 entries. Cleanup the DOS memory allocation
+    a bit. So far, Windows 3.1 doesn't have a problem with it. (joncampbell123).
+  - DOS kernel: Interrupt handler IRET was accidentally placed within
+    the SFT table, move it up to resolve the conflict. (joncampbell123).
   - Local DOS drive support: On Windows, if the guest is attempting to
     create a hidden file, make sure to call the right APIs to create a
     hidden file on the host. Not only is this needed to create a hidden
