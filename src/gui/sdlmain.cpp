@@ -3901,6 +3901,7 @@ static void GUI_StartUp() {
     transparency = 0;
     SetWindowTransparency(section->Get_int("transparency"));
     UpdateWindowDimensions();
+    ApplyPreventCap();
 }
 
 void Mouse_AutoLock(bool enable) {
@@ -6572,6 +6573,7 @@ static void show_warning(char const * const message) {
     SDL_Flip(sdl.surface);
 #endif
     SDL_Delay(12000);
+    ApplyPreventCap();
 }
 
 static void launcheditor(std::string edit) {
@@ -8726,6 +8728,9 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         qz_set_match_monitor_cb();
 #endif
 
+	CheckPreventCap();
+	LOG_MSG("Prevent capture: %u",preventcap);
+
         /* -- SDL init */
         if (SDL_Init(SDL_INIT_AUDIO|SDL_INIT_VIDEO|SDL_INIT_TIMER|SDL_INIT_NOPARACHUTE) >= 0)
             sdl.inited = true;
@@ -8960,6 +8965,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 #if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
         Reflect_Menu();
 #endif
+	ApplyPreventCapMenu();
 
         /* If PCjr emulation, map cartridge ROM */
         if (machine == MCH_PCJR)

@@ -1,4 +1,19 @@
 Next:
+  - Remove unnecessary and useless Win32 fcntl() on some memory typecast
+    to int which is causing a segfault whenever a ZIP file is mounted
+    as a drive with an overlay filesystem atop it. (joncampbell123)
+  - Update caption control feature to use equivalent APIs on Mac OS. (joncampbell123)
+  - Add dosbox.conf and menu option to control whether the DOSBox-X window
+    can be seen in screen captures in Windows 7/8/10/11. Windows 11 "Recall"
+    is very concerning and users might not want their DOS gaming to be
+    part of it's memory. (joncampbell123).
+  - Correct EGA switch readback from port 3C2h to reflect a value of 0x8
+    instead of 0x9 when machine=ega200 (joncampbell123).
+  - Correct BIOS data area value that holds the "EGA switches" to reflect
+    200-line EGA "emulation" when machine=ega200. Value 0x08 instead of 0x09
+    (joncampbell123).
+  - Correct mode parameters for CGA 640x200 2-color mode when using
+    machine=ega200 so that it displays correctly. (joncampbell123)
   - DOS kernel: Remove fixed hacks for SFT and dynamically allocate the
     second SFT table for the last N - 5 file handles. Add code to zero
     SFT table memory to ensure that random data doesn't cause issues.

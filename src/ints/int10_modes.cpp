@@ -469,7 +469,7 @@ VideoModeBlock ModeList_EGA_200[]={
 { 0x003  ,M_TEXT   ,640 ,400 ,80 ,25 ,8 ,8  ,4 ,0xB8000 ,0x1000 ,118 ,262 ,80 ,200 ,0	},
 { 0x004  ,M_CGA4   ,320 ,200 ,40 ,25 ,8 ,8  ,1 ,0xB8000 ,0x4000 ,61  ,262 ,40 ,200 ,_EGA_HALF_CLOCK	| _REPEAT1},
 { 0x005  ,M_CGA4   ,320 ,200 ,40 ,25 ,8 ,8  ,1 ,0xB8000 ,0x4000 ,61  ,262 ,40 ,200 ,_EGA_HALF_CLOCK	| _REPEAT1},
-{ 0x006  ,M_CGA2   ,640 ,200 ,80 ,25 ,8 ,8  ,1 ,0xB8000 ,0x4000 ,118 ,262 ,40 ,200 ,0   },
+{ 0x006  ,M_CGA2   ,640 ,200 ,80 ,25 ,8 ,8  ,1 ,0xB8000 ,0x4000 ,118 ,262 ,80 ,200 ,_REPEAT1   },
 { 0x007  ,M_TEXT   ,640 ,200 ,80 ,25 ,8 ,8  ,8 ,0xB0000 ,0x1000 ,118 ,262 ,80 ,200 ,0	},
 { 0x00D  ,M_EGA    ,320 ,200 ,40 ,25 ,8 ,8  ,8 ,0xA0000 ,0x2000 ,61  ,262 ,40 ,200 ,_EGA_HALF_CLOCK	},
 { 0x00E  ,M_EGA    ,640 ,200 ,80 ,25 ,8 ,8  ,4 ,0xA0000 ,0x4000 ,118 ,262 ,80 ,200 ,0 },
@@ -887,7 +887,7 @@ static void FinishSetMode(bool clearmem) {
 		real_writeb(BIOSMEM_SEG,BIOSMEM_NB_ROWS,(uint8_t)(CurMode->theight-1));
 		real_writew(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT,(uint16_t)CurMode->cheight);
 		real_writeb(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,(0x60|(clearmem?0:0x80)));
-		real_writeb(BIOSMEM_SEG,BIOSMEM_SWITCHES,0x09);
+		real_writeb(BIOSMEM_SEG,BIOSMEM_SWITCHES,(!IS_VGA_ARCH && ega200)?0x08:0x09);
 		// this is an index into the dcc table:
 #if C_DEBUG
 		if(IS_VGA_ARCH) real_writeb(BIOSMEM_SEG,BIOSMEM_DCC_INDEX,DISP2_Active()?0x0c:0x0b);
