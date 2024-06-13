@@ -140,15 +140,47 @@ static bool DOS_MultiplexFunctions(void) {
         }
         return true;
 	case 0x1216:	/* GET ADDRESS OF SYSTEM FILE TABLE ENTRY */
+		/* Apparently used by Dunkle Schatten 2 for whatever reason */
 		// reg_bx is a system file table entry, should coincide with
 		// the file handle so just use that
 		LOG(LOG_DOSMISC,LOG_ERROR)("Some BAD filetable call used bx=%X",reg_bx);
 		if(reg_bx <= DOS_FILES) CALLBACK_SCF(false);
 		else CALLBACK_SCF(true);
 		if (reg_bx<16) {
+			/* Assume the first table is valid */
 			RealPt sftrealpt=mem_readd(Real2Phys(dos_infoblock.GetPointer())+4);
 			PhysPt sftptr=Real2Phys(sftrealpt);
-			uint32_t sftofs=0x06u+reg_bx*0x3bu;
+
+			/* The SFT table is not one monolithic table, but is split across
+			 * smaller table "pieces" connected by a linked list */
+			unsigned int rel_entry = reg_bx;
+
+//DEBUG
+//			LOG_MSG("handle=%u rel=%u initsft=%08x",reg_bx,rel_entry,(unsigned int)sftrealpt);
+
+			while (1) {
+				/* DWORD +0 <next link or 0xFFFFFFFF>
+				 * WORD  +4 <number of entries in table> */
+				uint16_t tblsize = mem_readw(sftptr+4);
+
+				if (rel_entry < tblsize) break;
+
+				rel_entry -= tblsize;
+				sftrealpt = mem_readd(sftptr);
+				if (sftrealpt == 0 || (sftrealpt & 0xFFFF) == 0xFFFF/*According to RBIL, confirmed in MS-DOS: only the offset is checked for 0xFFFF to end the list*/) {
+					CALLBACK_SCF(true);
+					return true;
+				}
+				sftptr=Real2Phys(sftrealpt);
+
+//DEBUG
+//				LOG_MSG("handle=%u rel=%u nextsft=%08x",reg_bx,rel_entry,(unsigned int)sftrealpt);
+			}
+
+			uint32_t sftofs = SftHeaderSize + rel_entry*SftEntrySize;
+
+//DEBUG
+//			LOG_MSG("handle=%u rel=%u finalsft=%08x",reg_bx,rel_entry,(unsigned int)sftrealpt);
 
 			if (Files[reg_bx]) mem_writeb(sftptr+sftofs, (uint8_t)(Files[reg_bx]->refCtr));
 			else mem_writeb(sftptr+sftofs,0);
