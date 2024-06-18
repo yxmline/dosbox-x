@@ -4239,6 +4239,14 @@ public:
         else
             cpm_compat_mode = CPM_COMPAT_OFF;
 
+        /* If memsize < 16KB then the only way DOS can work properly is to allocate in the UMB private area */
+        if (MEM_TotalPages() < 4) {
+            if (!private_always_from_umb) {
+                private_always_from_umb = true;
+                LOG(LOG_MISC,LOG_DEBUG)("Memory size < 16KB, allocating all DOS kernel structures in the private upper memory area");
+            }
+        }
+
         /* FIXME: Boot up an MS-DOS system and look at what INT 21h on Microsoft's MS-DOS returns
          *        for SDA size and location, then use that here.
          *
@@ -4283,7 +4291,7 @@ public:
         if (private_always_from_umb) {
             DOS_GetMemory_Choose(); /* the pool starts in UMB */
             if (minimum_mcb_segment == 0)
-                DOS_MEM_START = IS_PC98_ARCH ? 0x80 : 0x70; /* funny behavior in some games suggests the MS-DOS kernel loads a bit higher on PC-98 */
+                DOS_MEM_START = IS_PC98_ARCH ? 0x80 : (MEM_TotalPages() >= 0x10/*64KB or more*/ ? 0x70 : 0x60); /* funny behavior in some games suggests the MS-DOS kernel loads a bit higher on PC-98 */
             else
                 DOS_MEM_START = minimum_mcb_segment;
 
@@ -4300,7 +4308,7 @@ public:
         }
         else {
             if (minimum_dos_initial_private_segment == 0)
-                DOS_PRIVATE_SEGMENT = IS_PC98_ARCH ? 0x80 : 0x70; /* funny behavior in some games suggests the MS-DOS kernel loads a bit higher on PC-98 */
+                DOS_PRIVATE_SEGMENT = IS_PC98_ARCH ? 0x80 : (MEM_TotalPages() >= 0x10/*64KB or more*/ ? 0x70 : 0x60); /* funny behavior in some games suggests the MS-DOS kernel loads a bit higher on PC-98 */
             else
                 DOS_PRIVATE_SEGMENT = minimum_dos_initial_private_segment;
 
