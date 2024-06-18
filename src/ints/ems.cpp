@@ -1635,7 +1635,7 @@ public:
 			return;
 		}
 
-        LOG_MSG("EMS page frame at 0x%04x-0x%04x",EMM_PAGEFRAME,EMM_PAGEFRAME+0xFFF);
+		LOG_MSG("EMS page frame at 0x%04x-0x%04x",EMM_PAGEFRAME,EMM_PAGEFRAME+0xFFF);
 
 		ENABLE_VCPI = section->Get_bool("vcpi");
 		ENABLE_V86_STARTUP = section->Get_bool("emm386 startup active");
@@ -1648,30 +1648,30 @@ public:
 			ENABLE_VCPI = false;
 		}
 
-        bool XMS_Active(void);
+		bool XMS_Active(void);
 
-        /* if XMS is not enabled, EMM386 emulation is impossible.
-         * Real MS-DOS EMM386.EXE will flat out refuse to load if HIMEM.SYS is not loaded.
-         * that also prevents VCPI from working. */
-        if (!XMS_Active() && ems_type != EMS_BOARD) {
-            if (ems_type == EMS_MIXED) {
-                LOG_MSG("EMS changed to board mode and VCPI disabled, because XMS is not enabled.");
-                ems_type = EMS_BOARD;
-            }
-            else if (ems_type == EMS_EMM386) {
-                /* do as MS-DOS does */
-                setup_EMS_none();
-                ems_type = EMS_NONE;
-                LOG_MSG("EMS disabled, EMM386 emulation is impossible when XMS is not enabled");
-                return;
-            }
+		/* if XMS is not enabled, EMM386 emulation is impossible.
+		 * Real MS-DOS EMM386.EXE will flat out refuse to load if HIMEM.SYS is not loaded.
+		 * that also prevents VCPI from working. */
+		if (!XMS_Active() && ems_type != EMS_BOARD) {
+			if (ems_type == EMS_MIXED) {
+				LOG_MSG("EMS changed to board mode and VCPI disabled, because XMS is not enabled.");
+				ems_type = EMS_BOARD;
+			}
+			else if (ems_type == EMS_EMM386) {
+				/* do as MS-DOS does */
+				setup_EMS_none();
+				ems_type = EMS_NONE;
+				LOG_MSG("EMS disabled, EMM386 emulation is impossible when XMS is not enabled");
+				return;
+			}
 
 			ENABLE_V86_STARTUP = false;
-            ENABLE_VCPI = false;
-        }
+			ENABLE_VCPI = false;
+		}
 
-        if (ems_type != EMS_BOARD)
-            BIOS_ZeroExtendedSize(true);
+		if (ems_type != EMS_BOARD)
+			BIOS_ZeroExtendedSize(true);
 
 		dbg_zero_on_ems_allocmem = section->Get_bool("zero memory on ems memory allocation");
 		if (dbg_zero_on_ems_allocmem) {
@@ -1699,6 +1699,20 @@ public:
 		if (ENABLE_V86_STARTUP && !ENABLE_VCPI) {
 			LOG_MSG("EMS: DOSBox-X does not support enabling virtual 8086 mode without VCPI.");
 			ENABLE_V86_STARTUP=false;
+		}
+
+		/* TODO: Even in "board" mode EMS emulation is highly dependent on having extended memory to map!
+		 *       If we truly wanted to emulate an EMS board, we'd allocate our own private memory and
+		 *       just map parts of it into the EMS page frame, which would allow emulation to work even
+		 *       if XMS is disabled and/or less than 1MB conventional memory is configured! */
+		if (ems_type == EMS_BOARD) {
+			if (MEM_TotalPages() <= 0x110) {
+				// FIXME: Board emulation should allocate it's own memory and map it into the EMS page frame like a device would,
+				//        not use extended memory!
+				LOG_MSG("EMS: EMS board mode as implemented still requires extended memory to work (we'll fix this someday).");
+				LOG_MSG("At least 1MB of memory must be configured for EMS emulation to work.");
+				LOG_MSG("Because of this limitation, EMS emulation will run as if no memory available.");
+			}
 		}
 
 		oshandle_memsize_16kb = (unsigned int)section->Get_int("ems system handle memory size");
@@ -1737,9 +1751,17 @@ public:
 			emm_segmentmappings[i].handle=NULL_HANDLE;
 		}
 
-		if (EMM_AllocateSystemHandle(oshandle_memsize_16kb) != EMM_NO_ERROR) { // allocate OS-dedicated handle (ems handle zero, 384kb)
-			LOG_MSG("EMS:Unable to allocate EMS system handle. disabling VCPI");
-			ENABLE_VCPI = false;
+		if (ems_type == EMS_BOARD) {
+			if (ENABLE_VCPI) {
+				LOG_MSG("EMS in board mode. disabling VCPI");
+				ENABLE_VCPI = false;
+			}
+		}
+		else {
+			if (EMM_AllocateSystemHandle(oshandle_memsize_16kb) != EMM_NO_ERROR) { // allocate OS-dedicated handle (ems handle zero, 384kb)
+				LOG_MSG("EMS:Unable to allocate EMS system handle. disabling VCPI");
+				ENABLE_VCPI = false;
+			}
 		}
 
 		if (ems_type == EMS_EMM386) {
@@ -1769,19 +1791,19 @@ public:
 			   in v86 mode, including protection fault exceptions */
 			call_v86mon.Install(&V86_Monitor,CB_IRET,"V86 Monitor");
 
-            {
-                Bitu old_a20 = XMS_GetEnabledA20();
+			{
+				Bitu old_a20 = XMS_GetEnabledA20();
 
-                XMS_EnableA20(true);
+				XMS_EnableA20(true);
 
-                mem_writeb((unsigned int)vcpi.private_area+0x2e00,(uint8_t)0xFE);       //GRP 4
-                mem_writeb((unsigned int)vcpi.private_area+0x2e01,(uint8_t)0x38);       //Extra Callback instruction
-                mem_writew((unsigned int)vcpi.private_area+0x2e02,call_v86mon.Get_callback());		//The immediate word
-                mem_writeb((unsigned int)vcpi.private_area+0x2e04,(uint8_t)0x66);
-                mem_writeb((unsigned int)vcpi.private_area+0x2e05,(uint8_t)0xCF);       //A IRETD Instruction
+				mem_writeb((unsigned int)vcpi.private_area+0x2e00,(uint8_t)0xFE);       //GRP 4
+				mem_writeb((unsigned int)vcpi.private_area+0x2e01,(uint8_t)0x38);       //Extra Callback instruction
+				mem_writew((unsigned int)vcpi.private_area+0x2e02,call_v86mon.Get_callback());		//The immediate word
+				mem_writeb((unsigned int)vcpi.private_area+0x2e04,(uint8_t)0x66);
+				mem_writeb((unsigned int)vcpi.private_area+0x2e05,(uint8_t)0xCF);       //A IRETD Instruction
 
-                XMS_EnableA20(old_a20 != 0);
-            }
+				XMS_EnableA20(old_a20 != 0);
+			}
 
 			/* DOSBox's default EMS emulation provides the EMS memory mapping but without the virtual 8086
 			 * mode. But there are DOS games and demos that assume EMM386.EXE == virtual 8086 mode and will
