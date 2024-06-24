@@ -5654,8 +5654,20 @@ pic_tickindex_t VGA_PITSync_delay(void) {
 	return et;
 }
 
+#if C_DEBUG
+extern bool DEBUG_HaltOnRetrace;
+Bitu DEBUG_EnableDebugger(void);
+#endif
+
 static void VGA_VerticalTimer(Bitu /*val*/) {
 	double current_time = PIC_GetCurrentEventTime();
+
+#if C_DEBUG
+	if (DEBUG_HaltOnRetrace) {
+		DEBUG_EnableDebugger();
+		DEBUG_HaltOnRetrace = false;
+	}
+#endif
 
 	dbg_event_maxscan = false;
 	dbg_event_scanstep = false;
@@ -6446,6 +6458,7 @@ bool IsDebuggerActive(void);
 void VGA_DebugRedraw(void) {
 #if C_DEBUG
 	if (IsDebuggerActive()) {
+		VGA_RenderOnDemandComplete();
 		RENDER_EndUpdate(true);
 		vga.draw.lines_done = vga.draw.lines_total;
 		PIC_RemoveEvents(VGA_Other_VertInterrupt);
@@ -6454,7 +6467,6 @@ void VGA_DebugRedraw(void) {
 		PIC_RemoveEvents(VGA_DisplayStartLatch);
 		VGA_DisplayStartLatch(0);
 		VGA_VerticalTimer(0);
-		VGA_RenderOnDemandComplete();
 	}
 #endif
 }

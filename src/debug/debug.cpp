@@ -76,6 +76,8 @@ char *FormatDate(uint16_t year, uint8_t month, uint8_t day);
 void GFX_SetTitle(int32_t cycles, int frameskip, Bits timing, bool paused);
 bool pc98_pegc_linear_framebuffer_enabled(void);
 
+bool DEBUG_HaltOnRetrace = false;
+
 extern bool                 dos_kernel_disabled;
 extern bool                 is_paused;
 extern bool                 pc98_crt_mode;
@@ -2228,6 +2230,11 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 
+	if (command == "VRT") {
+		DEBUG_HaltOnRetrace = true;
+		command = "RUN";
+	}
+
 	if (command == "RUN") {
 		DrawRegistersUpdateOld();
 		debug_running = false;
@@ -3610,7 +3617,7 @@ bool ParseCommand(char* str) {
 		DEBUG_ShowMsg("SR [reg] [value]          - Set register value. Multiple pairs allowed.\n");
 		DEBUG_ShowMsg("SM [seg]:[off] [val] [.]..- Set memory with following values.\n");
 		DEBUG_ShowMsg("SMV [addr] [val] [.]..    - Set memory with following values at linear (virtual) address.\n");
-        DEBUG_ShowMsg("FM [seg]:[off]            - Freeze memory value at address.\n");
+		DEBUG_ShowMsg("FM [seg]:[off]            - Freeze memory value at address.\n");
 		DEBUG_ShowMsg("EV [value [value] ...]    - Show register value(s).\n");
 		DEBUG_ShowMsg("IV [seg]:[off] [name]     - Create var name for memory address.\n");
 		DEBUG_ShowMsg("SV [filename]             - Save var list in file.\n");
@@ -3641,6 +3648,7 @@ bool ParseCommand(char* str) {
 		DEBUG_ShowMsg("TIMERIRQ                  - Run the system timer.\n");
 		DEBUG_ShowMsg("TIME [time]               - Display or change the internal time.\n");
 		DEBUG_ShowMsg("DATE [date]               - Display or change the internal date.\n");
+		DEBUG_ShowMsg("VRT                       - Run, then enter debugger at next vertical retrace.\n");
 
 		DEBUG_ShowMsg("IN[P|W|D] [port]          - I/O port read byte/word/dword.\n");
 		DEBUG_ShowMsg("OUT[P|W|D] [port] [data]  - I/O port write byte/word/dword.\n");
@@ -3900,6 +3908,20 @@ void win_code_ui_up(int count) {
 extern "C" INPUT_RECORD * _pdcurses_hax_inputrecord(void);
 #endif
 
+/* NTS: DOSBox SVN and almost (or all?) forks of DOSBox
+ *      zero CPU_Cycles and CPU_CyclesLeft, which is a
+ *      perfectly fine way to enter the debugger, but
+ *      a side effect of this is that emulator time is
+ *      effectively jumped forward to the start of the
+ *      next 1ms tick. If you're debugging time-dependent
+ *      code this has the effect of code that magically
+ *      works when you debug it but crashes normally, or
+ *      code that magically breaks when you debug it but
+ *      runs fine otherwise.
+ *
+ *      See include/pic.h for how these variables affect
+ *      emulator time used everywhere else in this code,
+ *      specifically PIC_TickIndex() and PIC_FullIndex(). */
 int32_t DEBUG_Run(int32_t amount,bool quickexit) {
 	skipFirstInstruction = true;
 	CPU_CycleLeft += CPU_Cycles - amount;
@@ -5157,7 +5179,8 @@ Bitu DEBUG_EnableDebugger(void)
 	if (!debugging || (debugging && debug_running))
 		DEBUG_Enable_Handler(true);
 
-	CPU_Cycles=CPU_CycleLeft=0;
+	CPU_CycleLeft += CPU_Cycles;
+	CPU_Cycles = 0;
 	return 0;
 }
 
