@@ -691,9 +691,46 @@ class PropertyEditor : public GUI::Window, public GUI::ActionEventSource_Callbac
 protected:
     Section_prop * section;
     Property *prop;
+
+    static constexpr auto RightMarginWindow    = 10; // TODO find origin, fix
+    static constexpr auto RightMarginBool      = 55; // TODO find origin, fix
+    static constexpr auto RightMarginText      = 40; // TODO find origin, fix
+
+    int GetHostWindowWidth() const
+    {
+        const int width = parent->getParent()->getWidth();
+
+        return width;
+    }
+
+    void SetupUI(const bool opts, GUI::Input*& input, GUI::Button*& infoButton)
+    {
+        const auto windowWidth = GetHostWindowWidth();
+
+        constexpr auto optionsWidth = 42;
+
+        const auto defaultSpacing = static_cast<int>(GUI::CurrentTheme.DefaultSpacing);
+
+        const auto inputWidth = 235 - (opts ? optionsWidth + defaultSpacing : 0);
+
+        const auto optionsPos = windowWidth - optionsWidth - RightMarginText - defaultSpacing;
+
+        const auto inputPos = opts
+                                  ? optionsPos - defaultSpacing - inputWidth
+                                  : windowWidth - RightMarginText - defaultSpacing - inputWidth;
+
+        input = new GUI::Input(this, inputPos, 0, inputWidth, static_cast<int>(GUI::CurrentTheme.ButtonHeight));
+
+        if(opts)
+        {
+            infoButton = new GUI::Button(this, optionsPos, 0, "...", optionsWidth);
+            infoButton->addActionHandler(this);
+        }
+    }
+
 public:
     PropertyEditor(Window *parent, int x, int y, Section_prop *section, Property *prop, bool opts) :
-        Window(parent, x, y, 500, 25), section(section), prop(prop) { (void)opts; }
+        Window(parent, x, y, parent->getParent()->getWidth() - RightMarginWindow, 25), section(section), prop(prop) { (void)opts; }
 
     virtual bool prepare(std::string &buffer) = 0;
 
@@ -732,7 +769,8 @@ public:
     PropertyEditorBool(Window *parent, int x, int y, Section_prop *section, Property *prop, bool opts) :
         PropertyEditor(parent, x, y, section, prop, opts) {
         label = new GUI::Label(this, 0, 5, prop->propname);
-        input = new GUI::Checkbox(this, 480, 3, "");
+        constexpr auto inputWidth = 3;
+        input = new GUI::Checkbox(this, GetHostWindowWidth() - inputWidth - RightMarginBool, inputWidth, "");
         input->setChecked(static_cast<bool>(prop->GetValue()));
     }
 
@@ -854,11 +892,7 @@ public:
         if (title=="4dos"&&!strcmp(prop->propname.c_str(), "rem"))
             input = new GUI::Input(this, 30, 0, 470);
         else {
-            input = new GUI::Input(this, 260, 0, opts?195:235);
-            if (opts) {
-                infoButton=new GUI::Button(this, 460, 0, "...", 35, 24);
-                infoButton->addActionHandler(this);
-            }
+            SetupUI(opts, input, infoButton);
         }
         std::string temps = prop->GetValue().ToString();
         input->setText(stringify(temps));
@@ -912,11 +946,7 @@ protected:
 public:
     PropertyEditorFloat(Window *parent, int x, int y, Section_prop *section, Property *prop, bool opts) :
         PropertyEditor(parent, x, y, section, prop, opts) {
-        input = new GUI::Input(this, 365, 0, opts?90:130);
-        if (opts) {
-            infoButton=new GUI::Button(this, 460, 0, "...", 35, 24);
-            infoButton->addActionHandler(this);
-        }
+        SetupUI(opts, input, infoButton);
         input->setText(stringify((double)prop->GetValue()));
         label = new GUI::Label(this, 0, 5, prop->propname);
 	scan_tabbing = true;
@@ -969,11 +999,7 @@ protected:
 public:
     PropertyEditorHex(Window *parent, int x, int y, Section_prop *section, Property *prop, bool opts) :
         PropertyEditor(parent, x, y, section, prop, opts) {
-        input = new GUI::Input(this, 365, 0, opts?90:130);
-        if (opts) {
-            infoButton=new GUI::Button(this, 460, 0, "...", 35, 24);
-            infoButton->addActionHandler(this);
-        }
+        SetupUI(opts, input, infoButton);
         std::string temps = prop->GetValue().ToString();
         input->setText(temps.c_str());
         label = new GUI::Label(this, 0, 5, prop->propname);
@@ -1027,11 +1053,7 @@ protected:
 public:
     PropertyEditorInt(Window *parent, int x, int y, Section_prop *section, Property *prop, bool opts) :
         PropertyEditor(parent, x, y, section, prop, opts) {
-        input = new GUI::Input(this, 365, 0, opts?90:130);
-        if (opts) {
-            infoButton=new GUI::Button(this, 460, 0, "...", 35, 24);
-            infoButton->addActionHandler(this);
-        }
+        SetupUI(opts, input, infoButton);
         //Maybe use ToString() of Value
         input->setText(stringify(static_cast<int>(prop->GetValue())));
         label = new GUI::Label(this, 0, 5, prop->propname);
@@ -1405,7 +1427,7 @@ public:
     std::vector<GUI::Char> cfg_sname;
 public:
     SectionEditor(GUI::Screen *parent, int x, int y, Section_prop *section) :
-        ToplevelWindow(parent, x, y, 510, 422, ""), section(section) {
+        ToplevelWindow(parent, x, y, 0, 0, ""), section(section) {
         if (section == NULL) {
             LOG_MSG("BUG: SectionEditor constructor called with section == NULL\n");
             return;
@@ -1414,9 +1436,9 @@ public:
 
         int first_row_y = 5;
         int row_height = 25;
-        int column_width = 500;
-        int button_row_h = 26;
-        int button_row_padding_y = 5 + 5;
+        int column_width = 600;
+        int button_row_h = (int)GUI::CurrentTheme.ButtonHeight;
+        int button_row_padding_y = static_cast<int>(GUI::CurrentTheme.DefaultSpacing);
 
         int num_prop = 0, k=0;
         while (section->Get_prop(num_prop) != NULL) {
@@ -3156,17 +3178,48 @@ public:
         bar->addItem(0,"");
         bar->addItem(0,MSG_Get("CLOSE"));
         bar->addMenu(MSG_Get("SETTINGS"));
+        
+        // theme menu
+        {
+            bar->addMenu("Theme"); // TODO MSG_Get("THEME")
+            bar->addItem(2, GUI::ThemeWindows31WindowsDefault::GetName());
+            bar->addItem(2, "");
+            bar->addItem(2, GUI::ThemeWindows31Arizona::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Bordeaux::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Cinnamon::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Designer::GetName());
+            bar->addItem(2, GUI::ThemeWindows31EmeraldCity::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Fluorescent::GetName());
+            bar->addItem(2, GUI::ThemeWindows31HotDogStand::GetName());
+            bar->addItem(2, GUI::ThemeWindows31LCDDefaultScreenSettings::GetName());
+            bar->addItem(2, GUI::ThemeWindows31LCDReversedDark::GetName());
+            bar->addItem(2, GUI::ThemeWindows31LCDReversedLight::GetName());
+            bar->addItem(2, GUI::ThemeWindows31BlackLeatherJacket::GetName());
+            bar->addItem(2, "|");
+            bar->addItem(2, GUI::ThemeWindows31Mahogany::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Monochrome::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Ocean::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Pastel::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Patchwork::GetName());
+            bar->addItem(2, GUI::ThemeWindows31PlasmaPowerSaver::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Rugby::GetName());
+            bar->addItem(2, GUI::ThemeWindows31TheBlues::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Tweed::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Valentine::GetName());
+            bar->addItem(2, GUI::ThemeWindows31Wingtips::GetName());
+        }
+        
         bar->addMenu(mainMenu.get_item("HelpMenu").get_text().c_str());
-        bar->addItem(2,MSG_Get("VISIT_HOMEPAGE"));
-        bar->addItem(2,"");
+        bar->addItem(3,MSG_Get("VISIT_HOMEPAGE"));
+        bar->addItem(3,"");
         if (!dos_kernel_disabled) {
             /* these do not work until shell help text is registered */
-            bar->addItem(2,MSG_Get("GET_STARTED"));
-            bar->addItem(2,MSG_Get("CDROM_SUPPORT"));
-            bar->addItem(2,"");
+            bar->addItem(3,MSG_Get("GET_STARTED"));
+            bar->addItem(3,MSG_Get("CDROM_SUPPORT"));
+            bar->addItem(3,"");
         }
-        bar->addItem(2,MSG_Get("INTRODUCTION"));
-        bar->addItem(2,mainMenu.get_item("help_about").get_text().c_str());
+        bar->addItem(3,MSG_Get("INTRODUCTION"));
+        bar->addItem(3,mainMenu.get_item("help_about").get_text().c_str());
         bar->addActionHandler(this);
 
         int gridbtnwidth = 130;
@@ -3261,6 +3314,30 @@ public:
         Section_prop * section=static_cast<Section_prop *>(control->GetSection("dosbox"));
         advopt->setChecked(section->Get_bool("show advanced options") || advOptUser);
 
+        // apply theme
+        {
+            auto theme = std::string(section->Get_string("configuration tool theme"));
+
+            if(theme.empty())
+            {
+                bool dark = false;
+
+#if defined(WIN32) && !defined(HX_DOS)
+                // ReSharper disable once CppDeclaratorDisambiguatedAsFunction
+                bool HostDarkMode(); // NOLINT(clang-diagnostic-vexing-parse)
+                dark = HostDarkMode();
+#endif
+                TryApplyTheme(
+                              dark
+                                  ? GUI::ThemeWindows31LCDReversedDark::GetName()
+                                  : GUI::ThemeWindows31LCDReversedLight::GetName());
+            }
+            else
+            {
+                TryApplyTheme(theme);
+            }
+        }
+
         strcpy(tmp1, (MSG_Get("SAVE")+std::string("...")).c_str());
 
         const auto xSave = gridbtnx + (gridbtnwidth + margin) * 2;
@@ -3294,8 +3371,59 @@ public:
         return false;
     }
 
+    static void TryApplyTheme(const GUI::String& name)
+    {
+        if(name == GUI::ThemeWindows31WindowsDefault::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31WindowsDefault();
+        if(name == GUI::ThemeWindows31Arizona::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Arizona();
+        if(name == GUI::ThemeWindows31Bordeaux::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Bordeaux();
+        if(name == GUI::ThemeWindows31Cinnamon::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Cinnamon();
+        if(name == GUI::ThemeWindows31Designer::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Designer();
+        if(name == GUI::ThemeWindows31EmeraldCity::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31EmeraldCity();
+        if(name == GUI::ThemeWindows31Fluorescent::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Fluorescent();
+        if(name == GUI::ThemeWindows31HotDogStand::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31HotDogStand();
+        if(name == GUI::ThemeWindows31LCDDefaultScreenSettings::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31LCDDefaultScreenSettings();
+        if(name == GUI::ThemeWindows31LCDReversedDark::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31LCDReversedDark();
+        if(name == GUI::ThemeWindows31LCDReversedLight::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31LCDReversedLight();
+        if(name == GUI::ThemeWindows31BlackLeatherJacket::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31BlackLeatherJacket();
+        if(name == GUI::ThemeWindows31Mahogany::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Mahogany();
+        if(name == GUI::ThemeWindows31Monochrome::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Monochrome();
+        if(name == GUI::ThemeWindows31Ocean::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Ocean();
+        if(name == GUI::ThemeWindows31Pastel::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Pastel();
+        if(name == GUI::ThemeWindows31Patchwork::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Patchwork();
+        if(name == GUI::ThemeWindows31PlasmaPowerSaver::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31PlasmaPowerSaver();
+        if(name == GUI::ThemeWindows31Rugby::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Rugby();
+        if(name == GUI::ThemeWindows31TheBlues::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31TheBlues();
+        if(name == GUI::ThemeWindows31Tweed::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Tweed();
+        if(name == GUI::ThemeWindows31Valentine::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Valentine();
+        if(name == GUI::ThemeWindows31Wingtips::GetName())
+            GUI::DefaultTheme = GUI::ThemeWindows31Wingtips();
+    }
+
     void actionExecuted(GUI::ActionEventSource *b, const GUI::String &arg) override {
         advOptUser = advopt->isChecked();
+        TryApplyTheme(arg); // TODO MSG_Get("THEME"), save to config
         GUI::String sname = RestoreName(arg);
         sname.at(0) = (unsigned int)std::tolower((int)sname.at(0));
         Section *sec;
