@@ -2703,6 +2703,12 @@ void DOSBOX_SetupConfigSections(void) {
             "location reported by the VESA BIOS. Set to nonzero for DOS games with sloppy VESA graphics pointer management.\n"
             "    MFX \"Melvindale\" (1996): Set this option to 2 to center the picture properly.");
 
+    Pint = secprop->Add_int("vesa lfb pel scanline adjust",Property::Changeable::WhenIdle,0);
+    Pint->Set_help("If non-zero, the VESA BIOS will report the linear framebuffer offset by this many pixels.\n"
+            "This does not affect the linear framebuffer's location. It only affects the linear framebuffer\n"
+            "location reported by the VESA BIOS. Set to nonzero for DOS games with sloppy VESA graphics pointer management.\n"
+            "    Contract \"Out of Control\" (1997): Set this option to 128 to fix the display.");
+
     /* If set, all VESA BIOS modes map 128KB of video RAM at A0000-BFFFF even though VESA BIOS emulation
      * reports a 64KB window. Some demos like the 1996 Wired report
      * (ftp.scene.org/pub/parties/1995/wired95/misc/e-w95rep.zip) assume they can write past the window
@@ -3802,6 +3808,14 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool = secprop->Add_bool("gus",Property::Changeable::WhenIdle,false);
     Pbool->Set_help("Enable the Gravis Ultrasound emulation.");
     Pbool->SetBasic(true);
+
+    Pstring = secprop->Add_string("global register read alias", Property::Changeable::WhenIdle, "auto");
+    Pstring->Set_values(truefalseautoopt);
+    Pstring->Set_help("If true, all GUS global registers have a read alias at N and N+0x80.\n"
+                      "If false, only the voice registers 0x0-0xF have a read alias at 0x80-0x8F as officially documented.\n"
+                      "If auto, automatically choose based on other settings such as GUS type.\n"
+                      "This setting may be needed for DOS demoscene entries that assume aliasing behavior such as Out of Control by Contract.");
+    Pstring->SetBasic(true);
 
     Pbool = secprop->Add_bool("autoamp",Property::Changeable::WhenIdle,false);
     Pbool->Set_help("If set, GF1 output will reduce in volume automatically if the sum of all channels exceeds full volume.\n"

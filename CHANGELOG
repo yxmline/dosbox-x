@@ -1,4 +1,25 @@
 NEXT
+  - Add SET /FIRST, a DOSBox-X extension, that takes the specified
+    variable if it exists and moves it to the front of the environment
+    block. (joncampbell123).
+  - SET command processing has been cleaned up and streamlined.
+    Added /ERASE command line switch to clear the environment
+    block (DOSBox-X extension). (joncampbell123).
+  - VESA BIOS: Add new option to adjust reported linear framebuffer
+    address by a specific number of pixels. This is needed by
+    "Out of Control" by Contract which for whatever reason,
+    will always draw to the LFB base minus 128 bytes. This option
+    makes it possible to correct the demo graphics. (joncampbell123).
+  - Gravis Ultrasound: Officially, registers 0x0-0xF, the voice
+    control registers, are documented to have a 0x0-0xF write and
+    0x80-0x8F read alias. Unofficially, according to the behavior
+    of 1997 demo "Out of Control" by Contract, all GUS registers
+    have a N and (N+0x80) alias, or at least register 0x4C, and
+    you can read them back from either index. Or else the demo
+    fails to detect the GUS. So add this alias, but only if
+    enabled in dosbox.conf. Real hardware testing is required to
+    know if the actual GUS behaves this way and which versions.
+    (joncampbell123).
   - Move the INT 3 default vector to well within the initial 16
     bytes of the DOS kernel, away from the List of Lists and SFT.
     The previous placement caused certain versions of Windows 3.2
