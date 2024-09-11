@@ -1,4 +1,5 @@
 NEXT
+  - Allow the ".inst" extension for CUE sheets. (Allofich)
   - Add SET /FIRST, a DOSBox-X extension, that takes the specified
     variable if it exists and moves it to the front of the environment
     block. (joncampbell123).
@@ -93,6 +94,7 @@ NEXT
     - properties/help: sorted alphabetically, mouse wheel scrollable
     - remove few rendundant labels, adjust names of some others
     - retain 'show advanced options' state throughout session
+  - SVN r4483: Fix compilation in Visual Studio 2008. (Allofich)
 
 2024.07.01
   - Correct Hercules InColor memory emulation. Read and write planar
