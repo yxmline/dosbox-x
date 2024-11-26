@@ -557,24 +557,38 @@ void MenuBrowseCDImage(char drive, int num) {
     const char *lFilterPatterns[] = {"*.iso","*.cue","*.bin","*.chd","*.mdf","*.gog","*.ins","*.inst","*.ISO","*.CUE","*.BIN","*.CHD","*.MDF","*.GOG","*.INS","*.INST" };
     const char *lFilterDescription = "CD image files (*.iso, *.cue, *.bin, *.chd, *.mdf, *.gog, *.ins, *.inst)";
     lTheOpenFileName = tinyfd_openFileDialog("Select a CD image file","", sizeof(lFilterPatterns) / sizeof(lFilterPatterns[0]),lFilterPatterns,lFilterDescription,0);
-
+    bool isempty = std::string(Drives[drive - 'A']->GetInfo() + 9) == "empty";
     if (lTheOpenFileName) {
         isoDrive *cdrom = dynamic_cast<isoDrive*>(Drives[drive-'A']);
         DOS_Drive *newDrive = NULL;
+        int error = -1;
+        uint8_t mediaid = 0xF8;
         if (cdrom && dos_kernel_disabled) {
             cdrom->setFileName(lTheOpenFileName);
+            if(isempty) {
+                newDrive = new isoDrive(drive, lTheOpenFileName, mediaid, error, options);
+                if(error) {
+                    delete newDrive;
+                    systemmessagebox("Error", "Could not mount the selected CD image.", "ok", "error", 1);
+                    chdir(Temp_CurrentDir);
+                    return;
+                }
+                delete cdrom;
+                cdrom = dynamic_cast<isoDrive*>(newDrive);
+                Drives[drive - 'A'] = cdrom;
+            }
         } else {
-            uint8_t mediaid = 0xF8;
-            int error = -1;
             newDrive = new isoDrive(drive, lTheOpenFileName, mediaid, error, options);
             if (error) {
+                delete newDrive;
                 systemmessagebox("Error","Could not mount the selected CD image.","ok","error", 1);
                 chdir( Temp_CurrentDir );
                 return;
             }
             cdrom = dynamic_cast<isoDrive*>(newDrive);
+            Drives[drive - 'A'] = cdrom;
         }
-        if (cdrom) DriveManager::ChangeDisk(drive-'A', cdrom);
+        if ((!isempty || !dos_kernel_disabled) && cdrom) DriveManager::ChangeDisk(drive-'A', cdrom);
 	}
 	chdir( Temp_CurrentDir );
 #endif
@@ -6766,7 +6780,12 @@ class IMGMOUNT : public Program {
 					emd->diskSizeK = ((sizes[0]*sizes[1]*sizes[2]*sizes[3])+512)/1024;
 					emd->UpdateFloppyType();
 				}
-				LOG_MSG("Mounted empty C/H/S/sz %u/%u/%u/%u %uKB",emd->cylinders,emd->heads,emd->sectors,emd->sector_size,emd->diskSizeK);
+				LOG_MSG("Mounted empty C/H/S/sz %u/%u/%u/%u %uKB",
+					(unsigned int)emd->cylinders,
+					(unsigned int)emd->heads,
+					(unsigned int)emd->sectors,
+					(unsigned int)emd->sector_size,
+					(unsigned int)emd->diskSizeK);
 				return emd;
 			}
 

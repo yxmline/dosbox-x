@@ -70,6 +70,7 @@ bool enable_supermegazeux_256colortext = false;
 
 extern bool vga_render_on_demand;
 extern signed char vga_render_on_demand_user;
+extern bool vga_ignore_extended_memory_bit;
 
 /* S3 streams processor state.
  * Registers are only loaded into hardware on vertical sync anyway. */
@@ -1116,6 +1117,10 @@ static uint8_t * EGA_Draw_VGA_Planar_Xlat8_LineOddEven(Bitu vidstart, Bitu line)
 
 static uint8_t * EGA_Draw_VGA_Planar_Xlat8_Line(Bitu vidstart, Bitu line) {
     return EGA_Planar_Common_Line<MCH_EGA,uint8_t>(TempLine,vidstart,line);
+}
+
+static uint8_t * VGA_Draw_VGA_Planar_Xlat8_LineOddEven(Bitu vidstart, Bitu line) {
+    return EGA_Planar_Common_LineOddEven<MCH_VGA,uint32_t>(TempLine,vidstart,line);
 }
 
 static uint8_t * VGA_Draw_VGA_Planar_Xlat32_Line(Bitu vidstart, Bitu line) {
@@ -6081,6 +6086,11 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
 			break;
 	}
 
+	/* EGA/VGA have a memory mode bit that enables >64KB.
+	 * We have to emulate this bit in order for 640x350x4 EGA mode to work */
+	if (IS_EGAVGA_ARCH && !(vga.seq.memory_mode&2/*Extended Memory*/) && !(vga_ignore_extended_memory_bit && IS_VGA_ARCH))
+		vga.draw.linear_mask &= 0xFFFFu;
+
 	if (IS_EGAVGA_ARCH)
 		vga.draw.planar_mask = vga.draw.linear_mask >> 2;
 	else if (machine == MCH_HERC && hercCard >= HERC_InColor)
@@ -7303,6 +7313,12 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 				if (vga.gfx.mode & 0x20) {
 					VGA_DrawLine = VGA_Draw_2BPP_Line_as_VGA;
 					VGA_DrawRawLine = VGA_RawDraw_2BPP_Line_as_VGA;
+				}
+				else if (vga.config.addr_shift >= 1/*word mode*/ && (vga.seq.clocking_mode & 0x04/*load every other clock cycle*/) &&
+					(vga.crtc.mode_control & 0x08/*increase memory address every other character clock*/)) {
+					VGA_DrawLine = VGA_Draw_VGA_Planar_Xlat8_LineOddEven;
+					VGA_DrawRawLine = VGA_RawDraw_VGA_Planar_Xlat32_Line;//TODO
+					vga.draw.blocks = (width+1u)>>1u;
 				}
 				else {
 					VGA_DrawLine = VGA_Draw_VGA_Planar_Xlat32_Line;
