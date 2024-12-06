@@ -463,10 +463,10 @@ VideoModeBlock ModeList_VGA_Paradise[]={
 
 VideoModeBlock ModeList_EGA_200[]={
 /* mode  ,type     ,sw  ,sh  ,tw ,th ,cw,ch ,pt,pstart  ,plength,htot,vtot,hde,vde special flags */
-{ 0x000  ,M_TEXT   ,320 ,400 ,40 ,25 ,8 ,8  ,8 ,0xB8000 ,0x0800 ,61  ,262 ,40 ,200 ,_EGA_HALF_CLOCK, 0},
-{ 0x001  ,M_TEXT   ,320 ,400 ,40 ,25 ,8 ,8  ,8 ,0xB8000 ,0x0800 ,61  ,262 ,40 ,200 ,_EGA_HALF_CLOCK, 0},
-{ 0x002  ,M_TEXT   ,640 ,400 ,80 ,25 ,8 ,8  ,4 ,0xB8000 ,0x1000 ,118 ,262 ,80 ,200 ,0, 0},
-{ 0x003  ,M_TEXT   ,640 ,400 ,80 ,25 ,8 ,8  ,4 ,0xB8000 ,0x1000 ,118 ,262 ,80 ,200 ,0, 0},
+{ 0x000  ,M_TEXT   ,320 ,200 ,40 ,25 ,8 ,8  ,8 ,0xB8000 ,0x0800 ,61  ,262 ,40 ,200 ,_EGA_HALF_CLOCK, 0},
+{ 0x001  ,M_TEXT   ,320 ,200 ,40 ,25 ,8 ,8  ,8 ,0xB8000 ,0x0800 ,61  ,262 ,40 ,200 ,_EGA_HALF_CLOCK, 0},
+{ 0x002  ,M_TEXT   ,640 ,200 ,80 ,25 ,8 ,8  ,4 ,0xB8000 ,0x1000 ,118 ,262 ,80 ,200 ,0, 0},
+{ 0x003  ,M_TEXT   ,640 ,200 ,80 ,25 ,8 ,8  ,4 ,0xB8000 ,0x1000 ,118 ,262 ,80 ,200 ,0, 0},
 { 0x004  ,M_CGA4   ,320 ,200 ,40 ,25 ,8 ,8  ,1 ,0xB8000 ,0x4000 ,61  ,262 ,40 ,200 ,_EGA_HALF_CLOCK	| _REPEAT1},
 { 0x005  ,M_CGA4   ,320 ,200 ,40 ,25 ,8 ,8  ,1 ,0xB8000 ,0x4000 ,61  ,262 ,40 ,200 ,_EGA_HALF_CLOCK	| _REPEAT1},
 { 0x006  ,M_CGA2   ,640 ,200 ,80 ,25 ,8 ,8  ,1 ,0xB8000 ,0x4000 ,118 ,262 ,80 ,200 ,_REPEAT1, 0},
@@ -887,7 +887,6 @@ static void FinishSetMode(bool clearmem) {
 		real_writeb(BIOSMEM_SEG,BIOSMEM_NB_ROWS,(uint8_t)(CurMode->theight-1));
 		real_writew(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT,(uint16_t)CurMode->cheight);
 		real_writeb(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,(0x60|(clearmem?0:0x80)));
-		real_writeb(BIOSMEM_SEG,BIOSMEM_SWITCHES,(!IS_VGA_ARCH && ega200)?0x08:0x09);
 		// this is an index into the dcc table:
 #if C_DEBUG
 		if(IS_VGA_ARCH) real_writeb(BIOSMEM_SEG,BIOSMEM_DCC_INDEX,DISP2_Active()?0x0c:0x0b);
@@ -1259,6 +1258,23 @@ static bool ShouldUseVPT(void) {
 
 bool unmask_irq0_on_int10_setmode = true;
 bool INT10_SetVideoMode(uint16_t mode) {
+	if (IS_EGA_ARCH) {
+		/* "After The War" forces EGA into 200-line CGA 8x8 text mode by
+		 * modifying the 16-bits at 0x487-0x488 to alter the EGA switches
+		 * and other info. For this trick to work here, we have to check
+		 * those bits every modeset. */
+		uint8_t egasw = (real_readb(BIOSMEM_SEG,BIOSMEM_SWITCHES)^0xFF)&0xF;
+		bool newega200 = (egasw == 0 || egasw == 1 || egasw == 2 || egasw == 6 || egasw == 7 || egasw == 8);
+
+		if (ega200 != newega200) {
+			LOG(LOG_MISC,LOG_DEBUG)(
+				"EGA: Guest application changed BIOS DATA AREA EGA switches, %s 200-line EGA modes (sw=0x%x)",
+				newega200?"enabled":"disabled",egasw);
+
+			ega200 = newega200;
+		}
+	}
+
 	if (CurMode&&CurMode->mode==7&&!IS_PC98_ARCH) {
 		VideoModeBlock *modelist;
 
@@ -2027,6 +2043,11 @@ att_text16:
 					att_data[i+6]=0x00;
 					att_data[i+7]=0x00;
 				}
+			} else if (IS_EGAVGA_ARCH && CurMode->sheight == 200) {
+				for (uint8_t ct=0;ct<8;ct++) {
+					att_data[ct]=ct;
+					att_data[ct+8]=ct+0x10;
+				}
 			} else {
 				for (uint8_t ct=0;ct<8;ct++) {
 					att_data[ct]=ct;
@@ -2172,6 +2193,15 @@ att_text16:
 							IO_Write(0x3c9,mtext_palette[i][1]);
 							IO_Write(0x3c9,mtext_palette[i][2]);
 						}
+					}
+					break;
+				}
+				else if (CurMode->sheight == 200) {
+					/* 200-line text modes need the CGA RGBI type palette, same as 200-line EGA 16-color */
+					for (i=0;i<64;i++) {
+						IO_Write(0x3c9,ega_palette[i][0]);
+						IO_Write(0x3c9,ega_palette[i][1]);
+						IO_Write(0x3c9,ega_palette[i][2]);
 					}
 					break;
 				} //FALLTHROUGH!!!!
