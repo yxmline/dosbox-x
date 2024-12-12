@@ -1560,8 +1560,19 @@ void DOSBOX_SetupConfigSections(void) {
                       "You can set code page either in the language file or with \"country\" setting in [config] section.");
     Pstring->SetBasic(true);
 
-    Pstring = secprop->Add_path("title",Property::Changeable::Always,"");
+    Pstring = secprop->Add_string("title",Property::Changeable::Always,"");
     Pstring->Set_help("Additional text to place in the title bar of the window.");
+    Pstring->SetBasic(true);
+
+    Pstring = secprop->Add_string("logo text",Property::Changeable::Always,"");
+    Pstring->Set_help("Text to place at the bottom of the screen during the startup logo. Text will line wrap automatically.\n"
+                      "To explicitly break to the next line, put \\n in the string.");
+    Pstring->SetBasic(true);
+
+    Pstring = secprop->Add_string("logo",Property::Changeable::Always,"");
+    Pstring->Set_help("Location of PNG images to use in place of the DOSBox-X logo at startup.\n"
+                      "This is the path of the base file name. For example logo=subdir\\sets\\007\\logo\n"
+                      "with machine=vgaonly will use subdir\\sets\\007\\logo224x224.png as the logo.");
     Pstring->SetBasic(true);
 
     Pbool = secprop->Add_bool("fastbioslogo",Property::Changeable::OnlyAtStart,false);
@@ -4758,6 +4769,13 @@ void DOSBOX_SetupConfigSections(void) {
                       "x=spec, y=spec\n"
                       "spec:   <number>    position adjust, can be positive or negative\n"
                       "        max-excess  if game sets maximum larger than int33 max x/y, adjust the position forward by the difference");
+
+    Pint = secprop->Add_int("int33 mickey threshold",Property::Changeable::WhenIdle,1);
+    Pint->Set_help("The smallest amount of mouse motion that will be reported to the guest. Motion below this amount is buffered until the threshold is met.\n"
+                   "Some DOS programs do not properly respond to small mouse movements causing effects like a sluggish cursor or cursor drift.\n"
+                   "Increase this option to the smallest value that achieves natural feeling motion.\n"
+                   "- Ultima Underworld: Use 2");
+    Pint->SetMinMax(1,16);
 
     Pint = secprop->Add_int("mouse report rate",Property::Changeable::WhenIdle,0);
     Pint->Set_help("Mouse reporting rate, or 0 for auto. This affects how often mouse events are reported to the guest through the mouse interrupt.\n"

@@ -54,6 +54,10 @@ extern bool PS1AudioCard;
 #include <sys/stat.h>
 #include "version_string.h"
 
+#if C_LIBPNG
+#include <png.h>
+#endif
+
 #if defined(DB_HAVE_CLOCK_GETTIME) && ! defined(WIN32)
 //time.h is already included
 #else
@@ -74,6 +78,11 @@ extern bool PS1AudioCard;
 #if defined(WIN32) && !defined(S_ISREG)
 # define S_ISREG(x) ((x & S_IFREG) == S_IFREG)
 #endif
+
+bool VGA_InitBiosLogo(unsigned int w,unsigned int h,unsigned int x,unsigned int y);
+void VGA_WriteBiosLogoBMP(unsigned int y,unsigned char *scanline,unsigned int w);
+void VGA_WriteBiosLogoPalette(unsigned int start,unsigned int count,unsigned char *rgb);
+void VGA_FreeBiosLogo(void);
 
 extern bool ega200;
 
@@ -7680,158 +7689,6 @@ bool AdapterROM_Read(Bitu address,unsigned long *size) {
     return false;
 }
 
-#include "src/gui/dosbox.vga16.bmp.h"
-#include "src/gui/dosbox.cga640.bmp.h"
-
-void DrawDOSBoxLogoCGA6(unsigned int x,unsigned int y) {
-    const unsigned char *s = dosbox_cga640_bmp;
-    const unsigned char *sf = s + sizeof(dosbox_cga640_bmp);
-    uint32_t width,height;
-    unsigned int dx,dy;
-    uint32_t off;
-    uint32_t sz;
-
-    if (memcmp(s,"BM",2)) return;
-    sz = host_readd(s+2); // size of total bitmap
-    off = host_readd(s+10); // offset of bitmap
-    if ((s+sz) > sf) return;
-    if ((s+14+40) > sf) return;
-
-    sz = host_readd(s+34); // biSize
-    if ((s+off+sz) > sf) return;
-    if (host_readw(s+26) != 1) return; // biBitPlanes
-    if (host_readw(s+28) != 1)  return; // biBitCount
-
-    width = host_readd(s+18);
-    height = host_readd(s+22);
-    if (width > (640-x) || height > (200-y)) return;
-
-    LOG(LOG_MISC,LOG_DEBUG)("Drawing CGA logo (%u x %u)",(int)width,(int)height);
-    for (dy=0;dy < height;dy++) {
-        uint32_t vram  = ((y+dy) >> 1) * 80;
-        vram += ((y+dy) & 1) * 0x2000;
-        vram += (x / 8);
-        s = dosbox_cga640_bmp + off + ((height-(dy+1))*((width+7)/8));
-        for (dx=0;dx < width;dx += 8) {
-            mem_writeb(0xB8000+vram,*s);
-            vram++;
-            s++;
-        }
-    }
-}
-
-/* HACK: Re-use the VGA logo */
-void DrawDOSBoxLogoPC98(unsigned int x,unsigned int y) {
-    const unsigned char *s = dosbox_vga16_bmp;
-    const unsigned char *sf = s + sizeof(dosbox_vga16_bmp);
-    unsigned int bit,dx,dy;
-    uint32_t width,height;
-    unsigned char p[4];
-    unsigned char c;
-    uint32_t off;
-    uint32_t sz;
-
-    if (memcmp(s,"BM",2)) return;
-    sz = host_readd(s+2); // size of total bitmap
-    off = host_readd(s+10); // offset of bitmap
-    if ((s+sz) > sf) return;
-    if ((s+14+40) > sf) return;
-
-    sz = host_readd(s+34); // biSize
-    if ((s+off+sz) > sf) return;
-    if (host_readw(s+26) != 1) return; // biBitPlanes
-    if (host_readw(s+28) != 4)  return; // biBitCount
-
-    width = host_readd(s+18);
-    height = host_readd(s+22);
-    if (width > (640-x) || height > (350-y)) return;
-
-    // EGA/VGA Write Mode 2
-    LOG(LOG_MISC,LOG_DEBUG)("Drawing VGA logo as PC-98 (%u x %u)",(int)width,(int)height);
-    for (dy=0;dy < height;dy++) {
-        uint32_t vram = ((y+dy) * 80) + (x / 8);
-        s = dosbox_vga16_bmp + off + ((height-(dy+1))*((width+1)/2));
-        for (dx=0;dx < width;dx += 8) {
-            p[0] = p[1] = p[2] = p[3] = 0;
-            for (bit=0;bit < 8;) {
-                c = (*s >> 4);
-                p[0] |= ((c >> 0) & 1) << (7 - bit);
-                p[1] |= ((c >> 1) & 1) << (7 - bit);
-                p[2] |= ((c >> 2) & 1) << (7 - bit);
-                p[3] |= ((c >> 3) & 1) << (7 - bit);
-                bit++;
-
-                c = (*s++) & 0xF;
-                p[0] |= ((c >> 0) & 1) << (7 - bit);
-                p[1] |= ((c >> 1) & 1) << (7 - bit);
-                p[2] |= ((c >> 2) & 1) << (7 - bit);
-                p[3] |= ((c >> 3) & 1) << (7 - bit);
-                bit++;
-            }
-
-            mem_writeb(0xA8000+vram,p[0]);
-            mem_writeb(0xB0000+vram,p[1]);
-            mem_writeb(0xB8000+vram,p[2]);
-            mem_writeb(0xE0000+vram,p[3]);
-            vram++;
-        }
-    }
-}
-
-void DrawDOSBoxLogoVGA(unsigned int x,unsigned int y) {
-    const unsigned char *s = dosbox_vga16_bmp;
-    const unsigned char *sf = s + sizeof(dosbox_vga16_bmp);
-    unsigned int bit,dx,dy;
-    uint32_t width,height;
-    uint32_t vram;
-    uint32_t off;
-    uint32_t sz;
-
-    if (memcmp(s,"BM",2)) return;
-    sz = host_readd(s+2); // size of total bitmap
-    off = host_readd(s+10); // offset of bitmap
-    if ((s+sz) > sf) return;
-    if ((s+14+40) > sf) return;
-
-    sz = host_readd(s+34); // biSize
-    if ((s+off+sz) > sf) return;
-    if (host_readw(s+26) != 1) return; // biBitPlanes
-    if (host_readw(s+28) != 4)  return; // biBitCount
-
-    width = host_readd(s+18);
-    height = host_readd(s+22);
-    if (width > (640-x) || height > (350-y)) return;
-
-    // EGA/VGA Write Mode 2
-    LOG(LOG_MISC,LOG_DEBUG)("Drawing VGA logo (%u x %u)",(int)width,(int)height);
-    IO_Write(0x3CE,0x05); // graphics mode
-    IO_Write(0x3CF,0x02); // read=0 write=2 odd/even=0 shift=0 shift256=0
-    IO_Write(0x3CE,0x03); // data rotate
-    IO_Write(0x3CE,0x00); // no rotate, no XOP
-    for (bit=0;bit < 8;bit++) {
-        const unsigned char shf = ((bit & 1) ^ 1) * 4;
-
-        IO_Write(0x3CE,0x08); // bit mask
-        IO_Write(0x3CF,0x80 >> bit);
-
-        for (dy=0;dy < height;dy++) {
-            vram = ((y+dy) * 80) + (x / 8);
-            s = dosbox_vga16_bmp + off + (bit/2) + ((height-(dy+1))*((width+1)/2));
-            for (dx=bit;dx < width;dx += 8) {
-                mem_readb(0xA0000+vram); // load VGA latches
-                mem_writeb(0xA0000+vram,(*s >> shf) & 0xF);
-                vram++;
-                s += 4;
-            }
-        }
-    }
-    // restore write mode 0
-    IO_Write(0x3CE,0x05); // graphics mode
-    IO_Write(0x3CF,0x00); // read=0 write=0 odd/even=0 shift=0 shift256=0
-    IO_Write(0x3CE,0x08); // bit mask
-    IO_Write(0x3CF,0xFF);
-}
-
 static int bios_pc98_posx = 0;
 extern bool tooutttf;
 
@@ -9352,6 +9209,30 @@ void BuildACPITable(void) {
 	rsdt_tw.finish();
 }
 
+#if C_LIBPNG
+# include "dosbox224x93.h"
+# include "dosbox224x163.h"
+# include "dosbox224x186.h"
+# include "dosbox224x224.h"
+
+static const unsigned char *BIOSLOGO_PNG_PTR = NULL;
+static const unsigned char *BIOSLOGO_PNG_FENCE = NULL;
+
+static void BIOSLOGO_PNG_READ(png_structp context,png_bytep buf,size_t count) {
+	(void)context;
+
+	while (count > 0 && BIOSLOGO_PNG_PTR < BIOSLOGO_PNG_FENCE) {
+		*buf++ = *BIOSLOGO_PNG_PTR++;
+		count--;
+	}
+	while (count > 0) {
+		*buf++ = 0;
+		count--;
+	}
+}
+
+#endif
+
 extern unsigned int INT13Xfer;
 
 class BIOS:public Module_base{
@@ -10723,6 +10604,8 @@ private:
     CALLBACK_HandlerObject cb_bios_startup_screen;
     static Bitu cb_bios_startup_screen__func(void) {
         const Section_prop* section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+        const char *logo_text = section->Get_string("logo text");
+        const char *logo = section->Get_string("logo");
         bool fastbioslogo=section->Get_bool("fastbioslogo")||control->opt_fastbioslogo||control->opt_fastlaunch;
         if (fastbioslogo && machine != MCH_PC98) {
 #if defined(USE_TTF)
@@ -10754,9 +10637,9 @@ private:
                 oldcols = oldlins = 0;
         }
 #endif
-        if (machine == MCH_MDA || machine == MCH_HERC) {
-            textsplash = true;
-        }
+
+	textsplash = true;
+
         char logostr[8][34];
         strcpy(logostr[0], "+---------------------+");
         strcpy(logostr[1], "|     Welcome  To     |");
@@ -10768,39 +10651,19 @@ private:
         sprintf(logostr[6], "| Version %10s  |", VERSION);
         strcpy(logostr[7], "+---------------------+");
 startfunction:
-        int logo_x,logo_y,x=2,y=2,rowheight=8;
+        int logo_x,logo_y,x=2,y=2;
+
         logo_y = 2;
-        logo_x = 80 - 2 - (224/8);
+        if (machine == MCH_HERC || machine == MCH_MDA)
+            logo_x = 80 - 2 - (224/9);
+        else
+            logo_x = 80 - 2 - (224/8);
 
         if (cpu.pmode) E_Exit("BIOS error: STARTUP function called while in protected/vm86 mode");
 
-        if (IS_VGA_ARCH && !textsplash) {
-            rowheight = 16;
+        if (IS_VGA_ARCH) {
             reg_eax = 18;       // 640x480 16-color
             CALLBACK_RunRealInt(0x10);
-            DrawDOSBoxLogoVGA((unsigned int)logo_x*8u,(unsigned int)logo_y*(unsigned int)rowheight);
-        }
-        else if (machine == MCH_EGA && !textsplash && !ega200 && vga.mem.memsize >= (128*1024)) { /* not ega200 and at least 128KB of VRAM */
-            rowheight = 14;
-            reg_eax = 16; // 640x350 16-color
-
-            CALLBACK_RunRealInt(0x10);
-
-            // color correction: change Dark Puke Yellow to brown
-            IO_Read(0x3DA); IO_Read(0x3BA);
-            IO_Write(0x3C0,0x06);
-            IO_Write(0x3C0,0x14); // red=1 green=1 blue=0
-            IO_Read(0x3DA); IO_Read(0x3BA);
-            IO_Write(0x3C0,0x20);
-
-            DrawDOSBoxLogoVGA((unsigned int)logo_x*8u,(unsigned int)logo_y*(unsigned int)rowheight);
-        }
-        else if ((machine == MCH_CGA || machine == MCH_EGA || machine == MCH_MCGA || machine == MCH_PCJR || machine == MCH_AMSTRAD || machine == MCH_TANDY) && !textsplash) {
-            rowheight = 8;
-            reg_eax = 6;        // 640x200 2-color
-            CALLBACK_RunRealInt(0x10);
-
-            DrawDOSBoxLogoCGA6((unsigned int)logo_x*8u,(unsigned int)logo_y*(unsigned int)rowheight);
         }
         else if (machine == MCH_PC98) {
             // clear the graphics layer
@@ -10822,58 +10685,10 @@ startfunction:
             CALLBACK_RunRealInt(0x18);
 
             bios_pc98_posx = x;
-
-            reg_eax = 0x4200;   // setup 640x400 graphics
-            reg_ecx = 0xC000;
-            CALLBACK_RunRealInt(0x18);
-
-            // enable the 4th bitplane, for 16-color analog graphics mode.
-            // TODO: When we allow the user to emulate only the 8-color BGR digital mode,
-            //       logo drawing should use an alternate drawing method.
-            IO_Write(0x6A,0x01);    // enable 16-color analog mode (this makes the 4th bitplane appear)
-            IO_Write(0x6A,0x04);    // but we don't need the EGC graphics
-            // If we caught a game mid-page flip, set the display and VRAM pages back to zero
-            IO_Write(0xA4,0x00);    // display page 0
-            IO_Write(0xA6,0x00);    // write to page 0
-
-            // program a VGA-like color palette so we can re-use the VGA logo
-            for (unsigned int i=0;i < 16;i++) {
-                unsigned int bias = (i & 8) ? 0x5 : 0x0;
-
-                IO_Write(0xA8,i);   // DAC index
-                if (i != 6) {
-                    IO_Write(0xAA,((i & 2) ? 0xA : 0x0) + bias);    // green
-                    IO_Write(0xAC,((i & 4) ? 0xA : 0x0) + bias);    // red
-                    IO_Write(0xAE,((i & 1) ? 0xA : 0x0) + bias);    // blue
-                }
-                else { // brown #6 instead of puke yellow
-                    IO_Write(0xAA, 0x5 + bias);    // green
-                    IO_Write(0xAC, 0xA + bias);    // red
-                    IO_Write(0xAE, 0x0 + bias);    // blue
-                }
-            }
-
-            if (textsplash) {
-                unsigned int bo, lastline = 7;
-                for (unsigned int i=0; i<=lastline; i++) {
-                    for (unsigned int j=0; j<strlen(logostr[i]); j++) {
-                        bo = (((unsigned int)(i+2) * 80u) + (unsigned int)(j+0x36)) * 2u;
-                        mem_writew(0xA0000+bo,i==0&&j==0?0x300B:(i==0&&j==strlen(logostr[0])-1?0x340B:(i==lastline&&j==0?0x380B:(i==lastline&&j==strlen(logostr[lastline])-1?0x3C0B:(logostr[i][j]=='-'&&(i==0||i==lastline)?0x240B:(logostr[i][j]=='|'?0x260B:logostr[i][j]%0xff))))));
-                        mem_writeb(0xA2000+bo+1,0xE1);
-                    }
-                }
-            } else {
-                if (!control->opt_fastlaunch) DrawDOSBoxLogoPC98((unsigned int)logo_x*8u,(unsigned int)logo_y*(unsigned int)rowheight);
-                reg_eax = 0x4000;   // show the graphics layer (PC-98) so we can render the DOSBox-X logo
-                CALLBACK_RunRealInt(0x18);
-            }
         }
         else {
             reg_eax = 3;        // 80x25 text
             CALLBACK_RunRealInt(0x10);
-
-            // TODO: For CGA, PCjr, and Tandy, we could render a 4-color CGA version of the same logo.
-            //       And for MDA/Hercules, we could render a monochromatic ASCII art version.
         }
 
 #if defined(USE_TTF)
@@ -10889,6 +10704,162 @@ startfunction:
         }
 
         BIOS_Int10RightJustifiedPrint(x,y,msg);
+
+        {
+            png_bytep rows[1];
+            unsigned char *row = NULL;/*png_width*/
+            png_structp png_context = NULL;
+            png_infop png_info = NULL;
+            png_infop png_end = NULL;
+            png_uint_32 png_width = 0,png_height = 0;
+            int png_bit_depth = 0,png_color_type = 0,png_interlace = 0,png_filter = 0,png_compression = 0;
+            png_color *palette = NULL;
+            int palette_count = 0;
+            std::string user_filename;
+            unsigned int rowheight = 8;
+            const char *filename = NULL;
+            const unsigned char *inpng = NULL;
+            size_t inpng_size = 0;
+            FILE *png_fp = NULL;
+
+            /* If the user wants a custom logo, just put it in the same directory as the .conf file and have at it.
+             * Requirements: The PNG must be 1/2/4/8bpp with a color palette, not grayscale, not truecolor, and
+             * no alpha channel data at all. No interlacing. Must be 224x224 or smaller, and should fit the size
+             * indicated in the filename. There are multiple versions, one for each vertical resolution of common
+             * CGA/EGA/VGA/etc. modes: 480-line, 400-line, 350-line, and 200-line. All images other than the 480-line
+             * one have a non-square pixel aspect ratio. Please take that into consideration. */
+            if (IS_VGA_ARCH) {
+                if (logo) user_filename = std::string(logo) + "224x224.png";
+                filename = "dosbox224x224.png";
+                inpng_size = dosbox224x224_png_len;
+                inpng = dosbox224x224_png;
+                rowheight = 16;
+            }
+            else if (IS_PC98_ARCH) {
+                if (logo) user_filename = std::string(logo) + "224x186.png";
+                filename = "dosbox224x186.png";
+                inpng_size = dosbox224x186_png_len;
+                inpng = dosbox224x186_png;
+                rowheight = 16;
+            }
+            else if (IS_EGA_ARCH) {
+                if (ega200) {
+                    if (logo) user_filename = std::string(logo) + "224x93.png";
+                    filename = "dosbox224x93.png";
+                    inpng_size = dosbox224x93_png_len;
+                    inpng = dosbox224x93_png;
+                }
+                else {
+                    if (logo) user_filename = std::string(logo) + "224x163.png";
+                    filename = "dosbox224x163.png";
+                    inpng_size = dosbox224x163_png_len;
+                    inpng = dosbox224x163_png;
+                    rowheight = 14;
+                }
+            }
+            else if (machine == MCH_HERC || machine == MCH_MDA) {
+                if (logo) user_filename = std::string(logo) + "224x163.png";
+                filename = "dosbox224x163.png";
+                inpng_size = dosbox224x163_png_len;
+                inpng = dosbox224x163_png;
+                rowheight = 14;
+            }
+            else {
+                if (logo) user_filename = std::string(logo) + "224x93.png";
+                filename = "dosbox224x93.png";
+                inpng_size = dosbox224x93_png_len;
+                inpng = dosbox224x93_png;
+            }
+
+            if (png_fp == NULL && !user_filename.empty())
+                png_fp = fopen(user_filename.c_str(),"rb");
+            if (png_fp == NULL && filename != NULL)
+                png_fp = fopen(filename,"rb");
+
+            if (png_fp || inpng) {
+                png_context = png_create_read_struct(PNG_LIBPNG_VER_STRING,NULL/*err*/,NULL/*err fn*/,NULL/*warn fn*/);
+                if (png_context) {
+                    png_info = png_create_info_struct(png_context);
+                    if (png_info) {
+                        png_set_user_limits(png_context,320,320);
+                    }
+                }
+            }
+
+            if (png_context && png_info) {
+                if (png_fp) {
+                    LOG(LOG_MISC,LOG_DEBUG)("Using external file logo %s",filename);
+                    png_init_io(png_context,png_fp);
+                }
+                else if (inpng) {
+                    LOG(LOG_MISC,LOG_DEBUG)("Using built-in logo");
+                    BIOSLOGO_PNG_PTR = inpng;
+                    BIOSLOGO_PNG_FENCE = inpng + inpng_size;
+                    png_set_read_fn(png_context,NULL,BIOSLOGO_PNG_READ);
+                }
+                else {
+                    abort(); /* should not be here */
+                }
+
+                png_read_info(png_context,png_info);
+                png_get_IHDR(png_context,png_info,&png_width,&png_height,&png_bit_depth,&png_color_type,&png_interlace,&png_compression,&png_filter);
+
+                LOG(LOG_MISC,LOG_DEBUG)("BIOS png image: w=%u h=%u bitdepth=%u ct=%u il=%u compr=%u filt=%u",
+                    png_width,png_height,png_bit_depth,png_color_type,png_interlace,png_compression,png_filter);
+
+                if (png_width != 0 && png_height != 0 && png_bit_depth != 0 && png_bit_depth <= 8 &&
+                    (png_color_type&(PNG_COLOR_MASK_PALETTE|PNG_COLOR_MASK_COLOR)) == (PNG_COLOR_MASK_PALETTE|PNG_COLOR_MASK_COLOR)/*palatted color only*/ &&
+                    png_interlace == 0/*do not support interlacing*/) {
+                    LOG(LOG_MISC,LOG_DEBUG)("PNG accepted");
+                    /* please convert everything to 8bpp for us */
+                    png_set_strip_16(png_context);
+                    png_set_packing(png_context);
+                    png_get_PLTE(png_context,png_info,&palette,&palette_count);
+
+                    row = new unsigned char[png_width + 32];
+                    rows[0] = row;
+
+                    if (palette != 0 && palette_count > 0 && palette_count <= 256 && row != NULL) {
+                        textsplash = false;
+                        if (machine == MCH_HERC || machine == MCH_MDA)
+                            VGA_InitBiosLogo(png_width,png_height,logo_x*9,logo_y*rowheight);
+                        else
+                            VGA_InitBiosLogo(png_width,png_height,logo_x*8,logo_y*rowheight);
+
+                        {
+                            unsigned char tmp[256*3];
+                            for (unsigned int x=0;x < (unsigned int)palette_count;x++) {
+                                tmp[(x*3)+0] = palette[x].red;
+                                tmp[(x*3)+1] = palette[x].green;
+                                tmp[(x*3)+2] = palette[x].blue;
+                            }
+                            VGA_WriteBiosLogoPalette(0,palette_count,tmp);
+                        }
+
+                        for (unsigned int y=0;y < png_height;y++) {
+                            png_read_rows(png_context,rows,NULL,1);
+                            VGA_WriteBiosLogoBMP(y,row,png_width);
+                        }
+                    }
+
+                    delete[] row;
+                }
+            }
+
+            if (png_context) png_destroy_read_struct(&png_context,&png_info,&png_end);
+            if (png_fp) fclose(png_fp);
+        }
+
+        if (machine == MCH_PC98 && textsplash) {
+            unsigned int bo, lastline = 7;
+            for (unsigned int i=0; i<=lastline; i++) {
+                for (unsigned int j=0; j<strlen(logostr[i]); j++) {
+                    bo = (((unsigned int)(i+2) * 80u) + (unsigned int)(j+0x36)) * 2u;
+                    mem_writew(0xA0000+bo,i==0&&j==0?0x300B:(i==0&&j==strlen(logostr[0])-1?0x340B:(i==lastline&&j==0?0x380B:(i==lastline&&j==strlen(logostr[lastline])-1?0x3C0B:(logostr[i][j]=='-'&&(i==0||i==lastline)?0x240B:(logostr[i][j]=='|'?0x260B:logostr[i][j]%0xff))))));
+                    mem_writeb(0xA2000+bo+1,0xE1);
+                }
+            }
+        }
         if (machine != MCH_PC98 && textsplash) {
             Bitu edx = reg_edx;
             //int oldx = x, oldy = y; UNUSED
@@ -10981,6 +10952,7 @@ startfunction:
                             case S3_Trio64V:    card = "S3 Trio64V+ SVGA"; break;
                             case S3_ViRGE:      card = "S3 ViRGE SVGA"; break;
                             case S3_ViRGEVX:    card = "S3 ViRGE VX SVGA"; break;
+                            case S3_Generic:    card = "S3"; break;
                         }
                         break;
                     case SVGA_ATI:
@@ -11078,6 +11050,89 @@ startfunction:
             BIOS_Int10RightJustifiedPrint(x,y,"ISA Plug & Play BIOS active\n");
         }
 
+        if (*logo_text) {
+            const size_t max_w = 76;
+            const char *s = logo_text;
+            const int saved_y = y;
+            size_t max_h;
+            char tmp[81];
+            int x,y;
+
+            x = 0; /* use it here as index to tmp[] */
+            if (IS_VGA_ARCH) /* VGA 640x480 has 30 lines (480/16) not 25 */
+                max_h = 30;
+            else
+                max_h = 25;
+            y = max_h - 3;
+
+            y--;
+            BIOS_Int10RightJustifiedPrint(x+2,y,"\n"); /* sync cursor */
+
+            while (*s) {
+                bool newline = false;
+
+                assert((size_t)x < max_w);
+                if (isalpha(*s) || isdigit(*s)) {
+                    size_t wi = 1;/*we already know s[0] fits the criteria*/
+                    while (s[wi] != 0 && (isalpha(s[wi]) || isdigit(s[wi]))) wi++;
+
+                    if (wi >= 24) { /* don't let overlong words crowd out the text */
+                        if (((size_t)x+wi) > max_w)
+                            wi = max_w - (size_t)x;
+                    }
+
+                    if (((size_t)x+wi) < max_w) {
+                        memcpy(tmp+x,s,wi);
+                        x += wi;
+                        s += wi;
+                    }
+                    else {
+                        newline = true;
+                    }
+                }
+                else if (*s == ' ') {
+                    if ((size_t)x < max_w) tmp[x++] = *s++;
+
+                    if ((size_t)x == max_w) {
+                        while (*s == ' ') s++;
+                        newline = true;
+                    }
+                }
+                else if (*s == '\\') {
+                    s++;
+                    if (*s == 'n') {
+                        newline = true; /* \n */
+                        s++;
+                    }
+                    else {
+                        s++;
+                    }
+                }
+                else {
+                    tmp[x++] = *s++;
+                }
+
+                assert((size_t)x <= max_w);
+                if ((size_t)x >= max_w || newline) {
+                    tmp[x] = 0;
+                    BIOS_Int10RightJustifiedPrint(x+2,y,tmp);
+                    x = 0;
+                    BIOS_Int10RightJustifiedPrint(x+2,y,"\n"); /* next line, which increments y */
+                    if ((size_t)y >= max_h) break;
+                }
+            }
+
+            if (x != 0 && (size_t)y < max_h) {
+                tmp[x] = 0;
+                BIOS_Int10RightJustifiedPrint(x+2,y,tmp);
+                x = 0;
+                BIOS_Int10RightJustifiedPrint(x+2,y,"\n"); /* next line, which increments y */
+            }
+
+            y = saved_y - 1;
+            BIOS_Int10RightJustifiedPrint(x+2,y,"\n"); /* sync cursor */
+        }
+
 #if !defined(C_EMSCRIPTEN)
         BIOS_Int10RightJustifiedPrint(x,y,"\nHit SPACEBAR to pause at this screen\n", false, true);
         BIOS_Int10RightJustifiedPrint(x,y,"\nPress DEL to enter BIOS setup screen\n", false, true);
@@ -11162,6 +11217,7 @@ startfunction:
 
                 if ((machine != MCH_PC98 && reg_ax == 0x5300/*DEL*/) || (machine == MCH_PC98 && reg_ax == 0x3900)) {
                     bios_setup = true;
+                    VGA_FreeBiosLogo();
                     showBIOSSetup(card, x, y);
                     break;
                 }
@@ -11302,6 +11358,7 @@ startfunction:
         }
 #endif
 
+        VGA_FreeBiosLogo();
         if (machine == MCH_PC98) {
             reg_eax = 0x4100;   // hide the graphics layer (PC-98)
             CALLBACK_RunRealInt(0x18);
@@ -12364,6 +12421,7 @@ void ROMBIOS_Init() {
 			    LOG_MSG("Will load IBM ROM BASIC to %05lx-%05lx",(unsigned long)ibm_rom_basic_base,(unsigned long)(ibm_rom_basic_base+ibm_rom_basic_size-1));
 			    Bitu base = ROMBIOS_GetMemory(ibm_rom_basic_size,"IBM ROM BASIC",1u/*page align*/,ibm_rom_basic_base);
 			    rombios_alloc.setMaxDynamicAllocationAddress(ibm_rom_basic_base - 1);
+			    (void)base;
 
 			    FILE *fp = fopen(ibm_rom_basic.c_str(),"rb");
 			    if (fp != NULL) {
