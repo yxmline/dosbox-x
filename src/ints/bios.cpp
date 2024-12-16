@@ -25,6 +25,7 @@
 #include "regs.h"
 #include "timer.h"
 #include "cpu.h"
+#include "bitop.h"
 #include "callback.h"
 #include "inout.h"
 #include "pic.h"
@@ -92,6 +93,8 @@ unsigned int ACPI_IO_BASE = 0x820;
 unsigned int ACPI_PM1A_EVT_BLK = 0x820;
 unsigned int ACPI_PM1A_CNT_BLK = 0x824;
 unsigned int ACPI_PM_TMR_BLK = 0x830;
+/* debug region 0x840-0x84F */
+unsigned int ACPI_DEBUG_IO = 0x840;
 
 std::string ibm_rom_basic;
 size_t ibm_rom_basic_size = 0;
@@ -166,6 +169,34 @@ unsigned int reset_post_delay = 0;
 
 Bitu call_irq_default = 0;
 uint16_t biosConfigSeg=0;
+
+static constexpr unsigned int ACPI_PMTIMER_CLOCK_RATE = 3579545; /* 3.579545MHz */
+
+pic_tickindex_t ACPI_PMTIMER_BASE_TIME = 0;
+uint32_t ACPI_PMTIMER_BASE_COUNT = 0;
+uint32_t ACPI_PMTIMER_MASK = 0xFFFFFFu; /* 24-bit mode */
+
+uint32_t ACPI_PMTIMER(void) {
+	pic_tickindex_t pt = PIC_FullIndex() - ACPI_PMTIMER_BASE_TIME;
+	uint32_t ct = (uint32_t)((pt * ACPI_PMTIMER_CLOCK_RATE) / 1000.0);
+	return ct;
+}
+
+void ACPI_PMTIMER_Event(Bitu /*val*/);
+void ACPI_PMTIMER_ScheduleNext(void) {
+	const uint32_t now_ct = ACPI_PMTIMER() & ACPI_PMTIMER_MASK;
+	const uint32_t next_delay_ct = (ACPI_PMTIMER_MASK + 1u) - now_ct;
+	const pic_tickindex_t delay = (1000.0 * next_delay_ct) / (pic_tickindex_t)ACPI_PMTIMER_CLOCK_RATE;
+
+	LOG(LOG_MISC,LOG_DEBUG)("ACPI PM TIMER SCHEDULE: now=0x%x next=0x%x delay=%.3f",now_ct,next_delay_ct,(double)delay);
+	PIC_AddEvent(ACPI_PMTIMER_Event,delay);
+}
+
+void ACPI_PMTIMER_CHECK(void) { /* please don't call this often */
+	PIC_RemoveEvents(ACPI_PMTIMER_Event);
+	LOG(LOG_MISC,LOG_DEBUG)("ACPI PM TIMER CHECK");
+	ACPI_PMTIMER_ScheduleNext();
+}
 
 Bitu BIOS_PC98_KEYBOARD_TRANSLATION_LOCATION = ~0u;
 Bitu BIOS_DEFAULT_IRQ0_LOCATION = ~0u;       // (RealMake(0xf000,0xfea5))
@@ -243,9 +274,25 @@ static void ACPI_SCI_Check(void) {
 
 void ACPI_PowerButtonEvent(void) {
 	if (ACPI_SCI_EN) {
-		ACPI_PM1_Status |= ACPI_PM1_Enable_PWRBTN_EN;
+		if (!(ACPI_PM1_Status & ACPI_PM1_Enable_PWRBTN_EN)) {
+			ACPI_PM1_Status |= ACPI_PM1_Enable_PWRBTN_EN;
+			ACPI_SCI_Check();
+		}
+	}
+}
+
+void ACPI_PMTIMER_Event(Bitu /*val*/) {
+	if (!(ACPI_PM1_Status & ACPI_PM1_Enable_TMR_EN)) {
+		ACPI_PM1_Status |= ACPI_PM1_Enable_TMR_EN;
 		ACPI_SCI_Check();
 	}
+
+	ACPI_PMTIMER_ScheduleNext();
+}
+
+/* you can't very well write strings with this, but you could write codes */
+static void acpi_cb_port_debug_w(Bitu /*port*/,Bitu val,Bitu /*iolen*/) {
+	LOG(LOG_MISC,LOG_DEBUG)("ACPI debug: 0x%x\n",(unsigned int)val);
 }
 
 static void acpi_cb_port_smi_cmd_w(Bitu /*port*/,Bitu val,Bitu /*iolen*/) {
@@ -256,12 +303,14 @@ static void acpi_cb_port_smi_cmd_w(Bitu /*port*/,Bitu val,Bitu /*iolen*/) {
 		if (!ACPI_SCI_EN) {
 			LOG(LOG_MISC,LOG_DEBUG)("Guest enabled ACPI");
 			ACPI_SCI_EN = true;
+			ACPI_PMTIMER_CHECK();
 			ACPI_SCI_Check();
 		}
 	}
 	else if (val == ACPI_DISABLE_CMD) {
 		if (ACPI_SCI_EN) {
 			LOG(LOG_MISC,LOG_DEBUG)("Guest disabled ACPI");
+			ACPI_PMTIMER_CHECK();
 			ACPI_SCI_EN = false;
 		}
 	}
@@ -315,6 +364,13 @@ static Bitu acpi_cb_port_evten_blk_r(Bitu port,Bitu /*iolen*/) {
 	return ret;
 }
 
+static Bitu acpi_cb_port_tmr_r(Bitu port,Bitu /*iolen*/) {
+	/* 24 or 32-bit TMR_VAL (depends on the mask value and whether our ACPI structures tell the OS it's 32-bit wide) */
+	Bitu ret = (Bitu)ACPI_PMTIMER();
+	LOG(LOG_MISC,LOG_DEBUG)("ACPI_PM_TMR read port %x ret %x",(unsigned int)port,(unsigned int)ret);
+	return ret;
+}
+
 static void acpi_cb_port_evten_blk_w(Bitu port,Bitu val,Bitu iolen) {
 	/* 16-bit register (PM1_EVT_LEN/2 == 2) */
 	LOG(LOG_MISC,LOG_DEBUG)("ACPI_PM1_EVT_BLK(enable) write port %x val %x iolen %x",(unsigned int)port,(unsigned int)val,(unsigned int)iolen);
@@ -333,9 +389,8 @@ static IO_ReadHandler* acpi_cb_port_r(IO_CalloutObject &co,Bitu port,Bitu iolen)
 	else if ((port & (~1u)) == ACPI_PM1A_CNT_BLK && iolen >= 2)
 		return acpi_cb_port_cnt_blk_r;
 	/* The ACPI specification says nothing about reading SMI_CMD so assume that means write only */
-	else if ((port & (~3u)) == ACPI_PM_TMR_BLK) {
-		LOG(LOG_MISC,LOG_DEBUG)("read ACPI_PM_TMR_BLK port=0x%x iolen=%u",(unsigned int)port,(unsigned int)iolen);
-	}
+	else if ((port & (~3u)) == ACPI_PM_TMR_BLK && iolen >= 4)
+		return acpi_cb_port_tmr_r;
 
 	return NULL;
 }
@@ -352,6 +407,8 @@ static IO_WriteHandler* acpi_cb_port_w(IO_CalloutObject &co,Bitu port,Bitu iolen
 		return acpi_cb_port_cnt_blk_w;
 	else if ((port & (~3u)) == ACPI_SMI_CMD)
 		return acpi_cb_port_smi_cmd_w;
+	else if (port == ACPI_DEBUG_IO && iolen >= 4)
+		return acpi_cb_port_debug_w;
 	else if ((port & (~3u)) == ACPI_PM_TMR_BLK) {
 		LOG(LOG_MISC,LOG_DEBUG)("write ACPI_PM_TMR_BLK port=0x%x iolen=%u",(unsigned int)port,(unsigned int)iolen);
 	}
@@ -8345,6 +8402,11 @@ namespace ACPIMethodFlags {
 	};
 }
 
+static constexpr unsigned int ACPIrtIO_16BitDecode = (1u << 0u);
+
+static constexpr unsigned int ACPIrtMR24_Writeable = (1u << 0u);
+static constexpr unsigned int ACPIrtMR32_Writeable = (1u << 0u);
+
 namespace ACPIFieldFlag {
 	namespace AccessType {
 		enum {
@@ -8588,6 +8650,16 @@ class ACPIAMLWriter {
 		unsigned char* writeptr(void) const;
 		void begin(unsigned char *n_w,unsigned char *n_f);
 	public:
+		ACPIAMLWriter &rtDMA(const unsigned char bitmask,const unsigned char flags);
+		ACPIAMLWriter &rtMemRange24(const unsigned int flags,const unsigned int minr,const unsigned int maxr,const unsigned int alignr,const unsigned int rangr);
+		ACPIAMLWriter &rtMemRange32(const unsigned int flags,const unsigned int minr,const unsigned int maxr,const unsigned int alignr,const unsigned int rangr);
+		ACPIAMLWriter &rtIO(const unsigned int flags,const uint16_t minport,const uint16_t maxport,const uint8_t alignment,const uint8_t rlength);
+		ACPIAMLWriter &rtIRQ(const uint16_t bitmask/*bits [15:0] correspond to IRQ 15-0*/,const bool pciStyle=false);
+		ACPIAMLWriter &rtHdrSmall(const unsigned char itemName,const unsigned int length);
+		ACPIAMLWriter &rtHdrLarge(const unsigned char itemName,const unsigned int length);
+		ACPIAMLWriter &rtBegin(void);
+		ACPIAMLWriter &rtEnd(void);
+	public:
 		ACPIAMLWriter &NameOp(const char *name);
 		ACPIAMLWriter &ByteOp(const unsigned char v);
 		ACPIAMLWriter &WordOp(const unsigned int v);
@@ -8596,14 +8668,18 @@ class ACPIAMLWriter {
 		ACPIAMLWriter &OpRegionOp(const char *name,const ACPIRegionSpace regionspace);
 		ACPIAMLWriter &FieldOp(const char *name,const unsigned int pred_size,const unsigned int fieldflag);
 		ACPIAMLWriter &FieldOpEnd(void);
-		ACPIAMLWriter &ScopeOp(const char *name,const unsigned int pred_size=MaxPkgSize);
+		ACPIAMLWriter &ScopeOp(const unsigned int pred_size=MaxPkgSize);
 		ACPIAMLWriter &ScopeOpEnd(void);
 		ACPIAMLWriter &PackageOp(const unsigned int pred_size=MaxPkgSize);
+		ACPIAMLWriter &RootCharScopeOp(void);
 		ACPIAMLWriter &PackageOpEnd(void);
+		ACPIAMLWriter &RootCharOp(void);
 		ACPIAMLWriter &NothingOp(void);
 		ACPIAMLWriter &ZeroOp(void);
 		ACPIAMLWriter &OneOp(void);
 		ACPIAMLWriter &AliasOp(const char *what,const char *to_what);
+		ACPIAMLWriter &BufferOpEnd(void);
+		ACPIAMLWriter &BufferOp(const unsigned int pred_size=MaxPkgSize);
 		ACPIAMLWriter &BufferOp(const unsigned char *data,const size_t datalen);
 		ACPIAMLWriter &DeviceOp(const char *name,const unsigned int pred_size=MaxPkgSize);
 		ACPIAMLWriter &DeviceOpEnd(void);
@@ -8631,11 +8707,15 @@ class ACPIAMLWriter {
 		ACPIAMLWriter &PkgLength(const unsigned int len,unsigned char* &wp,const unsigned int minlen=1);
 		ACPIAMLWriter &PkgLength(const unsigned int len,const unsigned int minlen=1);
 		ACPIAMLWriter &Name(const char *name);
+		ACPIAMLWriter &MultiNameOp(void);
+		ACPIAMLWriter &DualNameOp(void);
 		ACPIAMLWriter &BeginPkg(const unsigned int pred_length=MaxPkgSize);
 		ACPIAMLWriter &EndPkg(void);
 		ACPIAMLWriter &CountElement(void);
 	private:
 		unsigned char*		w=NULL,*f=NULL;
+		unsigned char*		buffer_len_pl = NULL;
+		unsigned char*		rt_start = NULL;
 };
 
 /* StoreOp Operand Supername: Store Operand into Supername */
@@ -8676,6 +8756,17 @@ ACPIAMLWriter &ACPIAMLWriter::ArgOp(const unsigned int arg) {
  * }
  *
  * See what they did there? */
+ACPIAMLWriter &ACPIAMLWriter::RootCharOp(void) {
+	*w++ = '\\';
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::RootCharScopeOp(void) {
+	RootCharOp(); /* this is how iasl encodes for example Scope(\) */
+	ZeroOp();
+	return *this;
+}
+
 ACPIAMLWriter &ACPIAMLWriter::NothingOp(void) {
 	ZeroOp();
 	return *this;
@@ -8760,6 +8851,23 @@ ACPIAMLWriter &ACPIAMLWriter::BufferOp(const unsigned char *data,const size_t da
 	return *this;
 }
 
+ACPIAMLWriter &ACPIAMLWriter::BufferOp(const unsigned int pred_size) {
+	assert(pred_size >= 10);
+	*w++ = 0x11;
+	BeginPkg(pred_size);
+	DwordOp(0); // placeholder
+	buffer_len_pl = w - 4;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::BufferOpEnd(void) {
+	assert(buffer_len_pl != NULL);
+	host_writed(buffer_len_pl,size_t(w - (buffer_len_pl + 4)));
+	buffer_len_pl = NULL;
+	EndPkg();
+	return *this;
+}
+
 ACPIAMLWriter &ACPIAMLWriter::AliasOp(const char *what,const char *to_what) {
 	*w++ = 0x06;
 	Name(what);
@@ -8794,6 +8902,83 @@ ACPIAMLWriter &ACPIAMLWriter::ElseOpEnd(void) {
 	return *this;
 }
 
+ACPIAMLWriter &ACPIAMLWriter::rtHdrLarge(const unsigned char itemName,const unsigned int length) {
+	assert(length <= 65536);
+	assert(itemName < 128);
+	*w++ = 0x80 + itemName;
+	host_writew(w,length); w += 2;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::rtHdrSmall(const unsigned char itemName,const unsigned int length) {
+	assert(length < 8);
+	assert(itemName < 16);
+	*w++ = (itemName << 3) + length;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::rtBegin(void) {
+	rt_start = w;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::rtEnd(void) {
+	rtHdrSmall(15/*end tag format*/,1/*length*/);
+	if (rt_start != NULL) {
+		unsigned char sum = 0;
+		for (unsigned char *s=rt_start;s < w;s++) sum += *s++;
+		*w++ = 0x100 - sum;
+	}
+	else {
+		*w++ = 0;
+	}
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::rtMemRange24(const unsigned int flags,const unsigned int minr,const unsigned int maxr,const unsigned int alignr,const unsigned int rangr) {
+	rtHdrLarge(1/*24-bit memory range format*/,9/*length*/);
+	*w++ = flags;
+	host_writew(w,minr >> 8u); w += 2;
+	host_writew(w,maxr >> 8u); w += 2;
+	host_writew(w,(alignr + 0xFFu) >> 8u); w += 2; /* FIXME: Um... alignment in bytes but everything else multiple of 256 bytes? */
+	host_writew(w,rangr >> 8u); w += 2;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::rtMemRange32(const unsigned int flags,const unsigned int minr,const unsigned int maxr,const unsigned int alignr,const unsigned int rangr) {
+	rtHdrLarge(5/*32-bit memory range format*/,17/*length*/);
+	*w++ = flags;
+	host_writed(w,minr); w += 4;
+	host_writed(w,maxr); w += 4;
+	host_writed(w,alignr); w += 4;
+	host_writed(w,rangr); w += 4;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::rtDMA(const unsigned char bitmask,const unsigned char flags) {
+	rtHdrSmall(5/*DMA format*/,2/*length*/);
+	*w++ = bitmask;
+	*w++ = flags;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::rtIO(const unsigned int flags,const uint16_t minport,const uint16_t maxport,const uint8_t alignment,const uint8_t rlength) {
+	rtHdrSmall(8/*IO format*/,7/*length*/);
+	*w++ = (unsigned char)flags;
+	host_writew(w,minport); w += 2;
+	host_writew(w,maxport); w += 2;
+	*w++ = alignment;
+	*w++ = rlength;
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::rtIRQ(const uint16_t bitmask,const bool pciStyle) {
+	rtHdrSmall(4/*IRQ format*/,3/*length*/);
+	host_writew(w,bitmask); w += 2;
+	*w++ = pciStyle ? 0x18/*active low level trigger shareable*/ : 0x01/*active high edge trigger*/;
+	return *this;
+}
+
 ACPIAMLWriter &ACPIAMLWriter::NameOp(const char *name) {
 	*w++ = 0x08; // NameOp
 	Name(name);
@@ -8806,6 +8991,16 @@ ACPIAMLWriter &ACPIAMLWriter::Name(const char *name) {
 		else *w++ = '_';
 	}
 
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::MultiNameOp(void) {
+	*w++ = 0x2F; // MultiNamePrefix
+	return *this;
+}
+
+ACPIAMLWriter &ACPIAMLWriter::DualNameOp() {
+	*w++ = 0x2E; // DualNamePrefix
 	return *this;
 }
 
@@ -8884,10 +9079,9 @@ ACPIAMLWriter &ACPIAMLWriter::FieldOpEnd(void) {
 	return *this;
 }
 
-ACPIAMLWriter &ACPIAMLWriter::ScopeOp(const char *name,const unsigned int pred_size) {
+ACPIAMLWriter &ACPIAMLWriter::ScopeOp(const unsigned int pred_size) {
 	*w++ = 0x10;
 	BeginPkg(pred_size);
-	Name(name);
 	return *this;
 }
 
@@ -9079,95 +9273,38 @@ void BuildACPITable(void) {
 		 *     DataItem := DefBuffer | DefNum | DefString
 		 *
 		 *     How to write: ACPIAML1_NameOp(Name) followed by the necessary functions to write the buffer, string, etc. for the name. */
-		/* Name(TST1,0xAB) */
-		aml.NameOp("TST1").ByteOp(0xAB);
-		/* Name(TST2,0x1234) */
-		aml.NameOp("TST2").WordOp(0x1234);
-		/* Name(TST3,0x12345678) */
-		aml.NameOp("TST3").DwordOp(0x12345678);
-		/* Name(TST4,"Hello ACPI BIOS") */
-		aml.NameOp("TST4").StringOp("Hello ACPI BIOS");
-		/* OperationRegion(ABC,SystemMemory,0xAABB0000,0x4100) */
-		aml.OpRegionOp("ABC",ACPIRegionSpace::SystemMemory).DwordOp(0xAABB0000).WordOp(0x4100);
-		/* OperationRegion(ABC2,SystemIO,0x880,0x18) */
-		aml.OpRegionOp("ABC2",ACPIRegionSpace::SystemIO).WordOp(0x880).WordOp(0x18);
-		/* Field(ABC2,AnyAcc,Lock,Preserve) which also calls BeginPkg(), FieldOpEnd calls EndPkg(). Use only Field writing functions! */
-		aml.FieldOp("ABC2",ACPIAMLWriter::MaxPkgSize,ACPIFieldFlag::AccessType::AnyAcc|ACPIFieldFlag::LockRule::Lock|ACPIFieldFlag::UpdateRule::Preserve);
-		aml.FieldOpElement("AF00",1);
-		aml.FieldOpElement("AF01",3);
-		aml.FieldOpElement("",2);
-		aml.FieldOpElement("AF02",2);
-		aml.FieldOpElement("AF03",3);
-		aml.FieldOpElement("",5+8);
-		aml.FieldOpElement("AF04",8);
-		aml.FieldOpEnd();
-		/* Scope */
-		aml.ScopeOp("_SB");
-		aml.NameOp("TST1").DwordOp(0xABCDEF);
-		/* Package ABCD */
-		aml.NameOp("ABCD").PackageOp();
-		/* Package contents. YOU MUST COUNT ELEMENTS MANUALLY */
-		aml.DwordOp(0xABCDEF).CountElement();
-		aml.DwordOp(0x1234).CountElement();
-		aml.ZeroOp().CountElement();
-		aml.OneOp().CountElement();
-		aml.PackageOp();
-		aml.StringOp("Hello world").CountElement();
-		aml.DwordOp(0xABCD1234).CountElement();
-		aml.PackageOpEnd().CountElement();
-		/* Package end */
-		aml.PackageOpEnd();
-		aml.AliasOp("TST1","ATS1");
-		aml.AliasOp("TST2","ATS2");
-		aml.AliasOp("TST3","ATS3");
-		{
-			static const unsigned char dept_of_redundant_redundancy[] = {0x11,0x22,0x33,0xAA,0xBB,0xCC};
-			aml.NameOp("DORR").BufferOp(dept_of_redundant_redundancy,sizeof(dept_of_redundant_redundancy));
-		}
-		/* device PCI0 */
-		aml.DeviceOp("PCI0");
-		aml.NameOp("DUH").DwordOp(0xABCD1234);
-		aml.NameOp("NDUH").ZeroOp();
-		/* method KICK */
-		aml.MethodOp("KICK",ACPIAMLWriter::MaxPkgSize,ACPIMethodFlags::ArgCount(2)|ACPIMethodFlags::Serialized);
-		aml.StoreOp().DwordOp(0x12345678).LocalOp(0); /* Local0 = 0x12345678 */
-		aml.AndOp().LocalOp(0).DwordOp(0xF0F0F0F0).LocalOp(0); /* Local0 &= 0xF0F0F0F0 (literally: Op1 = Local0 Op2 = 0xF0F0F0F0 Target = Local0) */
-		aml.StoreOp()./*(*/AndOp().LocalOp(0).DwordOp(0xFF00FF00).NothingOp()/*)*/.LocalOp(1); /* Local1 = Local0 & 0xFF00FF00 */
-		aml.StoreOp()./*(*/OrOp()./*(*/AndOp().LocalOp(0).DwordOp(0xCECECECE).NothingOp()/*)*/.DwordOp(0x03030303).NothingOp()/*)*/.LocalOp(2); /* Local2 = (Local0 & 0xFF00FF00) | 0x03030303 */
-		aml.IfOp().LEqualOp().Name("DUH").DwordOp(0xABCD1234); /* if (DUH == 0xABCD1234) { */
-			aml.ReturnOp().DwordOp(6); /* return 6; */
-		aml.IfOpEnd(); /* } (/if) */
-		aml.ElseOp(); /* else { */
-			aml.IfOp().LAndOp().Name("DUH").Name("NDUH"); /* if (DUH && NDUH) { */
-				aml.ReturnOp().DwordOp(77); /* return 77; */
-			aml.IfOpEnd(); /* } (/if) */
-			aml.IfOp().AndOp().Name("DUH").DwordOp(0x40103).NothingOp(); /* if (DUH & 0x40103) {    (note AndOp Op1 Op2 Target == "DUH" 0x40103 Nothing) */
-				aml.ReturnOp().DwordOp(77); /* return 79; */
-			aml.IfOpEnd(); /* } (/if) */
-		aml.ElseOpEnd(); /* } (/else) */
+		aml.ScopeOp().RootCharScopeOp();/* Scope (\) */
+			aml.OpRegionOp("DBG",ACPIRegionSpace::SystemIO).WordOp(ACPI_DEBUG_IO).ByteOp(0x10);
+			aml.FieldOp("DBG",ACPIAMLWriter::MaxPkgSize,ACPIFieldFlag::AccessType::DwordAcc|ACPIFieldFlag::UpdateRule::WriteAsZeros);
+			aml.FieldOpElement("DBGV",32);
+			aml.FieldOpEnd();
+		aml.ScopeOpEnd(); /* } end of Scope(\) */
 
-		aml.IfOp().Name("DUH"); /* if (DUH) { */
-			aml.ReturnOp().DwordOp(3); /* return 3; */
-		aml.IfOpEnd(); /* } (/if) */
-		aml.ElseOp(); /* else { */
-			aml.IfOp().Name("NDUH"); /* if (NDUH) { */
-				aml.ReturnOp().OneOp(); /* return 1; */
-			aml.IfOpEnd(); /* } (/if) */
-			aml.ElseOp(); /* else { */
-				aml.IfOp().LNotEqualOp().Name("NDUH").DwordOp(52); /* if (NDUH != 52) { */
-					aml.ReturnOp().DwordOp(666); /* return 666; */
-				aml.IfOpEnd(); /* } (/if) */
-				aml.ElseOp(); /* else { */
-					aml.ReturnOp().ZeroOp(); /* return 0; */
-				aml.ElseOpEnd(); /* } (/else) */
-			aml.ElseOpEnd(); /* } (/else) */
-		aml.ElseOpEnd(); /* } (/else) */
-		aml.MethodOpEnd();
-		/* end method */
-		aml.DeviceOpEnd();
-		/* end device */
+		aml.ScopeOp().RootCharOp().Name("_SB");
+			if (pcibus_enable) {
+				aml.DeviceOp("PCI0");
+					aml.NameOp("_HID").DwordOp(ISAPNP_ID('P','N','P',0x00,0x0A,0x00,0x03));
+					aml.NameOp("_ADR").DwordOp(0); /* [31:16] device [15:0] function */
+					aml.NameOp("_UID").DwordOp(0xD05B0C5);
+				aml.NameOp("_CRS").BufferOp().rtBegin(); /* ResourceTemplate() i.e. resource list */
+					aml.rtIO(
+						ACPIrtIO_16BitDecode,
+						0x0CF8,/*min*/
+						0x0CF8,/*max*/
+						0x01,/*align*/
+						0x4/*number of I/O ports req*/);
+					aml.rtEnd();
+				aml.BufferOpEnd();
+			}
+			else {
+				aml.DeviceOp("ISA");
+					aml.NameOp("_HID").DwordOp(ISAPNP_ID('P','N','P',0x00,0x0A,0x00,0x00));
+					aml.NameOp("_ADR").DwordOp(0); /* [31:16] device [15:0] function */
+					aml.NameOp("_UID").DwordOp(0xD05B0C5);
+				aml.DeviceOpEnd();
+
+			}
 		aml.ScopeOpEnd();
-		/* end scope */
 
 		assert(aml.writeptr() >= (dsdt.getptr()+dsdt.get_tablesize()));
 		assert(aml.writeptr() <= f);
@@ -9176,7 +9313,7 @@ void BuildACPITable(void) {
 		w = dsdt.finish();
 	}
 
-	{
+	{ /* Fixed ACPI Description Table (FACP) */
 		ACPISysDescTableWriter facp;
 		const PhysPt facp_offset = acpiofs2phys( acpiptr2ofs( w ) );
 
