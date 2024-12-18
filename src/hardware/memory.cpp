@@ -206,6 +206,13 @@ uint32_t MEM_get_address_bits() {
     return memory.address_bits;
 }
 
+uint32_t MEM_get_address_bits4GB() { /* some code cannot yet handle values larger than 32 */
+    if (memory.address_bits > 32u)
+        return 32u;
+    else
+        return memory.address_bits;
+}
+
 HostPt MemBase = NULL;
 
 class UnmappedPageHandler : public PageHandler {
@@ -227,7 +234,7 @@ public:
     uint8_t readb(PhysPt addr) override {
         (void)addr;
 #if C_DEBUG
-        LOG_MSG("Warning: Illegal read from %x, CS:IP %8x:%8x",addr,SegValue(cs),reg_eip);
+        LOG_MSG("Warning: Illegal read from %lx (lin=%x), CS:IP %8x:%8x",(unsigned long)PAGING_GetPhysicalAddress64(addr),addr,SegValue(cs),reg_eip);
 #else
         static Bits lcount=0;
         if (lcount<1000) {
@@ -241,7 +248,7 @@ public:
         (void)addr;//UNUSED
         (void)val;//UNUSED
 #if C_DEBUG
-        LOG_MSG("Warning: Illegal write to %x, CS:IP %8x:%8x",addr,SegValue(cs),reg_eip);
+        LOG_MSG("Warning: Illegal write to %lx (lin=%x), CS:IP %8x:%8x",(unsigned long)PAGING_GetPhysicalAddress64(addr),addr,SegValue(cs),reg_eip);
 #else
         static Bits lcount=0;
         if (lcount<1000) {
@@ -1831,12 +1838,17 @@ void Init_AddressLimitAndGateMask() {
     //       20 for 8086 emulation.
     memory.address_bits=(unsigned int)section->Get_int("memalias");
 
-    if (memory.address_bits == 0)
+    if (memory.address_bits == 0) {
+        // FIXME: We cannot automatically set this by CPU type because src/cpu/cpu.cpp Change_Config() has not been called yet!
+        //        That is where the cputype setting is converted into the CPU_ArchitectureType enumeration!
+        //        If that specific code can be moved into it's own function and called earlier than this point, then this
+        //        code can then automatically set 36 bits for Pentium II or higher emulation.
         memory.address_bits = 32;
+    }
     else if (memory.address_bits < 20)
         memory.address_bits = 20;
-    else if (memory.address_bits > 32)
-        memory.address_bits = 32;
+    else if (memory.address_bits > 36)
+        memory.address_bits = 36;
 
     // TODO: This should be ...? CPU init? Motherboard init?
     /* WARNING: Binary arithmetic done with 64-bit integers because under Microsoft C++

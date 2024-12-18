@@ -79,6 +79,8 @@ bool do_seg_limits = false;
 
 bool do_pse = false;
 bool enable_pse = false;
+uint8_t enable_pse_extbits = 0;
+uint8_t enable_pse_extmask = 0;
 
 bool enable_fpu = true;
 bool enable_msr = true;
@@ -3082,6 +3084,7 @@ bool CPU_CPUID(void) {
 				reg_ebx=0;			/* Not Supported */
 				reg_ecx=0;			/* No features */
 				reg_edx=enable_fpu?1:0;	/* FPU */
+				if (enable_pse) reg_edx |= 0x08; /* Page Size Extension */
 			} else if (CPU_ArchitectureType == CPU_ARCHTYPE_PENTIUM) {
 				reg_eax=report_fdiv_bug?0x513:0x517;	/* intel pentium */
 				reg_ebx=0;			/* Not Supported */
@@ -3089,6 +3092,7 @@ bool CPU_CPUID(void) {
 				reg_edx=0x00000010|(enable_fpu?1:0);	/* FPU+TimeStamp/RDTSC */
 				if (enable_msr) reg_edx |= 0x20; /* ModelSpecific/MSR */
 				if (enable_pse) reg_edx |= 0x08; /* Page Size Extension */
+				if (enable_pse_extbits) reg_edx |= 0x20000; /* PSE 36-bit */
 				if (enable_cmpxchg8b) reg_edx |= 0x100; /* CMPXCHG8B */
 			} else if (CPU_ArchitectureType == CPU_ARCHTYPE_PMMXSLOW) {
 				reg_eax=0x543;		/* intel pentium mmx (PMMX) */
@@ -3097,6 +3101,7 @@ bool CPU_CPUID(void) {
 				reg_edx=0x00800010|(enable_fpu?1:0);	/* FPU+TimeStamp/RDTSC+MMX+ModelSpecific/MSR */
 				if (enable_msr) reg_edx |= 0x20; /* ModelSpecific/MSR */
 				if (enable_pse) reg_edx |= 0x08; /* Page Size Extension */
+				if (enable_pse_extbits) reg_edx |= 0x20000; /* PSE 36-bit */
 				if (enable_cmpxchg8b) reg_edx |= 0x100; /* CMPXCHG8B */
 			} else if (CPU_ArchitectureType == CPU_ARCHTYPE_PPROSLOW) {
 				reg_eax=0x612;		/* intel pentium pro */
@@ -3105,6 +3110,7 @@ bool CPU_CPUID(void) {
 				reg_edx=0x00008011;	/* FPU+TimeStamp/RDTSC */
 				if (enable_msr) reg_edx |= 0x20; /* ModelSpecific/MSR */
 				if (enable_pse) reg_edx |= 0x08; /* Page Size Extension */
+				if (enable_pse_extbits) reg_edx |= 0x20000; /* PSE 36-bit */
 				if (enable_cmpxchg8b) reg_edx |= 0x100; /* CMPXCHG8B */
 			} else if (CPU_ArchitectureType == CPU_ARCHTYPE_PENTIUMII) {
 				/* NTS: Most operating systems will not attempt SYSENTER/SYSEXIT unless this returns model 3, stepping 3, or higher. */
@@ -3128,6 +3134,7 @@ bool CPU_CPUID(void) {
 				reg_edx=0x00808011;	/* FPU+TimeStamp/RDTSC */
 				if (enable_msr) reg_edx |= 0x20; /* ModelSpecific/MSR */
 				if (enable_pse) reg_edx |= 0x08; /* Page Size Extension */
+				if (enable_pse_extbits) reg_edx |= 0x20000; /* PSE 36-bit */
 				if (enable_cmpxchg8b) reg_edx |= 0x100; /* CMPXCHG8B */
 				reg_edx |= 0x800; /* SEP Fast System Call aka SYSENTER/SYSEXIT [SEE NOTES AT TOP OF THIS IF STATEMENT] */
 			} else if (CPU_ArchitectureType == CPU_ARCHTYPE_PENTIUMIII || CPU_ArchitectureType == CPU_ARCHTYPE_EXPERIMENTAL) {
@@ -3137,6 +3144,7 @@ bool CPU_CPUID(void) {
 				reg_edx=0x03808011;	/* FPU+TimeStamp/RDTSC+SSE+FXSAVE/FXRESTOR */
 				if (enable_msr) reg_edx |= 0x20; /* ModelSpecific/MSR */
 				if (enable_pse) reg_edx |= 0x08; /* Page Size Extension */
+				if (enable_pse_extbits) reg_edx |= 0x20000; /* PSE 36-bit */
 				if (enable_cmpxchg8b) reg_edx |= 0x100; /* CMPXCHG8B */
 				if (CPU_ArchitectureType == CPU_ARCHTYPE_PENTIUMIII && p3psn.enabled) reg_edx |= 0x40000;
 				reg_edx |= 0x800; /* SEP Fast System Call aka SYSENTER/SYSEXIT */
@@ -3728,12 +3736,11 @@ public:
 			CPU_CycleAutoAdjust=false;
 		}
 
-        menu_update_autocycle();
+		menu_update_autocycle();
 
 		cpu_rep_max=section->Get_int("interruptible rep string op");
 		ignore_undefined_msr=section->Get_bool("ignore undefined msr");
 		enable_msr=section->Get_bool("enable msr");
-		enable_pse=section->Get_bool("enable pse");
 		enable_syscall=section->Get_bool("enable syscall");
 		enable_cmpxchg8b=section->Get_bool("enable cmpxchg8b");
 		CPU_CycleUp=section->Get_int("cycleup");
@@ -3976,6 +3983,46 @@ public:
 			LOG_MSG("CPU warning: 80186 cpu type is experimental at this time");
 		}
 
+		{
+			const char *pse = section->Get_string("enable pse");
+			if (!strcmp(pse,"pse40")) {
+				enable_pse = true;
+				enable_pse_extbits = 8;
+			}
+			else if (!strcmp(pse,"pse36")) {
+				enable_pse = true;
+				enable_pse_extbits = 4;
+			}
+			else if (!strcmp(pse,"pse") || !strcmp(pse,"true")) {
+				enable_pse = true;
+				enable_pse_extbits = 0;
+			}
+			else if (!strcmp(pse,"none") || !strcmp(pse,"false")) {
+				enable_pse = false;
+			}
+			else {
+				/* auto */
+				if (CPU_ArchitectureType >= CPU_ARCHTYPE_PENTIUMII) {
+					enable_pse = true;
+					enable_pse_extbits = 4; // 36-bit
+				}
+				else if (CPU_ArchitectureType >= CPU_ARCHTYPE_486NEW) {
+					enable_pse = true;
+					enable_pse_extbits = 0;
+				}
+				else {
+					enable_pse = false;
+				}
+			}
+
+			if (enable_pse_extbits != 0)
+				enable_pse_extmask = (1u << enable_pse_extbits) - 1u;
+			else
+				enable_pse_extmask = 0;
+
+			LOG(LOG_CPU,LOG_DEBUG)("PSE extensions: enabled=%u bits=%u",enable_pse,enable_pse_extbits);
+		}
+
 		/* because of the way the BIOS writes certain entry points, a reboot is required
          * if changing between specific levels of CPU. These entry points will fault the
          * CPU otherwise. */
@@ -4085,9 +4132,9 @@ public:
 
         if (enable_cmpxchg8b && CPU_ArchitectureType >= CPU_ARCHTYPE_PENTIUM) LOG_MSG("Pentium CMPXCHG8B emulation is enabled");
 
-	if (CPU_ArchitectureType >= CPU_ARCHTYPE_PENTIUM) {
+	if (CPU_ArchitectureType >= CPU_ARCHTYPE_486NEW) {
 		do_pse = false;
-		cpu.cr4=0;
+		cpu.cr4 = 0;
 	}
 	else {
 		enable_pse = false;
@@ -4424,10 +4471,36 @@ void CPU_ForceV86FakeIO_Out(Bitu port,Bitu val,Bitu len) {
 	reg_edx = old_edx;
 }
 
+bool break_sysenter = false;
+bool break_sysexit = false;
+
+Bitu DEBUG_EnableDebugger(void);
+
+bool Toggle_BreakSYSEnter() {
+	break_sysenter = !break_sysenter;
+	return break_sysenter;
+}
+
+bool Toggle_BreakSYSExit() {
+	break_sysexit = !break_sysexit;
+	return break_sysexit;
+}
+
+bool Clear_SYSENTER_Debug() {
+	break_sysenter = false;
+	break_sysexit = false;
+	return true;
+}
+
 /* pentium II fast system call */
+/* NTS: Windows XP does not set MSR 0x175, which means the SYSENTER entry point begins to run with ESP == 0. But it loads ESP right away. */
+/* FIXME: Why does this occasionally cause Windows XP to crash? */
 bool CPU_SYSENTER() {
 	if (!enable_syscall) return false;
 	if (!cpu.pmode || cpu_sep_cs == 0) return false; /* CS != 0 and not real mode */
+
+	if (break_sysenter)
+		DEBUG_EnableDebugger();
 
 //	UNBLOCKED_LOG(LOG_CPU,LOG_DEBUG)("SYSENTER: From CS=%04x EIP=%08x",(unsigned int)Segs.val[cs],(unsigned int)reg_eip - 2);
 
@@ -4463,9 +4536,13 @@ bool CPU_SYSENTER() {
 	return true;
 }
 
+/* FIXME: Why does this occasionally cause Windows XP to crash? */
 bool CPU_SYSEXIT() {
 	if (!enable_syscall) return false;
 	if (!cpu.pmode || cpu_sep_cs == 0 || cpu.cpl != 0) return false; /* CS != 0 and not real mode, or not ring 0 */
+
+	if (break_sysexit)
+		DEBUG_EnableDebugger();
 
 //	UNBLOCKED_LOG(LOG_CPU,LOG_DEBUG)("SYSEXIT: From CS=%04x EIP=%08x",(unsigned int)Segs.val[cs],(unsigned int)reg_eip - 2);
 

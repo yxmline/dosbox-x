@@ -28,6 +28,8 @@
 
 extern bool do_pse;
 extern bool enable_pse;
+extern uint8_t enable_pse_extbits;
+extern uint8_t enable_pse_extmask;
 
 extern bool dos_kernel_disabled;
 PagingBlock paging;
@@ -220,7 +222,7 @@ static const uint8_t fault_table[] = {
 };
 
 #define PHYSPAGE_DITRY 0x10000000
-#define PHYSPAGE_ADDR  0x000FFFFF
+#define PHYSPAGE_ADDR  0x00FFFFFF
 
 // helper functions for calculating table entry addresses
 static inline PhysPt GetPageDirectoryEntryAddr(PhysPt lin_addr) {
@@ -356,7 +358,7 @@ private:
 
 		if (do_pse && dir_entry.dirblock.ps) {
 			// for debugging...
-			if (((dir_entry.dirblock4mb.base22<<10u)|(lin_page&0x3FFu)) != phys_page)
+			if (((dir_entry.dirblock4mb.base22<<10u)|((dir_entry.dirblock4mb.base32&enable_pse_extmask)<<20u)|(lin_page&0x3FFu)) != phys_page)
 				E_Exit("Undesired situation 3 PSE in page foiler.");
 
 			// set the dirty bit
@@ -836,11 +838,15 @@ initpage_retry:
 
 				/* LOG_MSG("INITPSE lin=0x%x phys=0x%lx base22=0x%x base32=0x%x",
 					(unsigned int)lin_addr,
-					(unsigned long)(((dir_entry.dirblock4mb.base22<<10ul)|(lin_page&0x3FFul))<<12ul),
+					(unsigned long)(((dir_entry.dirblock4mb.base22<<10ul)|((dir_entry.dirblock4mb.base32&enable_pse_extmask)<<20ul)|(lin_page&0x3FFul))<<12ul),
 					(unsigned int)dir_entry.dirblock4mb.base22,
 					(unsigned int)dir_entry.dirblock4mb.base32); */
 				// finally install the new page
-				PAGING_LinkPageNew(lin_page, (dir_entry.dirblock4mb.base22<<10u)|(lin_page&0x3FFu), result, dirty);
+				PAGING_LinkPageNew(lin_page,
+					(dir_entry.dirblock4mb.base22<<10u)|
+					((dir_entry.dirblock4mb.base32&enable_pse_extmask)<<20u)|
+					(lin_page&0x3FFu),
+					result, dirty);
 			}
 			else {
 				PhysPt tableEntryAddr = GetPageTableEntryAddr(lin_addr, dir_entry);
@@ -1044,9 +1050,12 @@ static void PAGING_LinkPageNew(Bitu lin_page, Bitu phys_page, Bitu linkmode, boo
 	PageHandler * handler=MEM_GetPageHandler(phys_page);
 	Bitu lin_base=lin_page << 12;
 
+	//NTS: phys_page is not used to index anything, however it must not use bits 31-30 used for other info. Stay within PHYSPAGE_ADDR.
+	phys_page &= PHYSPAGE_ADDR;
+
 //	LOG_MSG("MAPPG %s",lnm[outcome]);
 	
-	if (GCC_UNLIKELY(lin_page>=TLB_SIZE || phys_page>=TLB_SIZE)) 
+	if (GCC_UNLIKELY(lin_page>=TLB_SIZE))
 		E_Exit("Illegal page");
 	if (GCC_UNLIKELY(paging.links.used>=PAGING_LINKS)) {
 		LOG(LOG_PAGING,LOG_NORMAL)("Not enough paging links, resetting cache");
@@ -1115,7 +1124,11 @@ static void PAGING_LinkPageNew(Bitu lin_page, Bitu phys_page, Bitu linkmode, boo
 void PAGING_LinkPage(Bitu lin_page,Bitu phys_page) {
 	PageHandler * handler=MEM_GetPageHandler(phys_page);
 	Bitu lin_base=lin_page << 12;
-	if (lin_page>=TLB_SIZE || phys_page>=TLB_SIZE)
+
+	//NTS: phys_page is not used to index anything, however it must not use bits 31-30 used for other info. Stay within PHYSPAGE_ADDR.
+	phys_page &= PHYSPAGE_ADDR;
+
+	if (lin_page>=TLB_SIZE)
 		return E_Exit("Illegal page");
 
 	if (paging.links.used>=PAGING_LINKS) {
@@ -1299,7 +1312,11 @@ void PAGING_MapPage(Bitu lin_page,Bitu phys_page) {
 void PAGING_LinkPage(Bitu lin_page,Bitu phys_page) {
 	PageHandler * handler=MEM_GetPageHandler(phys_page);
 	Bitu lin_base=lin_page << 12;
-	if (lin_page>=(TLB_SIZE*(TLB_BANKS+1)) || phys_page>=(TLB_SIZE*(TLB_BANKS+1))) 
+
+	//NTS: phys_page is not used to index anything, however it must not use bits 31-30 used for other info. Stay within PHYSPAGE_ADDR.
+	phys_page &= PHYSPAGE_ADDR;
+
+	if (lin_page>=(TLB_SIZE*(TLB_BANKS+1)))
 		E_Exit("Illegal page");
 
 	if (paging.links.used>=PAGING_LINKS) {
@@ -1322,7 +1339,11 @@ void PAGING_LinkPage(Bitu lin_page,Bitu phys_page) {
 void PAGING_LinkPage_ReadOnly(Bitu lin_page,Bitu phys_page) {
 	PageHandler * handler=MEM_GetPageHandler(phys_page);
 	Bitu lin_base=lin_page << 12;
-	if (lin_page>=(TLB_SIZE*(TLB_BANKS+1)) || phys_page>=(TLB_SIZE*(TLB_BANKS+1))) 
+
+	//NTS: phys_page is not used to index anything, however it must not use bits 31-30 used for other info. Stay within PHYSPAGE_ADDR.
+	phys_page &= PHYSPAGE_ADDR;
+
+	if (lin_page>=(TLB_SIZE*(TLB_BANKS+1)))
 		E_Exit("Illegal page");
 
 	if (paging.links.used>=PAGING_LINKS) {
