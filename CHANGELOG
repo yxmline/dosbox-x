@@ -1,4 +1,36 @@
 Next
+  - Dynamic x86 core: Reflect STI instruction to normal core so that
+    the 1-instruction delay is correctly emulated. This makes it
+    possible to run Windows XP or Server 2003 with dynamic core and
+    SYSENTER/SYSEXIT emulation without random BSODs (joncampbell123).
+  - Fix default code page. Instead of assuming 437 at all times, use
+    437 for all IBM PC compatible modes and 932 for PC-98 emulation.
+    (joncampbell123).
+  - Normal core: Fix STI emulation to enforce the 1-instruction delay
+    by forcing the normal core to execute another instruction right
+    away without providing any opportunity for interrupt processing.
+    This does not break Peret Em Heru, Keen games, and it seems to fix
+    the random BSOD issues with Windows XP and Windows Server 2003
+    when emulating a Pentium II that supports SYSENTER/SYSEXIT. I'm
+    not clear on why this fix prevents them from crashing, but there
+    you go. (joncampbell123).
+  - Keyboard emulation: Fix PCjr key delay to match IBM documentation
+    stating how long it takes to transmit one scan code, which is
+    obviously much slower than normal to accomodate the slow CPU and
+    the optical nature of the transmission. This is needed in order
+    for emulation to correctly send Fn+key combinations. At normal
+    key delay, the guest will miss scan codes and function keys will
+    not be reliable. (joncampbell123).
+  - Keyboard emulation: The 83-keyboard scan codes work differently on
+    the PCjr keyboard because half of them are only accessible by holding
+    the Fn key. The keyboard only sends the base key scan code and the Fn
+    key scan code and the BIOS is expected to convert that to the normal
+    83-key scan codes expected by DOS software. The problem is some games
+    like "Agent USA" for PCjr are written to directly handle scan codes
+    through IRQ 1 (the fact that PCjr handles keyboard via NMI and reflects
+    to INT 9 is ignored here). Fix this by sending scan codes that emulate
+    holding Fn and pressing the appropriate key. Agent USA expects the
+    user to press F1 by holding Fn and pressing "1". (joncampbell123).
   - Revise VGA doublescan mode, vs bit 7 of the Max scanline register, to
     correct how VGA doublescans 200-line modes. Revise EGA/VGA text code
     to divide line by 2 in rendering to match double scanned scanlines,
@@ -50,6 +82,10 @@ Next
   - Added dosbox.conf option to specify BIOS logo file. (joncampbell123).
   - Added dosbox.conf option to specify a text message, up to 3 lines,
     at the bottom of the screen during BIOS POST screen. (joncampbell123).
+  - Fix color glitches in EGA, Tandy, Hercules mode on macOS SDL2 build 
+    (output=opengl)(maron2000)
+  - Add int33 mickey threshold option (Fixes Ultima Underworld) (jpernst)
+  - Fix configure.ac (disable-screenshot option) (maron2000) 
 
 2024.12.04
   - Arrange memory device allocation so that it is possible to allocate

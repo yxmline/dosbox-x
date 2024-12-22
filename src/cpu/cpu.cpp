@@ -1208,8 +1208,10 @@ void CPU_Interrupt(Bitu num,Bitu type,uint32_t oldeip) {
     Bitu DEBUG_EnableDebugger(void);
 
     if (type != CPU_INT_SOFTWARE) { /* CPU core already takes care of SW interrupts */
+#if !defined(HX_DOS)
         if (DEBUG_IntBreakpoint((uint8_t)num))
             DEBUG_EnableDebugger();
+#endif
     }
 # endif
     if (type == CPU_INT_SOFTWARE && boothax == BOOTHAX_MSDOS) {
@@ -4499,15 +4501,19 @@ bool CPU_SYSENTER() {
 	if (!enable_syscall) return false;
 	if (!cpu.pmode || cpu_sep_cs == 0) return false; /* CS != 0 and not real mode */
 
+#if !defined(HX_DOS)
 	if (break_sysenter)
 		DEBUG_EnableDebugger();
+#endif
 
 //	UNBLOCKED_LOG(LOG_CPU,LOG_DEBUG)("SYSENTER: From CS=%04x EIP=%08x",(unsigned int)Segs.val[cs],(unsigned int)reg_eip - 2);
 
 	CPU_SetCPL(0);
 
+	FillFlags();
 	SETFLAGBIT(VM,false);
 	SETFLAGBIT(IF,false);
+	SETFLAGBIT(RF,false);
 
 	reg_eip = cpu_sep_eip;
 	reg_esp = cpu_sep_esp;
@@ -4526,8 +4532,8 @@ bool CPU_SYSENTER() {
 	Segs.limit[ss] = 0xFFFFFFFF;
 	Segs.expanddown[ss] = false;
 	cpu.stack.big = true;
-	cpu.stack.mask=0xffffffff;
-	cpu.stack.notmask=0x00000000;
+	cpu.stack.mask = 0xffffffff;
+	cpu.stack.notmask = 0x00000000;
 
 	// DEBUG
 //	DEBUG_EnableDebugger();
@@ -4541,8 +4547,10 @@ bool CPU_SYSEXIT() {
 	if (!enable_syscall) return false;
 	if (!cpu.pmode || cpu_sep_cs == 0 || cpu.cpl != 0) return false; /* CS != 0 and not real mode, or not ring 0 */
 
+#if !defined(HX_DOS)
 	if (break_sysexit)
 		DEBUG_EnableDebugger();
+#endif
 
 //	UNBLOCKED_LOG(LOG_CPU,LOG_DEBUG)("SYSEXIT: From CS=%04x EIP=%08x",(unsigned int)Segs.val[cs],(unsigned int)reg_eip - 2);
 
@@ -4553,19 +4561,19 @@ bool CPU_SYSEXIT() {
 	/* NTS: Do NOT use SetSegGeneral, SYSENTER is documented to set CS and SS based on what was given to the MSR,
 	 *      but with fixed and very specific descriptor cache values that represent 32-bit flat segments with
 	 *      base == 0 and limit == 4GB. */
-	Segs.val[cs] = (cpu_sep_cs | 3) + 0x10; /* Yes, really. Look it up in Intel's documentation */
+	Segs.val[cs] = (cpu_sep_cs & 0xFFFC) + 0x10 + 3/*RPL*/; /* Yes, really. Look it up in Intel's documentation */
 	Segs.phys[cs] = 0;
 	Segs.limit[cs] = 0xFFFFFFFF;
 	Segs.expanddown[cs] = false;
 	cpu.code.big = true;
 
-	Segs.val[ss] = (cpu_sep_cs | 3) + 0x18; /* Yes, really. Look it up in Intel's documentation */
+	Segs.val[ss] = (cpu_sep_cs & 0xFFFC) + 0x18 + 3/*RPL*/; /* Yes, really. Look it up in Intel's documentation */
 	Segs.phys[ss] = 0;
 	Segs.limit[ss] = 0xFFFFFFFF;
 	Segs.expanddown[ss] = false;
 	cpu.stack.big = true;
-	cpu.stack.mask=0xffffffff;
-	cpu.stack.notmask=0x00000000;
+	cpu.stack.mask = 0xffffffff;
+	cpu.stack.notmask = 0x00000000;
 
 	CPU_SetCPL(3);
 
