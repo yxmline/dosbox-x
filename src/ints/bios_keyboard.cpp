@@ -47,7 +47,7 @@
 
 extern Bitu BIOS_PC98_KEYBOARD_TRANSLATION_LOCATION;
 
-static Bitu call_int16 = 0,call_irq1 = 0,irq1_ret_ctrlbreak_callback = 0,call_irq6 = 0,call_irq_pcjr_nmi = 0;
+static Bitu call_int16 = 0,call_irq1 = 0,irq1_ret_ctrlbreak_callback = 0,call_irq6 = 0,call_irq_pcjr_nmi = 0,call_int48_pcjr = 0;
 static uint8_t fep_line = 0x01;
 
 /* Nice table from BOCHS i should feel bad for ripping this */
@@ -145,105 +145,6 @@ static scancode_tbl scan_to_scanascii[MAX_SCAN_CODE + 1] = {
       { 0x4e2b, 0x4e2b, 0x9000, 0x4ef0 ,0x4e00, 0x4e2b }, /* 4e + */
       { 0x4f00, 0x4f31, 0x7500, 0x0001 ,0x4f00, 0x4f31 }, /* 4f 1 End */
       { 0x5000, 0x5032, 0x9100, 0x0002 ,0x5000, 0x5032 }, /* 50 2 Down */
-      { 0x5100, 0x5133, 0x7600, 0x0003 ,0x5100, 0x5133 }, /* 51 3 PgDn */
-      { 0x5200, 0x5230, 0x9200, 0x0000 ,0x5200, 0x5230 }, /* 52 0 Ins */
-      { 0x5300, 0x532e, 0x9300,   none ,0x5300, 0x532e }, /* 53 Del */
-      {   none,   none,   none,   none ,   none,   none },
-      {   none,   none,   none,   none ,   none,   none },
-//	  { 0x565c, 0x567c,   none,   none ,0x565c, 0x567c }, /* 56 (102-key) */
-//      normal, shift , ctrl  , alt    ,kana  , kana_shift
-      { 0x565c, 0x567c,   none,   none   ,0x56db, 0x56f0 }, /* 56 (102-key), \_ロ| for AX */ //56h \|ﾛ underscore
-      { 0x8500, 0x8700, 0x8900, 0x8b00 ,0x8500, 0x8700 }, /* 57 F11 */
-      { 0x8600, 0x8800, 0x8a00, 0x8c00 ,0x8600, 0x8800 },  /* 58 F12 */
-	  { 0xab00, 0xac00, 0xad00, 0xae00, 0xab00, 0xac00 },  /* 5a 無変換 (non-conversion) for AX */
-	  { 0xa700, 0xa800, 0xa900, 0xaa00, 0xa700, 0xa800 },  /* 5b 変換 (conversion) for AX */
-	  { 0xd200, 0xd300, 0xd400, 0xd500, 0xd200, 0xd300 }   /* 5c AX (additional function key) for AX */
-      };
-
-static scancode_tbl scan_to_scanascii_pcjr_fn[MAX_SCAN_CODE + 1] = { /* PCjr with Fn key held down */
-//      normal, shift , ctrl  , alt    ,kana  , kana_shift
-      {   none,   none,   none,   none,   none,   none  },
-      { 0x011b, 0x011b, 0x011b, 0x01f0 ,0x011b, 0x011b }, /*  1 escape */
-      { 0x3b00, 0x5400, 0x5e00, 0x6800 ,0x3b00, 0x5400 }, /*  2 F1 */
-      { 0x3c00, 0x5500, 0x5f00, 0x6900 ,0x3c00, 0x5500 }, /*  3 F2 */
-      { 0x3d00, 0x5600, 0x6000, 0x6a00 ,0x3d00, 0x5600 }, /*  4 F3 */
-      { 0x3e00, 0x5700, 0x6100, 0x6b00 ,0x3e00, 0x5700 }, /*  5 F4 */
-      { 0x3f00, 0x5800, 0x6200, 0x6c00 ,0x3f00, 0x5800 }, /*  6 F5 */
-      { 0x4000, 0x5900, 0x6300, 0x6d00 ,0x4000, 0x5900 }, /*  7 F6 */
-      { 0x4100, 0x5a00, 0x6400, 0x6e00 ,0x4100, 0x5a00 }, /*  8 F7 */
-      { 0x4200, 0x5b00, 0x6500, 0x6f00 ,0x4200, 0x5b00 }, /*  9 F8 */
-      { 0x4300, 0x5c00, 0x6600, 0x7000 ,0x4300, 0x5c00 }, /* 0a F9 */
-      { 0x4400, 0x5d00, 0x6700, 0x7100 ,0x4400, 0x5d00 }, /* 0b F10 */
-      { 0x0c2d, 0x0c5f, 0x0c1f, 0x8200 ,0x0cce, 0x0c00 }, /* 0c -_ */
-      { 0x0d3d, 0x0d2b,   none, 0x8300 ,0x0dcd, 0x0d00 }, /* 0d =+ */
-      { 0x0e08, 0x0e08, 0x0e7f, 0x0ef0 ,0x0e08, 0x0e08 }, /* 0e backspace */
-      { 0x0f09, 0x0f00, 0x9400,   none ,0x0f09, 0x0f09 }, /* 0f tab */
-      {   none,   none,   none,   none ,   none,   none }, /* 10 Q */
-      { 0x1177, 0x1157, 0x1117, 0x1100 ,0x11c3, 0x1100 }, /* 11 W */
-      {   none,   none,   none,   none ,   none,   none }, /* 12 E */
-      { 0x1372, 0x1352, 0x1312, 0x1300 ,0x13bd, 0x1300 }, /* 13 R */
-      { 0x1474, 0x1454, 0x1414, 0x1400 ,0x14b6, 0x1400 }, /* 14 T */
-      { 0x1579, 0x1559, 0x1519, 0x1500 ,0x15dd, 0x1500 }, /* 15 Y */
-      { 0x1675, 0x1655, 0x1615, 0x1600 ,0x16c5, 0x1600 }, /* 16 U */
-      { 0x1769, 0x1749, 0x1709, 0x1700 ,0x17c6, 0x1700 }, /* 17 I */
-      { 0x186f, 0x184f, 0x180f, 0x1800 ,0x18d7, 0x1800 }, /* 18 O */
-      { 0x1970, 0x1950, 0x1910, 0x1900 ,0x19be, 0x1900 }, /* 19 P */
-      { 0x1a5b, 0x1a7b, 0x1a1b, 0x1af0 ,0x1ade, 0x1a00 }, /* 1a [{ */
-      { 0x1b5d, 0x1b7d, 0x1b1d, 0x1bf0 ,0x1bdf, 0x1ba2 }, /* 1b ]} */
-      { 0x1c0d, 0x1c0d, 0x1c0a,   none ,0x1c0d, 0x1c0d }, /* 1c Enter */
-      {   none,   none,   none,   none ,   none,   none }, /*  1d L Ctrl */
-      { 0x1e61, 0x1e41, 0x1e01, 0x1e00 ,0x1ec1, 0x1e00 }, /* 1e A */
-      {   none,   none,   none,   none ,   none,   none }, /* 1f S */
-      { 0x2064, 0x2044, 0x2004, 0x2000 ,0x20bc, 0x2000 }, /* 20 D */
-      { 0x2166, 0x2146, 0x2106, 0x2100 ,0x21ca, 0x2100 }, /* 21 F */
-      { 0x2267, 0x2247, 0x2207, 0x2200 ,0x22b7, 0x2200 }, /* 22 G */
-      { 0x2368, 0x2348, 0x2308, 0x2300 ,0x23b8, 0x2300 }, /* 23 H */
-      { 0x246a, 0x244a, 0x240a, 0x2400 ,0x24cf, 0x2400 }, /* 24 J */
-      { 0x256b, 0x254b, 0x250b, 0x2500 ,0x25c9, 0x2500 }, /* 25 K */
-      { 0x266c, 0x264c, 0x260c, 0x2600 ,0x26d8, 0x2600 }, /* 26 L */
-      { 0x273b, 0x273a,   none, 0x27f0 ,0x27da, 0x2700 }, /* 27 ;: */
-      { 0x2960, 0x297e,   none, 0x29f0 ,0x29d1, 0x29a3 }, /* 28 '" */
-      { 0x2960, 0x297e,   none, 0x29f0 ,0x29d1, 0x29a3 }, /* 29 "`" "~"  /  29h "`" "~" "ﾑ" "｣" */
-      {   none,   none,   none,   none,   none,   none }, /* 2a L shift */
-      { 0x2b5c, 0x2b7c, 0x2b1c, 0x2bf0 ,0x2bb0, 0x2bf0 }, /* 2b "*" "/"  /  2bh "\\" "|" "ｰ" */
-      { 0x2c7a, 0x2c5a, 0x2c1a, 0x2c00 ,0x2cc2, 0x2caf }, /* 2c Z */
-      { 0x2d78, 0x2d58, 0x2d18, 0x2d00 ,0x2dbb, 0x2d00 }, /* 2d X */
-      { 0x2e63, 0x2e43, 0x2e03, 0x2e00 ,0x2ebf, 0x2e00 }, /* 2e C */
-      { 0x2f76, 0x2f56, 0x2f16, 0x2f00 ,0x2fcb, 0x2f00 }, /* 2f V */
-      {   none,   none,   none,   none ,   none,   none }, /* 30 B */
-      { 0x316e, 0x314e, 0x310e, 0x3100 ,0x31d0, 0x3100 }, /* 31 N */
-      { 0x326d, 0x324d, 0x320d, 0x3200 ,0x32d3, 0x3200 }, /* 32 M */
-      { 0x332c, 0x333c,   none, 0x33f0 ,0x33c8, 0x33a4 }, /* 33 ,< */
-      { 0x342e, 0x343e,   none, 0x34f0 ,0x34d9, 0x34a1 }, /* 34 .> */
-      { 0x355c, 0x357c,   none, 0x35f0 ,0x35d2, 0x35a5 }, /* 35 /? */
-      {   none,   none,   none,   none ,   none,   none }, /*  36 R Shift */
-      { 0x372a, 0x372a, 0x9600, 0x37f0 , 0x372a, 0x3700 }, /* 37 * */
-      {   none,   none,   none,   none ,   none,   none }, /*  38 L Alt */
-      { 0x3920, 0x3920, 0x3920, 0x3920 , 0x3920, 0x3920 }, /* 39 space */
-      {   none,   none,   none,   none ,   none,   none }, /*  3a caps lock */
-//    { 0x3a00, 0x3a00,   none,   none , 0x3a00, 0x3a00 }, -- 3a Kanji --
-      { 0x3b00, 0x5400, 0x5e00, 0x6800 ,0x3b00, 0x5400 }, /* 3b F1 */
-      { 0x3c00, 0x5500, 0x5f00, 0x6900 ,0x3c00, 0x5500 }, /* 3c F2 */
-      { 0x3d00, 0x5600, 0x6000, 0x6a00 ,0x3d00, 0x5600 }, /* 3d F3 */
-      { 0x3e00, 0x5700, 0x6100, 0x6b00 ,0x3e00, 0x5700 }, /* 3e F4 */
-      { 0x3f00, 0x5800, 0x6200, 0x6c00 ,0x3f00, 0x5800 }, /* 3f F5 */
-      { 0x4000, 0x5900, 0x6300, 0x6d00 ,0x4000, 0x5900 }, /* 40 F6 */
-      { 0x4100, 0x5a00, 0x6400, 0x6e00 ,0x4100, 0x5a00 }, /* 41 F7 */
-      { 0x4200, 0x5b00, 0x6500, 0x6f00 ,0x4200, 0x5b00 }, /* 42 F8 */
-      { 0x4300, 0x5c00, 0x6600, 0x7000 ,0x4300, 0x5c00 }, /* 43 F9 */
-      { 0x4400, 0x5d00, 0x6700, 0x7100 ,0x4400, 0x5d00 }, /* 44 F10 */
-      {   none,   none,   none,   none ,   none,   none }, /*  45 Num Lock */
-      {   none,   none,   none,   none ,   none,   none }, /*  46 Scroll Lock */
-      { 0x4700, 0x4737, 0x7700, 0x0007 ,0x4700, 0x4737 }, /* 47 7 Home */
-      { 0x4700, 0x4737, 0x7700, 0x0007 ,0x4700, 0x4737 }, /* 48 8 UP */
-      { 0x4900, 0x4939, 0x8400, 0x0009 ,0x4900, 0x4939 }, /* 49 9 PgUp */
-      { 0x4a2d, 0x4a2d, 0x8e00, 0x4af0 ,0x4a00, 0x4a2d }, /* 4a - */
-      { 0x4900, 0x4939, 0x8400, 0x0009 ,0x4900, 0x4939 }, /* 4b 4 Left */
-      { 0x4cf0, 0x4c35, 0x8f00, 0x0005 ,0x4c00, 0x4c35 }, /* 4c 5 */
-      { 0x5100, 0x5133, 0x7600, 0x0003 ,0x5100, 0x5133 }, /* 4d 6 Right */
-      { 0x4e2b, 0x4e2b, 0x9000, 0x4ef0 ,0x4e00, 0x4e2b }, /* 4e + */
-      { 0x4f00, 0x4f31, 0x7500, 0x0001 ,0x4f00, 0x4f31 }, /* 4f 1 End */
-      { 0x4f00, 0x4f31, 0x7500, 0x0001 ,0x4f00, 0x4f31 }, /* 50 2 Down */
       { 0x5100, 0x5133, 0x7600, 0x0003 ,0x5100, 0x5133 }, /* 51 3 PgDn */
       { 0x5200, 0x5230, 0x9200, 0x0000 ,0x5200, 0x5230 }, /* 52 0 Ins */
       { 0x5300, 0x532e, 0x9300,   none ,0x5300, 0x532e }, /* 53 Del */
@@ -700,15 +601,13 @@ static Bitu IRQ1_Handler(void) {
  * states for numlock capslock. 
  */
     Bitu scancode=reg_al;
-    uint8_t flags1,flags2,flags3,kanafl,leds,leds_orig,pcjr_fn;
+    uint8_t flags1,flags2,flags3,kanafl,leds,leds_orig;
     flags1=mem_readb(BIOS_KEYBOARD_FLAGS1);
     flags2=mem_readb(BIOS_KEYBOARD_FLAGS2);
     flags3=mem_readb(BIOS_KEYBOARD_FLAGS3);
     kanafl=mem_readb(BIOS_KEYBOARD_AX_KBDSTATUS);
     leds  =mem_readb(BIOS_KEYBOARD_LEDS); 
     leds_orig = leds;
-    if (machine == MCH_PCJR) pcjr_fn=mem_readb(BIOS_KEYBOARD_PCJR_FLAG2);
-    else pcjr_fn=0;
 #ifdef CAN_USE_LOCK
     /* No hack anymore! */
 #else
@@ -886,7 +785,6 @@ static Bitu IRQ1_Handler(void) {
         if (scancode == 0x53 && !(flags3 & 0x01) && !(flags1 & 0x03) && (flags1 & 0x0c) == 0x0c && ((!(flags3 & 0x10) && (flags3 & 0x0c) == 0x0c) || ((flags3 & 0x10) && (flags2 & 0x03) == 0x03))) { /* Ctrl-Alt-Del? */
             throw int(3);
         }
-        if (machine == MCH_PCJR) goto normal_key;
         if(flags3 &0x02) {  /*extend key. e.g key above arrows or arrows*/
             if(scancode == 0x52) flags2 |=0x80; /* press insert */         
             if(flags1 &0x08) {
@@ -910,11 +808,6 @@ static Bitu IRQ1_Handler(void) {
         break;
 
     default: /* Normal Key */
-        if ((scancode&0x7Fu)==0x54 && machine == MCH_PCJR) {
-            if (scancode&0x80) pcjr_fn &= ~BIOS_KEYBOARD_PCJR_FLAG2_FN_FLAG;
-            else pcjr_fn |= BIOS_KEYBOARD_PCJR_FLAG2_FN_FLAG;
-            goto irq1_end;
-        }
         if (scancode==0x2e && !(flags3 & 0x01) && (flags1&0x04))
             ctrlbrk=true;
     normal_key:
@@ -923,61 +816,46 @@ static Bitu IRQ1_Handler(void) {
         /* Handle the actual scancode */
         if (scancode & 0x80) goto irq1_end;
         if (scancode > MAX_SCAN_CODE) goto irq1_end;
-        if (machine == MCH_PCJR && (pcjr_fn & (BIOS_KEYBOARD_PCJR_FLAG2_FN_FLAG|BIOS_KEYBOARD_PCJR_FLAG2_FN_LOCK)) != 0) {
-            /* This bit test is how the PCjr BIOS listing handles it:
-             * [http://hackipedia.org/browse.cgi/Computer/Platform/PC%2c%20IBM%20compatible/Computers/IBM/PCjr/IBM%20Personal%20Computer%20PCjr%20Hardware%20Reference%20Technical%20Reference%20%281983%2d11%29%20First%20Edition%2epdf] page 428 of the PDF, A-40 ROM BIOS */
-            if (flags1 & 0x08) {                    /* Alt is being pressed */
-                asciiscan = scan_to_scanascii_pcjr_fn[scancode].alt;
-            } else if (flags1 & 0x04) {                 /* Ctrl is being pressed */
-                asciiscan = scan_to_scanascii_pcjr_fn[scancode].control;
-            } else if (flags1 & 0x03) {                 /* Either shift is being pressed */
-                asciiscan = scan_to_scanascii_pcjr_fn[scancode].shift;
-            } else {
-                asciiscan = scan_to_scanascii_pcjr_fn[scancode].normal;
-            }
+        if (flags1 & 0x08) {                    /* Alt is being pressed */
+            asciiscan = scan_to_scanascii[scancode].alt;
+        } else if (flags1 & 0x04) {                 /* Ctrl is being pressed */
+            asciiscan = scan_to_scanascii[scancode].control;
+        } else if ((flags1 & 0x03) && (kanafl & 0x02)) { //for AX: Kana is active + Shift is being pressed
+            asciiscan = scan_to_scanascii[scancode].kana_shift; //for AX
+        } else if (flags1 & 0x03) {                 /* Either shift is being pressed */
+            asciiscan = scan_to_scanascii[scancode].shift;
+        } else if (kanafl & 0x02) {
+            asciiscan = scan_to_scanascii[scancode].kana; //for AX: Kana is active
         } else {
-            if (flags1 & 0x08) {                    /* Alt is being pressed */
-                asciiscan = scan_to_scanascii[scancode].alt;
-            } else if (flags1 & 0x04) {                 /* Ctrl is being pressed */
-                asciiscan = scan_to_scanascii[scancode].control;
-            } else if ((flags1 & 0x03) && (kanafl & 0x02)) { //for AX: Kana is active + Shift is being pressed
-                asciiscan = scan_to_scanascii[scancode].kana_shift; //for AX
-            } else if (flags1 & 0x03) {                 /* Either shift is being pressed */
-                asciiscan = scan_to_scanascii[scancode].shift;
-            } else if (kanafl & 0x02) {
-                asciiscan = scan_to_scanascii[scancode].kana; //for AX: Kana is active
+            asciiscan = scan_to_scanascii[scancode].normal;
+        }
+        /* cancel shift is letter and capslock active */
+        if(flags1&64) {
+            if(flags1&3) {
+                /*cancel shift */  
+                if(((asciiscan&0x00ff) >0x40) && ((asciiscan&0x00ff) <0x5b)) 
+                    asciiscan=scan_to_scanascii[scancode].normal; 
             } else {
-                asciiscan = scan_to_scanascii[scancode].normal;
+                /* add shift */
+                if(((asciiscan&0x00ff) >0x60) && ((asciiscan&0x00ff) <0x7b)) 
+                    asciiscan=scan_to_scanascii[scancode].shift; 
             }
-            /* cancel shift is letter and capslock active */
-            if(flags1&64) {
-                if(flags1&3) {
-                    /*cancel shift */  
-                    if(((asciiscan&0x00ff) >0x40) && ((asciiscan&0x00ff) <0x5b)) 
-                        asciiscan=scan_to_scanascii[scancode].normal; 
-                } else {
-                    /* add shift */
-                    if(((asciiscan&0x00ff) >0x60) && ((asciiscan&0x00ff) <0x7b)) 
-                        asciiscan=scan_to_scanascii[scancode].shift; 
-                }
-            }
-            if (flags3 &0x02) {
-                /* extended key (numblock), return and slash need special handling */
-                if (scancode==0x1c) {   /* return */
-                    if (flags1 &0x08) asciiscan=0xa600;
-                    else asciiscan=(asciiscan&0xff)|0xe000;
-                } else if (scancode==0x35) {    /* slash */
-                    if (flags1 &0x08) asciiscan=0xa400;
-                    else if (flags1 &0x04) asciiscan=0x9500;
-                    else asciiscan=0xe02f;
-                }
+        }
+        if (flags3 &0x02) {
+            /* extended key (numblock), return and slash need special handling */
+            if (scancode==0x1c) {   /* return */
+                if (flags1 &0x08) asciiscan=0xa600;
+                else asciiscan=(asciiscan&0xff)|0xe000;
+            } else if (scancode==0x35) {    /* slash */
+                if (flags1 &0x08) asciiscan=0xa400;
+                else if (flags1 &0x04) asciiscan=0x9500;
+                else asciiscan=0xe02f;
             }
         }
         add_key(asciiscan);
         break;
     }
 irq1_end:
-    if (machine == MCH_PCJR) mem_writeb(BIOS_KEYBOARD_PCJR_FLAG2,pcjr_fn);
     if(scancode !=0xe0) flags3 &=~0x02;                                 //Reset 0xE0 Flag
     mem_writeb(BIOS_KEYBOARD_FLAGS1,flags1);
     if ((scancode&0x80)==0) flags2&=0xf7;
@@ -1291,6 +1169,61 @@ static Bitu PCjr_NMI_Keyboard_Handler(void) {
     if (IO_ReadB(0x64) & 1) /* while data is available */
         reg_eip++; /* skip over EIP to IRQ1 call through */
 
+    return CBRET_NONE;
+}
+
+/* On PCjr the purpose of INT 48h normally is to translate PCjr scan codes to 83-key scan codes
+ * and then call INT 9h with that scan code.
+ *
+ * Some 83-key codes can only be entered by holding Fn and typing another key, and the raw scan
+ * codes reflect that. For compatibility with DOS programs, INT 48h has to translate, for example,
+ * Fn + 1 into the scan code for F1. */
+static Bitu PCjr_INT48_Keyboard_Handler(void) {
+    uint8_t pcjr_f = mem_readb(BIOS_KEYBOARD_PCJR_FLAG2);
+    uint8_t flags1 = mem_readb(BIOS_KEYBOARD_FLAGS1);
+
+    if ((reg_al&0x7F) == 0x54) {
+        if (reg_al&0x80/*release*/) pcjr_f &= ~BIOS_KEYBOARD_PCJR_FLAG2_FN_FLAG;
+        else pcjr_f |= BIOS_KEYBOARD_PCJR_FLAG2_FN_FLAG;
+        goto skip_int9;
+    }
+
+#define UPDATESHIFT(x) if (x) { flags1 &= ~0x3; /*break*/ } else { flags1 |= 0x3; /*make*/ }
+#define CLEARSHIFT() UPDATESHIFT(1/*break*/)
+
+    if (pcjr_f & (BIOS_KEYBOARD_PCJR_FLAG2_FN_FLAG|BIOS_KEYBOARD_PCJR_FLAG2_FN_LOCK)) {
+        const uint8_t bc = reg_al & 0x80;
+        switch (reg_al&0x7F) {
+            case 0x02: reg_al=0x3B|bc; break;/*Fn+1 = F1*/
+            case 0x03: reg_al=0x3C|bc; break;/*Fn+2 = F2*/
+            case 0x04: reg_al=0x3D|bc; break;/*Fn+3 = F3*/
+            case 0x05: reg_al=0x3E|bc; break;/*Fn+4 = F4*/
+            case 0x06: reg_al=0x3F|bc; break;/*Fn+5 = F5*/
+            case 0x07: reg_al=0x40|bc; break;/*Fn+6 = F6*/
+            case 0x08: reg_al=0x41|bc; break;/*Fn+7 = F7*/
+            case 0x09: reg_al=0x42|bc; break;/*Fn+8 = F8*/
+            case 0x0A: reg_al=0x43|bc; break;/*Fn+9 = F9*/
+            case 0x0B: reg_al=0x44|bc; break;/*Fn+10 = F10*/
+            case 0x1A: reg_al=0x2B|bc; UPDATESHIFT(bc); break;/*Fn+[ = | which is SHIFT+\ */
+            case 0x1B: reg_al=0x29|bc; UPDATESHIFT(bc); break;/*Fn+] = ~ which is SHIFT+` */
+            case 0x28: reg_al=0x29|bc; CLEARSHIFT(); break;/*Fn+' = ` which is unshifted ` */
+            case 0x35: reg_al=0x2B|bc; CLEARSHIFT(); break;/*Fn+/ = \\ which is unshifted \\ */
+            case 0x48: reg_al=0x47|bc; break;/*Fn+Up = Home*/
+            case 0x4B: reg_al=0x49|bc; break;/*Fn+Left = Page Up*/
+            case 0x4D: reg_al=0x51|bc; break;/*Fn+Right = Page Down*/
+            case 0x50: reg_al=0x4F|bc; break;/*Fn+Down = End*/
+            default: break;
+        }
+    }
+
+#undef UPDATESHIFT
+#undef CLEARSHIFT
+
+    reg_eip++; /* skip over IRET */
+skip_int9: /* if we do not skip IRET, then INT 48h returns without calling INT 9h */
+
+    mem_writeb(BIOS_KEYBOARD_FLAGS1,flags1);
+    mem_writeb(BIOS_KEYBOARD_PCJR_FLAG2,pcjr_f);
     return CBRET_NONE;
 }
 
@@ -1694,6 +1627,10 @@ void BIOS_UnsetupKeyboard(void) {
         CALLBACK_DeAllocate(call_irq_pcjr_nmi);
         call_irq_pcjr_nmi = 0;
     }
+    if (call_int48_pcjr != 0) {
+        CALLBACK_DeAllocate(call_int48_pcjr);
+        call_int48_pcjr = 0;
+    }
     if (call_irq6 != 0) {
         CALLBACK_DeAllocate(call_irq6);
         call_irq6 = 0;
@@ -1724,29 +1661,43 @@ void BIOS_SetupKeyboard(void) {
 
     call_irq1=CALLBACK_Allocate();
     if (machine == MCH_PCJR) { /* PCjr keyboard interrupt connected to NMI */
+        uint32_t a;
+ 
+        /* NMI: Read bits from infared port to decode keyboard scan code. If valid, pass it to INT 48h.
+         * INT 48h: Track Fn key and other state, convert PCjr scan codes to 83-key compatible scan codes, pass it to INT 9h.
+         * INT 9h: Process scan code same as you would on normal IBM PC hardware. */
         call_irq_pcjr_nmi=CALLBACK_Allocate();
-
         CALLBACK_Setup(call_irq_pcjr_nmi,&PCjr_NMI_Keyboard_Handler,CB_IRET,"PCjr NMI Keyboard");
-
-        uint32_t a = CALLBACK_RealPointer(call_irq_pcjr_nmi);
-
+        a = CALLBACK_RealPointer(call_irq_pcjr_nmi);
         RealSetVec(0x02/*NMI*/,a);
 
-        /* TODO: PCjr calls INT 48h to convert PCjr scan codes to IBM PC/XT compatible */
+        a = ((a >> 16) << 4) + (a & 0xFFFF);
+        /* a+0 = callback instruction (4 bytes)
+         * a+4 = iret (1 bytes)
+         *
+         * NTS: PCjr NMI doesn't read it from port 60h! But this makes it work in this emulator! */
+        phys_writeb(a+5,0x50);		/* push ax */
+        phys_writeb(a+6,0x1e);		/* push ds */
+        phys_writew(a+7,0xC0C7);	/* mov ax,0x0040    NTS: Do not use PUSH <imm>, that opcode does not exist on the 8086 */
+        phys_writew(a+9,0x0040);	/* <---------' */
+        phys_writew(a+11,0xD88E);	/* mov ds,ax */
+        phys_writew(a+13,0x60E4);	/* in al,60h */
+        phys_writew(a+15,0x48CD);	/* int 48h */
+        phys_writeb(a+17,0x1f);		/* pop ds */
+        phys_writeb(a+18,0x58);		/* pop ax */
+        phys_writew(a+19,0x00EB + ((256-21)<<8)); /* jmp a+0 */
 
-	a = ((a >> 16) << 4) + (a & 0xFFFF);
-	/* a+0 = callback instruction (4 bytes)
-	 * a+4 = iret (1 bytes) */
-	phys_writeb(a+5,0x50);		/* push ax */
-	phys_writeb(a+6,0x1e);		/* push ds */
-	phys_writew(a+7,0xC0C7);	/* mov ax,0x0040    NTS: Do not use PUSH <imm>, that opcode does not exist on the 8086 */
-	phys_writew(a+9,0x0040);	/* <---------' */
-	phys_writew(a+11,0xD88E);	/* mov ds,ax */
-	phys_writew(a+13,0x60E4);	/* in al,60h */
-	phys_writew(a+15,0x09CD);	/* int 9h */
-	phys_writeb(a+17,0x1f);		/* pop ds */
-	phys_writeb(a+18,0x58);		/* pop ax */
-	phys_writew(a+19,0x00EB + ((256-21)<<8)); /* jmp a+0 */
+        /* INT 48h. NMI handler protects AX already, no need to PUSH AX/POP AX */
+        call_int48_pcjr=CALLBACK_Allocate();
+        CALLBACK_Setup(call_int48_pcjr,&PCjr_INT48_Keyboard_Handler,CB_IRET,"PCjr INT 48h translation");
+        a = CALLBACK_RealPointer(call_int48_pcjr);
+        RealSetVec(0x48/*translation*/,a);
+
+        a = ((a >> 16) << 4) + (a & 0xFFFF);
+        /* a+0 = callback instruction (4 bytes)
+         * a+4 = iret (1 bytes) */
+        phys_writew(a+5,0x09CD);	/* int 9 */
+        phys_writeb(a+7,0xCF);	        /* iret */
     }
 
     if (IS_PC98_ARCH) {
