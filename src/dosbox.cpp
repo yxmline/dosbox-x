@@ -1912,7 +1912,9 @@ void DOSBOX_SetupConfigSections(void) {
     //       No tricks! This code will ensure the path is to a FILE, not a directory, block device, or worse.
     Pstring = secprop->Add_path("memory file",Property::Changeable::OnlyAtStart,"");
     Pstring->Set_help("If set, guest memory is memory-mapped from a file on disk, rather than allocated from memory.\n"
-                      "This option can help keep DOSBox-X from consuming too much RAM for large values of memsize.");
+                      "This option can help keep DOSBox-X from consuming too much RAM for large values of memsize.\n"
+                      "This option is required to emulate 4GB or more of RAM. The file will be created if it does not exist\n"
+                      "and it does not require any special maintenance or formatting.");
     Pstring->SetBasic(true);
 
 #if defined(C_EMSCRIPTEN)
@@ -1925,7 +1927,11 @@ void DOSBOX_SetupConfigSections(void) {
         "Amount of memory DOSBox-X has in megabytes.\n"
         "This value is best left at its default to avoid problems with some games,\n"
         "although other games and applications may require a higher value.\n"
-        "Programs that use 286 protected mode like Windows 3.0 in Standard Mode may crash with more than 15MB.");
+        "Programs that use 286 protected mode like Windows 3.0 in Standard Mode may crash with more than 15MB.\n"
+        "A memory file is required to emulate a memory size of 4GB or more.\n"
+        "The maximum value allowed is affected by the memalias setting which affects the maximum amount of memory CPU can access as a power of 2.\n"
+        "The maximum value is also affected by the CPU type. See DOSBox-X console and log file for details.\n"
+        "The maximum setting 1048576 represents 1TB and requires at least a Pentium II and PSE-40 emulation.");
     Pint->SetBasic(true);
 
     Pint = secprop->Add_int("memsizekb", Property::Changeable::OnlyAtStart,0);
@@ -2991,7 +2997,7 @@ void DOSBOX_SetupConfigSections(void) {
             "You must enable this option to run Windows ME because portions of the kernel rely on this instruction.");
 
     Pbool = secprop->Add_bool("enable syscall",Property::Changeable::Always,true);
-    Pbool->Set_help("Allow SYSENTER/SYSEXIT instructions. This option is only meaningful when cputype=pentium_ii.\n");
+    Pbool->Set_help("Allow SYSENTER/SYSEXIT instructions. This option is only meaningful when is cputype=pentium_ii or higher.\n");
 
     Pbool = secprop->Add_bool("ignore undefined msr",Property::Changeable::Always,false);
     Pbool->Set_help("Ignore RDMSR/WRMSR on undefined registers. Normally the CPU will fire an Invalid Opcode exception in that case.\n"

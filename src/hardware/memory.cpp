@@ -1420,6 +1420,9 @@ uint16_t CPU_Pop16(void);
 
 static bool cmos_reset_type_9_sarcastic_win31_comments=true;
 
+void CPU_SetResetSignal(int x);
+bool CPU_DynamicCoreCannotUseCPPExceptions(void);
+
 void On_Software_286_int15_block_move_return(unsigned char code) {
     uint16_t vec_seg,vec_off;
 
@@ -1438,11 +1441,6 @@ void On_Software_286_int15_block_move_return(unsigned char code) {
         cmos_reset_type_9_sarcastic_win31_comments=false;
         LOG_MSG("CMOS Shutdown byte 0x%02x says to do INT 15 block move reset %04x:%04x. Only weirdos like Windows 3.1 use this... NOT WELL TESTED!",code,vec_seg,vec_off);
     }
-
-#if C_DYNAMIC_X86
-    /* FIXME: The way I will be carrying this out is incompatible with the Dynamic core! */
-    if (cpudecoder == &CPU_Core_Dyn_X86_Run) E_Exit("Sorry, CMOS shutdown CPU reset method is not compatible with dynamic core");
-#endif
 
     /* set stack pointer. prepare to emulate BIOS returning from INT 15h block move, 286 style */
     CPU_SetSegGeneral(cs,0xF000);
@@ -1463,8 +1461,10 @@ void On_Software_286_int15_block_move_return(unsigned char code) {
     CPU_IRET(false,0);
 
     /* force execution change (FIXME: Is there a better way to do this?) */
-    throw int(4);
-    /* does not return */
+    if (CPU_DynamicCoreCannotUseCPPExceptions())
+        CPU_SetResetSignal(4);
+    else
+        throw int(4);
 }
 
 void On_Software_286_reset_vector(unsigned char code) {
@@ -1487,11 +1487,6 @@ void On_Software_286_reset_vector(unsigned char code) {
 
     LOG_MSG("CMOS Shutdown byte 0x%02x says to jump to reset vector %04x:%04x",code,vec_seg,vec_off);
 
-#if C_DYNAMIC_X86
-    /* FIXME: The way I will be carrying this out is incompatible with the Dynamic core! */
-    if (cpudecoder == &CPU_Core_Dyn_X86_Run) E_Exit("Sorry, CMOS shutdown CPU reset method is not compatible with dynamic core");
-#endif
-
     /* following CPU reset, and coming from the BIOS, CPU registers are trashed */
     reg_eax = 0x2010000;
     reg_ebx = 0x2111;
@@ -1509,8 +1504,10 @@ void On_Software_286_reset_vector(unsigned char code) {
     reg_eip = vec_off;
 
     /* force execution change (FIXME: Is there a better way to do this?) */
-    throw int(4);
-    /* does not return */
+    if (CPU_DynamicCoreCannotUseCPPExceptions())
+        CPU_SetResetSignal(4);
+    else
+        throw int(4);
 }
 
 void CPU_Exception_Level_Reset();
@@ -1587,12 +1584,11 @@ void On_Software_CPU_Reset() {
 
             LOG_MSG("PC-98 reset and continue: RETF to %04x:%04x",SegValue(cs),reg_ip);
 
-            // DEBUG
-//            Bitu DEBUG_EnableDebugger(void);
-  //          DEBUG_EnableDebugger();
-
             /* force execution change (FIXME: Is there a better way to do this?) */
-            throw int(4);
+            if (CPU_DynamicCoreCannotUseCPPExceptions())
+                CPU_SetResetSignal(4);
+            else
+                throw int(4);
             /* does not return */
         }
     }
@@ -1612,15 +1608,10 @@ void On_Software_CPU_Reset() {
         }
     }
 
-#if C_DYNAMIC_X86
-    /* this technique is NOT reliable when running the dynamic core! */
-    if (cpudecoder == &CPU_Core_Dyn_X86_Run) {
-        LOG_MSG("Warning: C++ exception method is not compatible with dynamic core when emulating reset");
-    }
-#endif
-
-    throw int(3);
-    /* does not return */
+    if (CPU_DynamicCoreCannotUseCPPExceptions())
+        CPU_SetResetSignal(3);
+    else
+        throw int(3);
 }
 
 bool allow_port_92_reset = true;
@@ -1800,15 +1791,19 @@ HostPt GetMemBase(void) { return MemBase; }
 /*! \brief          REDOS.COM utility command on drive Z: to trigger restart of the DOS kernel
  */
 class REDOS : public Program {
-public:
-    /*! \brief      Program entry point, when the command is run */
-    void Run(void) override {
-		if (cmd->FindExist("/?", false) || cmd->FindExist("-?", false)) {
-			WriteOut("Reboots the kernel of DOSBox-X's emulated DOS.\n\nRE-DOS\n");
-			return;
+	public:
+		/*! \brief      Program entry point, when the command is run */
+		void Run(void) override {
+			if (cmd->FindExist("/?", false) || cmd->FindExist("-?", false)) {
+				WriteOut("Reboots the kernel of DOSBox-X's emulated DOS.\n\nRE-DOS\n");
+				return;
+			}
+
+			if (CPU_DynamicCoreCannotUseCPPExceptions())
+				CPU_SetResetSignal(6);
+			else
+				throw int(6);
 		}
-        throw int(6);
-    }
 };
 
 void REDOS_ProgramStart(Program * * make) {
@@ -1915,11 +1910,18 @@ void Init_AddressLimitAndGateMask() {
     memory.address_bits=(unsigned int)section->Get_int("memalias");
 
     if (memory.address_bits == 0) {
-        // FIXME: We cannot automatically set this by CPU type because src/cpu/cpu.cpp Change_Config() has not been called yet!
-        //        That is where the cputype setting is converted into the CPU_ArchitectureType enumeration!
-        //        If that specific code can be moved into it's own function and called earlier than this point, then this
-        //        code can then automatically set 36 bits for Pentium II or higher emulation.
-        memory.address_bits = 32;
+        /* TODO: We don't know the memsize yet. If memsize is 60GB or more, 40 bits, else 36 bits.
+         *       Pentium II/III systems are PSE-36 type PSE extensions.
+         *       For similar reasons for 486, if 60MB or more, 32 bits, else 26 bits.
+         *       For similar reasons for 386, if 14mB or more, 32 bits, else 24 bits. */
+        if (CPU_ArchitectureType >= CPU_ARCHTYPE_PENTIUMII)
+            memory.address_bits = 36;
+        else if (CPU_ArchitectureType >= CPU_ARCHTYPE_386)
+            memory.address_bits = 32; /* NTS: 26 is also valid for 486SX emulation, 24 for 386SX emulation */
+        else if (CPU_ArchitectureType >= CPU_ARCHTYPE_286)
+            memory.address_bits = 24; /* The 286 cannot address more than 16MB */
+        else
+            memory.address_bits = 20; /* The 8086 cannot address more than 1MB */
     }
     else if (memory.address_bits < 20)
         memory.address_bits = 20;
