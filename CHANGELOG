@@ -1,4 +1,13 @@
 Next
+  - Fix bug that prevented the Configuration GUI from saving to dosbox.conf
+    the last Windows 3.1 theme you applied using the dropdown menu.
+    (joncampbell123).
+  - Add option to apply vmemdelay to SVGA and linear framebuffer
+    modes (such as VESA BIOS modes), which reduces emulator performance
+    for those modes, but allows you to emulate slower SVGA cards.
+    Due to how some machine types are emulated, this option also enables
+    vmemdelay to affect the PC-98 linear framebuffer, Tandy & PCjr
+    video modes, as well as MDA/Hercules. (joncampbell123).
   - Add workaround to CPU reset logic that allows it to work correctly
     even with dynamic core. Previously, if the guest reset the system,
     the emulator would crash with an error message about an uncaught

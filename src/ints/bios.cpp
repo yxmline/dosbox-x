@@ -95,6 +95,7 @@ bool VGA_InitBiosLogo(unsigned int w,unsigned int h,unsigned int x,unsigned int 
 void VGA_WriteBiosLogoBMP(unsigned int y,unsigned char *scanline,unsigned int w);
 void VGA_WriteBiosLogoPalette(unsigned int start,unsigned int count,unsigned char *rgb);
 void VGA_FreeBiosLogo(void);
+void VGA_ShowBIOSLogo(void);
 
 extern bool ega200;
 
@@ -10902,7 +10903,7 @@ startfunction:
                 inpng = dosbox224x224_png;
                 rowheight = 16;
             }
-            else if (IS_PC98_ARCH) {
+            else if (IS_PC98_ARCH || machine == MCH_MCGA) {
                 if (logo) user_filename = std::string(logo) + "224x186.png";
                 filename = "dosbox224x186.png";
                 inpng_size = dosbox224x186_png_len;
@@ -11007,6 +11008,7 @@ startfunction:
                             png_read_rows(png_context,rows,NULL,1);
                             VGA_WriteBiosLogoBMP(y,row,png_width);
                         }
+                        VGA_ShowBIOSLogo();
                     }
 
                     delete[] row;

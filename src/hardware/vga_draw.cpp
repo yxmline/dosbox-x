@@ -3451,6 +3451,8 @@ struct BIOSlogo_t {
 	unsigned int		width = 0,height = 0;
 	unsigned char*		palette = NULL; /* 256 colors (NOTE: Except for VGA and PC-98, not all 256 colors available!) */
 	VGA_Line_Handler	DrawLine = NULL;
+	bool			visible = false;
+	bool			vsync_enable = false;
 
 	BIOSlogo_t() {
 	}
@@ -3462,6 +3464,8 @@ struct BIOSlogo_t {
 		bmp = NULL;
 		if (palette) delete[] palette;
 		palette = NULL;
+		visible = false;
+		vsync_enable = false;
 	}
 	void position(unsigned int new_x,unsigned int new_y) {
 		x = new_x;
@@ -3485,19 +3489,21 @@ static BIOSlogo_t BIOSlogo;
 static uint8_t *VGA_DrawLineBiosLogoOverlay(Bitu vidstart, Bitu line) {
 	uint8_t *r = BIOSlogo.DrawLine(vidstart,line);
 
-	/* FIXME: Need to copy scanline if "r" points directly at video memory, which is
-	 *        very unlikely in all standard MDA/CGA/Herc/PCjr/Tandy/EGA/VGA modes,
-	 *        but might happen if the BIOS startup screen were to use SVGA modes,
-	 *        but that isn't going to happen because there isn't any need to. */
+	/* Remember my snarky comments below about how somehow drawing on the scaline corrupts video memory
+	 * even if the scanline is a translated copy of the video memory? This applies here to. Why? Who
+	 * the fuck knows. This consideration is needed to avoid the DOSBox-X logo on the BIOS screen from
+	 * causing random garbage on the VGA graphics RAM. As usual, modifying through pointer "r" causes
+	 * corruption. Modifying TempLine, which is basically the same exact memory "r" points to, does not. */
 
-	if (BIOSlogo.bmp != NULL && BIOSlogo.palette != NULL) {
-		if (vga.draw.lines_done >= BIOSlogo.y) {
+	if (BIOSlogo.bmp != NULL && BIOSlogo.palette != NULL && BIOSlogo.visible && BIOSlogo.vsync_enable) {
+		if (vga.draw.lines_done >= BIOSlogo.y && r >= TempLine && r < (TempLine+sizeof(TempLine))) {
 			const unsigned int rel = vga.draw.lines_done - BIOSlogo.y;
+			const unsigned int bofs = (unsigned int)(r - TempLine);
 			if (rel < BIOSlogo.height) {
 				const unsigned char *src = BIOSlogo.bmp + (rel * BIOSlogo.width);
 				if (vga.draw.bpp == 32) {
 					const unsigned int m = BIOSlogo.x + BIOSlogo.width;
-					uint32_t *dst = (uint32_t*)r + BIOSlogo.x;
+					uint32_t *dst = (uint32_t*)(TempLine + bofs) + BIOSlogo.x;
 					unsigned int x = BIOSlogo.x;
 					while (x < m && x < vga.draw.width) {
 						const unsigned char pixel = *src++;
@@ -3507,7 +3513,7 @@ static uint8_t *VGA_DrawLineBiosLogoOverlay(Bitu vidstart, Bitu line) {
 				}
 				else if (vga.draw.bpp == 8) {
 					const unsigned int m = BIOSlogo.x + BIOSlogo.width;
-					uint8_t *dst = (uint8_t*)r + BIOSlogo.x;
+					uint8_t *dst = (uint8_t*)(TempLine + bofs) + BIOSlogo.x;
 					unsigned int x = BIOSlogo.x;
 					while (x < m && x < vga.draw.width) {
 						const unsigned char pixel = *src++;
@@ -3521,20 +3527,28 @@ static uint8_t *VGA_DrawLineBiosLogoOverlay(Bitu vidstart, Bitu line) {
 	return r;
 }
 
+void VGA_BIOSLogoUpdatePalette(void) {
+	if (vga.draw.bpp == 8) {
+		for (unsigned int i=0;i < 0x40;i++) {
+			RENDER_SetPal(0xC0+i,
+					BIOSlogo.palette[(i*3)+0],
+					BIOSlogo.palette[(i*3)+1],
+					BIOSlogo.palette[(i*3)+2]);
+		}
+	}
+}
+
 void BiosLogoHookVGADrawLine(void) {
 	if (VGA_DrawLine != VGA_DrawLineBiosLogoOverlay) {
 		BIOSlogo.DrawLine = VGA_DrawLine;
 		VGA_DrawLine = VGA_DrawLineBiosLogoOverlay;
-
-		if (vga.draw.bpp == 8) {
-			for (unsigned int i=0;i < 0x40;i++) {
-				RENDER_SetPal(0xC0+i,
-					BIOSlogo.palette[(i*3)+0],
-					BIOSlogo.palette[(i*3)+1],
-					BIOSlogo.palette[(i*3)+2]);
-			}
-		}
+		VGA_BIOSLogoUpdatePalette();
 	}
+}
+
+void VGA_ShowBIOSLogo(void) {
+	VGA_BIOSLogoUpdatePalette();
+	BIOSlogo.visible = true;
 }
 
 bool VGA_InitBiosLogo(unsigned int w,unsigned int h,unsigned int x,unsigned int y) {
@@ -3556,6 +3570,7 @@ void VGA_WriteBiosLogoPalette(unsigned int start,unsigned int count,unsigned cha
 			BIOSlogo.palette[((i+start)*3)+1] = rgb[(i*3)+1];
 			BIOSlogo.palette[((i+start)*3)+2] = rgb[(i*3)+2];
 		}
+		if (BIOSlogo.visible) VGA_BIOSLogoUpdatePalette();
 	}
 }
 
@@ -5796,6 +5811,8 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
 		DEBUG_HaltOnRetrace = false;
 	}
 #endif
+
+	if (BIOSlogo.visible) BIOSlogo.vsync_enable = true;
 
 	dbg_event_maxscan = false;
 	dbg_event_scanstep = false;
