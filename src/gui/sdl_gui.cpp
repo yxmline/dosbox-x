@@ -234,6 +234,712 @@ bool gui_menu_exit(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     return true;
 }
 
+/* Windows-Like GUI toolkit (to better emulate the look and feel of Windows 3.1) */
+namespace WLGUI {
+
+	typedef size_t Handle;
+	typedef size_t HandleIndex;
+	typedef uint32_t DevicePixel;/*pixel value, in target device format i.e. 16bpp rrrrrggggggbbbbb*/
+
+	static constexpr Handle InvalidHandleValue = ~Handle(0u);
+	static constexpr HandleIndex InvalidHandleIndex = ~HandleIndex(0u);
+
+	enum class HandleType {
+		NoType=0, /* FIXME: Why can't I use "None", GCC? Are you reserving identifiers for future Python support or something? */
+		DC=1
+	};
+
+	enum class ColorspaceType {
+		RGB=0
+	};
+
+	enum class BkMode {
+		Transparent=0,
+		Opaque=1
+	};
+
+	struct DevicePixelDescription {
+		union t {
+			struct RGB {
+				struct mask {
+					DevicePixel	r,g,b,a;
+				} mask;
+				struct shift {
+					uint8_t		r,g,b,a;
+				} shift;
+				struct width {
+					uint8_t		r,g,b,a;
+				} width;
+
+				DevicePixel Make8(const unsigned int rv,const unsigned int gv,const unsigned int bv,const unsigned int av=0xFF) const;
+			} RGB;
+		} t;
+		uint8_t		BitsPerPixel;
+		uint8_t		BytesPerPixel;
+	};
+
+	struct Dimensions {
+		unsigned int	w,h;
+
+		Dimensions() { }
+		Dimensions(const unsigned int _w,const unsigned int _h) : w(_w), h(_h) { }
+	};
+
+	struct Point {
+		long	x,y;
+
+		Point() { }
+		Point(const long _x,const long _y) : x(_x), y(_y) { }
+	};
+
+	class ResourceList {
+	public:
+		HandleIndex ListAlloc = 0;
+		std::vector<void*> List;
+		void *GetVoid(const HandleIndex i);
+		void SetVoid(const HandleIndex i,void *p);
+		size_t Size(void) const;
+		HandleIndex AllocateHandleIndex(void);
+	};
+
+	template <class T> class TypedResourceList : public ResourceList {
+	public:
+		T *Get(const HandleIndex i) {
+			return (T*)GetVoid(i);
+		}
+		void Set(const HandleIndex i,T *p) {
+			SetVoid(i,(void*)p);
+		}
+	};
+
+	struct ReferenceCountTracking {
+		int		refcount = 0;
+		int		AddRef(void);
+		int		Release(void); /* which does NOT delete the object when refcount == 0 */
+	};
+
+	static Handle MakeHandle(const HandleType ht,const HandleIndex idx);
+	static HandleIndex GetHandleIndex(const HandleType ht,const Handle h);
+	static unsigned int MaskToWidth(DevicePixel m);
+	static unsigned int Pixel8ToWidth(const unsigned int v,const unsigned int width);
+	static const DevicePixelDescription ColorDescription_DefaultRGB32(const bool withAlpha);
+
+	namespace DC {
+
+		enum class ObjType {
+			Base=0, /* you shouldn't use this */
+			SDLSurface=1
+		};
+
+		struct Obj;
+		TypedResourceList<Obj> List;
+
+		/* A bit of polymorphism because like a real Windows DC it can be a display, a printer, etc.
+		 * In this toolkit, it can be a SDL surface, OpenGL texture, etc. Unlike Windows there's
+		 * no need to worry about partial redraw because this toolkit takes the DWM approach where
+		 * every window is a surface, texture, etc.
+		 *
+		 * In most cases you should GetDC and ReleaseDC to draw on your window just like real Windows.
+		 * Don't keep the DC open except to draw. */
+		struct Obj {
+			struct Flags {
+				static constexpr uint32_t BKM_OPAQUE = uint32_t(1u) << uint32_t(0u); /* background is opaque i.e. text */
+				static constexpr uint32_t COORD_MAP_MODE = uint32_t(1u) << uint32_t(1u); /* coordinate scaling after origin translation */
+				uint32_t v = 0;
+			};
+
+			ObjType		type; /* init by constructor */
+			Dimensions	viewport = {0,0}; /* the viewport in device pixels i.e. SDL surface pixels */
+			Point		originSrc = {0,0}; /* coordinate system origin */
+			Point		originDst = {0,0}; /* coordinate system origin */
+			Point		scaleSrc = {1,1}; /* source scale */
+			Point		scaleDst = {1,1}; /* dest scale */
+			DevicePixel	BackgroundColor = 0;
+			DevicePixel	ForegroundColor = 0;
+			DevicePixelDescription ColorDescription; /* init by constructor if base, otherwise UNINITIALIZED */
+			ColorspaceType	Colorspace = ColorspaceType::RGB;
+			ReferenceCountTracking ref;
+			Flags		Flags;
+
+			void		(*SetPixel)(Obj &obj,long x,long y,const DevicePixel c) = &SetPixel_stub;
+
+			Obj();
+			Obj(const ObjType t);
+			virtual ~Obj();
+			virtual BkMode SetBkMode(BkMode x);
+			virtual DevicePixel MakeRGB8(const unsigned int r,const unsigned int g,const unsigned int b,const unsigned int a=0xFF);
+			virtual DevicePixel SetBackgroundColor(const DevicePixel c);
+			virtual DevicePixel SetForegroundColor(const DevicePixel c);
+			virtual bool SetLogicalOrigin(const long x=0,const long y=0,Point *po=NULL);
+			bool SetLogicalExtents(const long w,const long h,Point *po=NULL);
+			virtual bool SetDeviceOrigin(const long x=0,const long y=0,Point *po=NULL);
+			bool SetDeviceExtents(const long w,const long h,Point *po=NULL);
+			bool SetArbitraryMapMode(const bool m=false);
+			void ConvertLogicalToDeviceCoordinates(long &x,long &y);
+			static void SetPixel_stub(Obj &obj,long x,long y,const DevicePixel c);
+		};
+
+		/* SDL surface DC */
+		struct ObjSDLSurface : public Obj {
+			SDL_Surface*	surface = NULL;
+			Point		viewport_origin = {0,0}; /* in case we do subregions of a surface as "window objects" */
+
+			ObjSDLSurface();
+			ObjSDLSurface(SDL_Surface *surf);
+			virtual ~ObjSDLSurface();
+
+			void initFromSurface(void);
+			void ConvertLogicalToDeviceCoordinates(long &x,long &y);
+			void *GetSurfaceRowPtr(long x,long y);
+			static void SetPixel_32bpp(Obj &bobj,long x,long y,const DevicePixel c);
+			static void SetPixel_24bpp(Obj &bobj,long x,long y,const DevicePixel c);
+			static void SetPixel_16bpp(Obj &bobj,long x,long y,const DevicePixel c);
+			static void SetPixel_8bpp(Obj &bobj,long x,long y,const DevicePixel c);
+		};
+
+		Handle CreateSDLSurfaceDC(SDL_Surface *surf);
+		Obj* GetObject(const Handle h);
+		DevicePixel MakeRGB8(const Handle h,const unsigned int r,const unsigned int g,const unsigned int b,const unsigned int a=0xFF);
+		void SetPixel(const Handle h,const long x,const long y,const DevicePixel c);
+		bool GetDeviceColorspace(const Handle h,ColorspaceType &t);
+		bool GetDevicePixelFormat(const Handle h,DevicePixelDescription &d);
+		BkMode SetBkMode(const Handle h,BkMode x);
+		DevicePixel SetBackgroundColor(const Handle h,const DevicePixel c);
+		DevicePixel SetForegroundColor(const Handle h,const DevicePixel c);
+		bool SetLogicalOrigin(const Handle h,const long x=0,const long y=0,Point *po=NULL);
+		bool SetLogicalExtents(const Handle handle,const long w,const long h,Point *po=NULL);
+		bool SetDeviceOrigin(const Handle h,const long x=0,const long y=0,Point *po=NULL);
+		bool SetDeviceExtents(const Handle handle,const long w,const long h,Point *po=NULL);
+		bool SetArbitraryMapMode(const Handle h,const bool m=false);
+		bool Delete(const Handle h);
+	}
+
+}
+
+namespace WLGUI {
+
+	static Handle MakeHandle(const HandleType ht,const HandleIndex idx) {
+		return ((Handle)ht << (Handle)24u) + Handle(idx & 0xFFFFFFu);
+	}
+
+	static HandleIndex GetHandleIndex(const HandleType ht,const Handle h) {
+		if (ht == HandleType(h >> (Handle)24u))
+			return HandleIndex(h & 0xFFFFFFu);
+		else
+			return InvalidHandleIndex;
+	}
+
+	static unsigned int MaskToWidth(DevicePixel m) {
+		if (m != DevicePixel(0)) {
+			unsigned int count = 0;
+			while ((m & DevicePixel(1)) == DevicePixel(0)) m >>= DevicePixel(1);
+			while (m) { m >>= DevicePixel(1); count++; }
+			return count;
+		}
+
+		return 0;
+	}
+
+	static unsigned int Pixel8ToWidth(const unsigned int v,const unsigned int width) {
+		if (width != 0) {
+			const unsigned int mv = (1u << width) - 1u;
+			return ((v * mv) + 128u) / 255u;
+		}
+
+		return 0;
+	}
+
+	DevicePixel DevicePixelDescription::t::RGB::Make8(const unsigned int rv,const unsigned int gv,const unsigned int bv,const unsigned int av) const {
+		return	(DevicePixel(Pixel8ToWidth(rv,width.r)) << DevicePixel(shift.r)) +
+			(DevicePixel(Pixel8ToWidth(gv,width.g)) << DevicePixel(shift.g)) +
+			(DevicePixel(Pixel8ToWidth(bv,width.b)) << DevicePixel(shift.b)) +
+			(DevicePixel(Pixel8ToWidth(av,width.a)) << DevicePixel(shift.a));
+	}
+
+	static const DevicePixelDescription ColorDescription_DefaultRGB32(const bool withAlpha) {
+		DevicePixelDescription r;
+
+		r.BitsPerPixel = 32;
+		r.BytesPerPixel = 4;
+
+		r.t.RGB.mask.a = withAlpha ? (0xFFu << 24u) : 0u;
+		r.t.RGB.shift.a = withAlpha ? 24u : 0u;
+		r.t.RGB.width.a = withAlpha ? 8u : 0u;
+
+		r.t.RGB.mask.r = 0xFFu << 16u;
+		r.t.RGB.shift.r = 16u;
+		r.t.RGB.width.r = 8u;
+
+		r.t.RGB.mask.g = 0xFFu << 8u;
+		r.t.RGB.shift.g = 8u;
+		r.t.RGB.width.g = 8u;
+
+		r.t.RGB.mask.b = 0xFFu << 0u;
+		r.t.RGB.shift.b = 0u;
+		r.t.RGB.width.b = 8u;
+
+		return r;
+	}
+
+	void *ResourceList::GetVoid(const HandleIndex i) {
+		if (i < HandleIndex(List.size())) return List[i];
+		return NULL;
+	}
+
+	void ResourceList::SetVoid(const HandleIndex i,void *p) {
+		if (i < HandleIndex(List.size())) {
+			List[i] = p;
+			if (p == NULL) ListAlloc = i;
+		}
+	}
+
+	size_t ResourceList::Size(void) const {
+		return List.size();
+	}
+
+	int ReferenceCountTracking::AddRef(void) {
+		return ++refcount;
+	}
+
+	int ReferenceCountTracking::Release(void) {
+		return --refcount;
+	}
+
+	HandleIndex ResourceList::AllocateHandleIndex(void) {
+		/* scan forward from ListAlloc */
+		const HandleIndex pListAlloc = ListAlloc;
+		while (ListAlloc < List.size()) {
+			const HandleIndex index = ListAlloc++;
+			if (List[index] == NULL) return index;
+		}
+
+		ListAlloc = 0; /* No opening, scan again but only up to where the first loop started scanning */
+		while (ListAlloc < List.size() && ListAlloc <= pListAlloc) {
+			const HandleIndex index = ListAlloc++;
+			if (List[index] == NULL) return index;
+		}
+
+		/* Well then, enlarge the list */
+		{
+			const size_t osz = List.size();
+			if (osz >= 1024u) return InvalidHandleIndex; /* but not too much! */
+			ListAlloc = HandleIndex(osz); /* neither of the first two found anything, scan from where we extend the list */
+			List.resize(osz + (osz / 4u) + 64u);
+			for (size_t i=osz;i < List.size();i++) List[i] = NULL;
+		}
+
+		/* one more time */
+		while (ListAlloc < List.size()) {
+			const HandleIndex index = ListAlloc++;
+			if (List[index] == NULL) return index;
+		}
+
+		return InvalidHandleIndex;
+	}
+
+	namespace DC {
+
+		Obj::Obj() : type(ObjType::Base) {
+			ColorDescription_DefaultRGB32(false);
+		}
+
+		Obj::Obj(const ObjType t) : type(t) {
+		}
+
+		Obj::~Obj() {
+			if (ref.refcount != 0) LOG_MSG("Object release when refcount != 0 (this=%p)",(void*)this);
+		}
+
+		BkMode Obj::SetBkMode(BkMode x) {
+			const BkMode prev = (Flags.v & Flags::BKM_OPAQUE) ? BkMode::Opaque : BkMode::Transparent;
+			if (x == BkMode::Opaque) Flags.v |= Flags::BKM_OPAQUE;
+			else Flags.v &= ~Flags::BKM_OPAQUE;
+			return prev;
+		}
+
+		DevicePixel Obj::MakeRGB8(const unsigned int r,const unsigned int g,const unsigned int b,const unsigned int a) {
+			/* you must override this if your colorspace is not RGB (but this toolkit will be used where RGB is always used) */
+			return ColorDescription.t.RGB.Make8(r,g,b,a);
+		}
+
+		DevicePixel Obj::SetBackgroundColor(const DevicePixel c) {
+			const DevicePixel prev = BackgroundColor;
+			BackgroundColor = c;
+			return prev;
+		}
+
+		DevicePixel Obj::SetForegroundColor(const DevicePixel c) {
+			const DevicePixel prev = ForegroundColor;
+			ForegroundColor = c;
+			return prev;
+		}
+
+		bool Obj::SetLogicalOrigin(const long x,const long y,Point *po) {
+			if (po) *po = originSrc;
+			originSrc = Point(x,y);
+			return true;
+		}
+
+		bool Obj::SetLogicalExtents(const long w,const long h,Point *po) {
+			if (po) *po = scaleSrc;
+			scaleSrc = Point(w,h);
+			return true;
+		}
+
+		bool Obj::SetDeviceOrigin(const long x,const long y,Point *po) {
+			if (po) *po = originDst;
+			originDst = Point(x,y);
+			return true;
+		}
+
+		bool Obj::SetDeviceExtents(const long w,const long h,Point *po) {
+			if (po) *po = scaleDst;
+			scaleDst = Point(w,h);
+			return true;
+		}
+
+		bool Obj::SetArbitraryMapMode(const bool m) {
+			const bool pv = (Flags.v & Flags::COORD_MAP_MODE) != 0;
+			if (m) Flags.v |= Flags::COORD_MAP_MODE;
+			else Flags.v &= ~Flags::COORD_MAP_MODE;
+			return pv;
+		}
+
+		void Obj::ConvertLogicalToDeviceCoordinates(long &x,long &y) {
+			x += originSrc.x;
+			y += originSrc.y;
+			if (Flags.v & Flags::COORD_MAP_MODE) {
+				x = (x * scaleDst.x) / scaleSrc.x;
+				y = (y * scaleDst.y) / scaleSrc.y;
+			}
+			x += originDst.x;
+			y += originDst.y;
+		}
+
+		void Obj::SetPixel_stub(Obj &obj,long x,long y,const DevicePixel c) {
+			(void)obj;
+			(void)x;
+			(void)y;
+			(void)c;
+		}
+
+		///////////////////////////
+
+		ObjSDLSurface::ObjSDLSurface() : Obj(ObjType::SDLSurface) {
+		}
+
+		ObjSDLSurface::ObjSDLSurface(SDL_Surface *surf) : Obj(ObjType::SDLSurface), surface(surf) {
+			initFromSurface();
+		}
+
+		ObjSDLSurface::~ObjSDLSurface() {
+		}
+
+		void ObjSDLSurface::initFromSurface(void) {
+			viewport.w = abs(surface->w);
+			viewport.h = abs(surface->h);
+			scaleSrc = { (long)viewport.w, (long)viewport.h };
+			scaleDst = { (long)viewport.w, (long)viewport.h };
+			ColorDescription.BitsPerPixel = surface->format->BitsPerPixel;
+			ColorDescription.BytesPerPixel = surface->format->BytesPerPixel;
+
+			ColorDescription.t.RGB.mask.r = surface->format->Rmask;
+			ColorDescription.t.RGB.shift.r = surface->format->Rshift;
+			ColorDescription.t.RGB.width.r = MaskToWidth(surface->format->Rmask);
+
+			ColorDescription.t.RGB.mask.g = surface->format->Gmask;
+			ColorDescription.t.RGB.shift.g = surface->format->Gshift;
+			ColorDescription.t.RGB.width.g = MaskToWidth(surface->format->Gmask);
+
+			ColorDescription.t.RGB.mask.b = surface->format->Bmask;
+			ColorDescription.t.RGB.shift.b = surface->format->Bshift;
+			ColorDescription.t.RGB.width.b = MaskToWidth(surface->format->Bmask);
+
+			ColorDescription.t.RGB.mask.a = surface->format->Amask;
+			ColorDescription.t.RGB.shift.a = surface->format->Ashift;
+			ColorDescription.t.RGB.width.a = MaskToWidth(surface->format->Amask);
+
+			BackgroundColor = ColorDescription.t.RGB.Make8(0xFF,0xFF,0xFF);
+			ForegroundColor = ColorDescription.t.RGB.Make8(0x00,0x00,0x00);
+
+			if (ColorDescription.BytesPerPixel == 4)
+				SetPixel = SetPixel_32bpp;
+			else if (ColorDescription.BytesPerPixel == 3)
+				SetPixel = SetPixel_24bpp;
+			else if (ColorDescription.BytesPerPixel == 2)
+				SetPixel = SetPixel_16bpp;
+			else if (ColorDescription.BytesPerPixel == 1)
+				SetPixel = SetPixel_8bpp;
+		}
+
+		void ObjSDLSurface::ConvertLogicalToDeviceCoordinates(long &x,long &y) {
+			Obj::ConvertLogicalToDeviceCoordinates(x,y);
+			x += viewport_origin.x;
+			y += viewport_origin.y;
+		}
+
+		/* WARNING: This is not suitable for surfaces less than 8bpp if x != 0 */
+		void *ObjSDLSurface::GetSurfaceRowPtr(long x,long y) {
+			/* We trust the viewport has not been corrupted to extend outside the SDL surface! */
+			if (x >= 0l && x < (long)viewport.w && y >= 0l && y < (long)viewport.h) {
+				unsigned char *p = (unsigned char*)(surface->pixels);
+				if (p == NULL) return NULL;
+				return
+					p +
+					((unsigned int)surface->pitch * (unsigned int)y) +
+					((unsigned int)ColorDescription.BytesPerPixel * (unsigned int)x);
+			}
+			return NULL;
+		}
+
+		void ObjSDLSurface::SetPixel_32bpp(Obj &bobj,long x,long y,const DevicePixel c) {
+			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
+			obj.ConvertLogicalToDeviceCoordinates(x,y);
+			uint32_t *row = (uint32_t*)obj.GetSurfaceRowPtr(x,y);
+			if (row != NULL) *row = uint32_t(c);
+		}
+
+		void ObjSDLSurface::SetPixel_24bpp(Obj &bobj,long x,long y,const DevicePixel c) {
+			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
+			obj.ConvertLogicalToDeviceCoordinates(x,y);
+			uint8_t *row = (uint8_t*)obj.GetSurfaceRowPtr(x,y);
+			if (row != NULL) { /* this is why 24bpp isn't well supported past the late 1990s, it's awkward to draw sometimes */
+				host_writew(row,uint16_t(c));
+				host_writeb(row+2,uint8_t(c >> DevicePixel(16)));
+			}
+		}
+
+		void ObjSDLSurface::SetPixel_16bpp(Obj &bobj,long x,long y,const DevicePixel c) {
+			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
+			obj.ConvertLogicalToDeviceCoordinates(x,y);
+			uint16_t *row = (uint16_t*)obj.GetSurfaceRowPtr(x,y);
+			if (row != NULL) *row = uint16_t(c);
+		}
+
+		void ObjSDLSurface::SetPixel_8bpp(Obj &bobj,long x,long y,const DevicePixel c) {
+			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
+			obj.ConvertLogicalToDeviceCoordinates(x,y);
+			uint8_t *row = (uint8_t*)obj.GetSurfaceRowPtr(x,y);
+			if (row != NULL) *row = uint8_t(c);
+		}
+
+		Handle CreateSDLSurfaceDC(SDL_Surface *surf) {
+			const size_t idx = List.AllocateHandleIndex();
+			if (idx != InvalidHandleIndex) {
+				List.Set(idx,(Obj*)(new ObjSDLSurface(surf)));
+				return MakeHandle(HandleType::DC,HandleIndex(idx));
+			}
+
+			return InvalidHandleValue;
+		}
+
+		/* for internal use only */
+		Obj* GetObject(const Handle h) {
+			const HandleIndex idx = GetHandleIndex(HandleType::DC,h);
+			return List.Get(idx);
+		}
+
+		DevicePixel MakeRGB8(const Handle h,const unsigned int r,const unsigned int g,const unsigned int b,const unsigned int a) {
+			Obj* obj = GetObject(h);
+			if (obj) return obj->ColorDescription.t.RGB.Make8(r,g,b,a);
+			return DevicePixel(0);
+		}
+
+		void SetPixel(const Handle h,const long x,const long y,const DevicePixel c) {
+			Obj* obj = GetObject(h);
+			if (obj) obj->SetPixel(*obj,x,y,c); /* NTS: call through function pointer */
+		}
+
+		bool GetDeviceColorspace(const Handle h,ColorspaceType &t) {
+			Obj* obj = GetObject(h);
+			if (obj) { t = obj->Colorspace; return true; }
+			return false;
+		}
+
+		bool GetDevicePixelFormat(const Handle h,DevicePixelDescription &d) {
+			Obj* obj = GetObject(h);
+			if (obj) { d = obj->ColorDescription; return true; }
+			return false;
+		}
+
+		BkMode SetBkMode(const Handle h,BkMode x) {
+			Obj* obj = GetObject(h);
+			if (obj) return obj->SetBkMode(x);
+			return BkMode::Transparent;
+		}
+
+		DevicePixel SetBackgroundColor(const Handle h,const DevicePixel c) {
+			Obj* obj = GetObject(h);
+			if (obj) return obj->SetBackgroundColor(c);
+			return DevicePixel(0);
+		}
+
+		DevicePixel SetForegroundColor(const Handle h,const DevicePixel c) {
+			Obj* obj = GetObject(h);
+			if (obj) return obj->SetForegroundColor(c);
+			return DevicePixel(0);
+		}
+
+		bool SetLogicalOrigin(const Handle h,const long x,const long y,Point *po) {
+			Obj* obj = GetObject(h);
+			if (obj) return obj->SetLogicalOrigin(x,y,po);
+			return false;
+		}
+
+		bool SetLogicalExtents(const Handle handle,const long w,const long h,Point *po) {
+			Obj* obj = GetObject(handle);
+			if (obj) return obj->SetLogicalExtents(w,h,po);
+			return false;
+		}
+
+		bool SetDeviceOrigin(const Handle h,const long x,const long y,Point *po) {
+			Obj* obj = GetObject(h);
+			if (obj) return obj->SetDeviceOrigin(x,y,po);
+			return false;
+		}
+
+		bool SetDeviceExtents(const Handle handle,const long w,const long h,Point *po) {
+			Obj* obj = GetObject(handle);
+			if (obj) return obj->SetDeviceExtents(w,h,po);
+			return false;
+		}
+
+		bool SetArbitraryMapMode(const Handle h,const bool m) {
+			Obj* obj = GetObject(h);
+			if (obj) return obj->SetArbitraryMapMode(m);
+			return false;
+		}
+
+		bool Delete(const Handle h) {
+			const HandleIndex idx = GetHandleIndex(HandleType::DC,h);
+			if (idx != InvalidHandleIndex && idx < List.Size()) {
+				Obj *obj = List.Get(idx);
+				if (obj != NULL) {
+					List.Set(idx,NULL);
+					delete obj;
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+	}
+
+}
+
+void NewUIExperiment(bool pressed) {
+	if (!pressed) return;
+
+	GFX_EndUpdate(nullptr);
+	GFX_SetTitle(-1,-1,-1,true);
+	KEYBOARD_ClrBuffer();//Clear buffer
+	GFX_LosingFocus();//Release any keys pressed (buffer gets filled again). (could be in above if, but clearing the mapper input when exiting the mapper is sensible as well
+	SDL_Delay(20);
+
+#if defined(C_SDL2)
+#elif defined(C_HX_DOS)
+#else
+	int dw,dh;
+	void UpdateWindowDimensions(void);
+	UpdateWindowDimensions();
+	dw = (int)currentWindowWidth;
+	dh = (int)currentWindowHeight;
+
+	if (dw < 32) dw = 32;
+	if (dh < 32) dh = 32;
+
+        SDL_Event event;
+
+	LOG_MSG("NewGUI %d x %d",dw,dh);
+	SDL_Surface *gui_surface = SDL_SetVideoMode(dw,dh,32,0);
+	if (gui_surface == NULL) E_Exit("Could not initialize video mode for GUI: %s",SDL_GetError());
+        SDL_FillRect(gui_surface, nullptr, 0);
+
+	WLGUI::Handle gui_surface_dc = WLGUI::DC::CreateSDLSurfaceDC(gui_surface);
+	if (gui_surface_dc == WLGUI::InvalidHandleValue) E_Exit("Cannot create SDL DC");
+
+	for (long x=-100;x < 100;x++) {
+		WLGUI::DC::SetPixel(gui_surface_dc,x,   x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,x+128,x+128));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+10,x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,0,    0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+20,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    x+128,0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+30,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    0,    x+128));
+	}
+
+	SDL_UpdateRect(gui_surface, 0, 0, 0, 0);
+	while (SDL_PollEvent(&event));
+	SDL_Delay(1000);
+	SDL_FillRect(gui_surface, nullptr, 0);
+
+	WLGUI::DC::SetLogicalOrigin(gui_surface_dc,100,0);
+	for (long x=-100;x < 100;x++) {
+		WLGUI::DC::SetPixel(gui_surface_dc,x,   x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,x+128,x+128));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+10,x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,0,    0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+20,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    x+128,0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+30,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    0,    x+128));
+	}
+	WLGUI::DC::SetLogicalOrigin(gui_surface_dc,0,100);
+	for (long x=-100;x < 100;x++) {
+		WLGUI::DC::SetPixel(gui_surface_dc,x,   x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,x+128,x+128));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+10,x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,0,    0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+20,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    x+128,0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+30,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    0,    x+128));
+	}
+	WLGUI::DC::SetLogicalOrigin(gui_surface_dc);
+	for (long x=-100;x < 100;x++) {
+		WLGUI::DC::SetPixel(gui_surface_dc,x,   x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,x+128,x+128));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+10,x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,0,    0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+20,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    x+128,0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+30,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    0,    x+128));
+	}
+
+	WLGUI::DC::SetDeviceOrigin(gui_surface_dc,200,0);
+	for (long x=-100;x < 100;x++) {
+		WLGUI::DC::SetPixel(gui_surface_dc,x,   x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,x+128,x+128));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+10,x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,0,    0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+20,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    x+128,0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+30,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    0,    x+128));
+	}
+	WLGUI::DC::SetDeviceOrigin(gui_surface_dc,0,200);
+	for (long x=-100;x < 100;x++) {
+		WLGUI::DC::SetPixel(gui_surface_dc,x,   x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,x+128,x+128));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+10,x,WLGUI::DC::MakeRGB8(gui_surface_dc,x+128,0,    0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+20,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    x+128,0    ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+30,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0,    0,    x+128));
+	}
+	WLGUI::DC::SetDeviceOrigin(gui_surface_dc);
+
+	SDL_UpdateRect(gui_surface, 0, 0, 0, 0);
+	while (SDL_PollEvent(&event));
+	SDL_Delay(1000);
+	SDL_FillRect(gui_surface, nullptr, 0);
+
+	WLGUI::DC::SetDeviceOrigin(gui_surface_dc,dw/2,dh/2);
+	WLGUI::DC::SetLogicalExtents(gui_surface_dc,5000,5000);
+	WLGUI::DC::SetDeviceExtents(gui_surface_dc,dw/2,dh/2);
+	WLGUI::DC::SetArbitraryMapMode(gui_surface_dc,true);
+
+	for (long x=-4000;x < 4000;x++) {
+		long cx = ((x+4000l)*255l)/8000l;
+		WLGUI::DC::SetPixel(gui_surface_dc,x,    x,WLGUI::DC::MakeRGB8(gui_surface_dc,cx,cx,cx));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+100,x,WLGUI::DC::MakeRGB8(gui_surface_dc,cx,0, 0 ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+200,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0, cx,0 ));
+		WLGUI::DC::SetPixel(gui_surface_dc,x+300,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0, 0, cx));
+	}
+
+	SDL_UpdateRect(gui_surface, 0, 0, 0, 0);
+	while (SDL_PollEvent(&event));
+	SDL_Delay(1000);
+	SDL_FillRect(gui_surface, nullptr, 0);
+
+	if (!WLGUI::DC::Delete(gui_surface_dc)) E_Exit("Cannot delete SDL DC");
+#endif
+
+        GFX_Stop();
+        if (sdl.draw.callback) (sdl.draw.callback)( GFX_CallBackReset );
+        GFX_Start();
+}
+
 extern bool toscale;
 extern const char* RunningProgram;
 static GUI::ScreenSDL *UI_Startup(GUI::ScreenSDL *screen) {

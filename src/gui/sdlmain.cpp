@@ -3346,6 +3346,8 @@ void Sendkeymapper(bool pressed) {
 
 bool has_GUI_StartUp = false;
 
+void NewUIExperiment(bool pressed);
+
 static void GUI_StartUp() {
     DOSBoxMenu::item *item;
 
@@ -3962,6 +3964,9 @@ static void GUI_StartUp() {
     SetWindowTransparency(section->Get_int("transparency"));
     UpdateWindowDimensions();
     ApplyPreventCap();
+
+    /* Experiment -- You're not supposed to play with this yet hence why no binding is assigned by default */
+    MAPPER_AddHandler(NewUIExperiment, MK_nothing, 0, "newuitest", "New UI test", &item);
 }
 
 void Mouse_AutoLock(bool enable) {
@@ -8259,9 +8264,9 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             control->ParseConfigFile(config_combined.c_str()); // Load the conf file created above 
             if(control->configfiles.size()) LOG_MSG("CONFIG: Created and loaded user config file %s", config_combined.c_str());
         }
-        LOG_MSG("CONFIG: Loaded config file: %s", control->configfiles.front().c_str());
 
         if (control->configfiles.size()) {
+            LOG_MSG("CONFIG: Loaded config file: %s", control->configfiles.front().c_str());
             if (control->opt_eraseconf&&control->config_file_list.empty()) {
                 LOG_MSG("Erase config file: %s\n", control->configfiles.front().c_str());
                 unlink(control->configfiles.front().c_str());

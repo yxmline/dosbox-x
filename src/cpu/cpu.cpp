@@ -3213,7 +3213,15 @@ void CPU_SetResetSignal(int x) {
 }
 
 bool CPU_DynamicCoreCannotUseCPPExceptions(void) {
-	return (cpudecoder == &CPU_Core_Dyn_X86_Run || cpudecoder == &CPU_Core_Dynrec_Run);
+#if C_DYNAMIC_X86
+	if (cpudecoder == &CPU_Core_Dyn_X86_Run)
+		return true;
+#endif
+#if C_DYNREC
+	if (cpudecoder == &CPU_Core_Dynrec_Run)
+		return true;
+#endif
+	return false;
 }
 
 Bits HLT_Decode(void) {
@@ -4559,7 +4567,7 @@ bool CPU_SYSENTER() {
 	if (!enable_syscall) return false;
 	if (!cpu.pmode || cpu_sep_cs == 0) return false; /* CS != 0 and not real mode */
 
-#if !defined(HX_DOS)
+#if !defined(HX_DOS) && C_DEBUG
 	if (break_sysenter)
 		DEBUG_EnableDebugger();
 #endif
@@ -4593,9 +4601,6 @@ bool CPU_SYSENTER() {
 	cpu.stack.mask = 0xffffffff;
 	cpu.stack.notmask = 0x00000000;
 
-	// DEBUG
-//	DEBUG_EnableDebugger();
-
 //	UNBLOCKED_LOG(LOG_CPU,LOG_DEBUG)("SYSENTER: CS=%04x EIP=%08x ESP=%08x",(unsigned int)Segs.val[cs],(unsigned int)reg_eip,(unsigned int)reg_esp);
 	return true;
 }
@@ -4605,7 +4610,7 @@ bool CPU_SYSEXIT() {
 	if (!enable_syscall) return false;
 	if (!cpu.pmode || cpu_sep_cs == 0 || cpu.cpl != 0) return false; /* CS != 0 and not real mode, or not ring 0 */
 
-#if !defined(HX_DOS)
+#if !defined(HX_DOS) && C_DEBUG
 	if (break_sysexit)
 		DEBUG_EnableDebugger();
 #endif
@@ -4634,9 +4639,6 @@ bool CPU_SYSEXIT() {
 	cpu.stack.notmask = 0x00000000;
 
 	CPU_SetCPL(3);
-
-	// DEBUG
-//	DEBUG_EnableDebugger();
 
 //	UNBLOCKED_LOG(LOG_CPU,LOG_DEBUG)("SYSEXIT: CS=%04x EIP=%08x ESP=%08x",(unsigned int)Segs.val[cs],(unsigned int)reg_eip,(unsigned int)reg_esp);
 	return true;
