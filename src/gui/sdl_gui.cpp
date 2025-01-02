@@ -241,6 +241,7 @@ namespace WLGUI {
 	typedef size_t HandleIndex;
 	typedef uint32_t DevicePixel;/*pixel value, in target device format i.e. 16bpp rrrrrggggggbbbbb*/
 
+	static constexpr uint32_t Mask24 = uint32_t(0xFFFFFFu);
 	static constexpr Handle InvalidHandleValue = ~Handle(0u);
 	static constexpr HandleIndex InvalidHandleIndex = ~HandleIndex(0u);
 
@@ -361,6 +362,7 @@ namespace WLGUI {
 			ReferenceCountTracking ref;
 			Flags		Flags;
 
+			DevicePixel	(*GetPixel)(Obj &obj,long x,long y) = &GetPixel_stub;
 			void		(*SetPixel)(Obj &obj,long x,long y,const DevicePixel c) = &SetPixel_stub;
 
 			Obj();
@@ -375,7 +377,9 @@ namespace WLGUI {
 			virtual bool SetDeviceOrigin(const long x=0,const long y=0,Point *po=NULL);
 			bool SetDeviceExtents(const long w,const long h,Point *po=NULL);
 			bool SetArbitraryMapMode(const bool m=false);
-			void ConvertLogicalToDeviceCoordinates(long &x,long &y);
+			virtual void ConvertLogicalToDeviceCoordinates(long &x,long &y);
+
+			static DevicePixel GetPixel_stub(Obj &obj,long x,long y);
 			static void SetPixel_stub(Obj &obj,long x,long y,const DevicePixel c);
 		};
 
@@ -388,13 +392,20 @@ namespace WLGUI {
 			ObjSDLSurface(SDL_Surface *surf);
 			virtual ~ObjSDLSurface();
 
+			virtual void ConvertLogicalToDeviceCoordinates(long &x,long &y) override;
+
 			void initFromSurface(void);
-			void ConvertLogicalToDeviceCoordinates(long &x,long &y);
 			void *GetSurfaceRowPtr(long x,long y);
+
 			static void SetPixel_32bpp(Obj &bobj,long x,long y,const DevicePixel c);
 			static void SetPixel_24bpp(Obj &bobj,long x,long y,const DevicePixel c);
 			static void SetPixel_16bpp(Obj &bobj,long x,long y,const DevicePixel c);
 			static void SetPixel_8bpp(Obj &bobj,long x,long y,const DevicePixel c);
+
+			static DevicePixel GetPixel_32bpp(Obj &bobj,long x,long y);
+			static DevicePixel GetPixel_24bpp(Obj &bobj,long x,long y);
+			static DevicePixel GetPixel_16bpp(Obj &bobj,long x,long y);
+			static DevicePixel GetPixel_8bpp(Obj &bobj,long x,long y);
 		};
 
 		Handle CreateSDLSurfaceDC(SDL_Surface *surf);
@@ -412,6 +423,7 @@ namespace WLGUI {
 		bool SetDeviceExtents(const Handle handle,const long w,const long h,Point *po=NULL);
 		bool SetArbitraryMapMode(const Handle h,const bool m=false);
 		bool Delete(const Handle h);
+
 	}
 
 }
@@ -616,6 +628,13 @@ namespace WLGUI {
 			y += originDst.y;
 		}
 
+		DevicePixel Obj::GetPixel_stub(Obj &obj,long x,long y) {
+			(void)obj;
+			(void)x;
+			(void)y;
+			return DevicePixel(0);
+		}
+
 		void Obj::SetPixel_stub(Obj &obj,long x,long y,const DevicePixel c) {
 			(void)obj;
 			(void)x;
@@ -662,14 +681,22 @@ namespace WLGUI {
 			BackgroundColor = ColorDescription.t.RGB.Make8(0xFF,0xFF,0xFF);
 			ForegroundColor = ColorDescription.t.RGB.Make8(0x00,0x00,0x00);
 
-			if (ColorDescription.BytesPerPixel == 4)
+			if (ColorDescription.BytesPerPixel == 4) {
+				GetPixel = GetPixel_32bpp;
 				SetPixel = SetPixel_32bpp;
-			else if (ColorDescription.BytesPerPixel == 3)
+			}
+			else if (ColorDescription.BytesPerPixel == 3) {
+				GetPixel = GetPixel_24bpp;
 				SetPixel = SetPixel_24bpp;
-			else if (ColorDescription.BytesPerPixel == 2)
+			}
+			else if (ColorDescription.BytesPerPixel == 2) {
+				GetPixel = GetPixel_16bpp;
 				SetPixel = SetPixel_16bpp;
-			else if (ColorDescription.BytesPerPixel == 1)
+			}
+			else if (ColorDescription.BytesPerPixel == 1) {
+				GetPixel = GetPixel_8bpp;
 				SetPixel = SetPixel_8bpp;
+			}
 		}
 
 		void ObjSDLSurface::ConvertLogicalToDeviceCoordinates(long &x,long &y) {
@@ -694,33 +721,54 @@ namespace WLGUI {
 
 		void ObjSDLSurface::SetPixel_32bpp(Obj &bobj,long x,long y,const DevicePixel c) {
 			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
-			obj.ConvertLogicalToDeviceCoordinates(x,y);
 			uint32_t *row = (uint32_t*)obj.GetSurfaceRowPtr(x,y);
 			if (row != NULL) *row = uint32_t(c);
 		}
 
+		DevicePixel ObjSDLSurface::GetPixel_32bpp(Obj &bobj,long x,long y) {
+			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
+			uint32_t *row = (uint32_t*)obj.GetSurfaceRowPtr(x,y);
+			if (row != NULL) return DevicePixel(*row);
+			return DevicePixel(0);
+		}
+
 		void ObjSDLSurface::SetPixel_24bpp(Obj &bobj,long x,long y,const DevicePixel c) {
 			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
-			obj.ConvertLogicalToDeviceCoordinates(x,y);
 			uint8_t *row = (uint8_t*)obj.GetSurfaceRowPtr(x,y);
-			if (row != NULL) { /* this is why 24bpp isn't well supported past the late 1990s, it's awkward to draw sometimes */
-				host_writew(row,uint16_t(c));
-				host_writeb(row+2,uint8_t(c >> DevicePixel(16)));
-			}
+			if (row != NULL) *row = (uint32_t(c) & Mask24) + ((*row) & (~Mask24));
+		}
+
+		DevicePixel ObjSDLSurface::GetPixel_24bpp(Obj &bobj,long x,long y) {
+			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
+			uint32_t *row = (uint32_t*)obj.GetSurfaceRowPtr(x,y);
+			if (row != NULL) return DevicePixel(*row & Mask24);
+			return DevicePixel(0);
 		}
 
 		void ObjSDLSurface::SetPixel_16bpp(Obj &bobj,long x,long y,const DevicePixel c) {
 			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
-			obj.ConvertLogicalToDeviceCoordinates(x,y);
 			uint16_t *row = (uint16_t*)obj.GetSurfaceRowPtr(x,y);
 			if (row != NULL) *row = uint16_t(c);
 		}
 
+		DevicePixel ObjSDLSurface::GetPixel_16bpp(Obj &bobj,long x,long y) {
+			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
+			uint16_t *row = (uint16_t*)obj.GetSurfaceRowPtr(x,y);
+			if (row != NULL) return DevicePixel(*row);
+			return DevicePixel(0);
+		}
+
 		void ObjSDLSurface::SetPixel_8bpp(Obj &bobj,long x,long y,const DevicePixel c) {
 			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
-			obj.ConvertLogicalToDeviceCoordinates(x,y);
 			uint8_t *row = (uint8_t*)obj.GetSurfaceRowPtr(x,y);
 			if (row != NULL) *row = uint8_t(c);
+		}
+
+		DevicePixel ObjSDLSurface::GetPixel_8bpp(Obj &bobj,long x,long y) {
+			ObjSDLSurface &obj = reinterpret_cast<ObjSDLSurface&>(bobj);
+			uint8_t *row = (uint8_t*)obj.GetSurfaceRowPtr(x,y);
+			if (row != NULL) return DevicePixel(*row);
+			return DevicePixel(0);
 		}
 
 		Handle CreateSDLSurfaceDC(SDL_Surface *surf) {
@@ -745,9 +793,21 @@ namespace WLGUI {
 			return DevicePixel(0);
 		}
 
-		void SetPixel(const Handle h,const long x,const long y,const DevicePixel c) {
+		DevicePixel GetPixel(const Handle h,long x,long y) {
 			Obj* obj = GetObject(h);
-			if (obj) obj->SetPixel(*obj,x,y,c); /* NTS: call through function pointer */
+			if (obj) {
+				obj->ConvertLogicalToDeviceCoordinates(x,y);
+				return obj->GetPixel(*obj,x,y); /* NTS: call through function pointer */
+			}
+			return DevicePixel(0);
+		}
+
+		void SetPixel(const Handle h,long x,long y,const DevicePixel c) {
+			Obj* obj = GetObject(h);
+			if (obj) {
+				obj->ConvertLogicalToDeviceCoordinates(x,y);
+				obj->SetPixel(*obj,x,y,c); /* NTS: call through function pointer */
+			}
 		}
 
 		bool GetDeviceColorspace(const Handle h,ColorspaceType &t) {
@@ -925,6 +985,24 @@ void NewUIExperiment(bool pressed) {
 		WLGUI::DC::SetPixel(gui_surface_dc,x+100,x,WLGUI::DC::MakeRGB8(gui_surface_dc,cx,0, 0 ));
 		WLGUI::DC::SetPixel(gui_surface_dc,x+200,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0, cx,0 ));
 		WLGUI::DC::SetPixel(gui_surface_dc,x+300,x,WLGUI::DC::MakeRGB8(gui_surface_dc,0, 0, cx));
+	}
+	WLGUI::DC::SetArbitraryMapMode(gui_surface_dc,false);
+	WLGUI::DC::SetLogicalOrigin(gui_surface_dc,0,0);
+	WLGUI::DC::SetDeviceOrigin(gui_surface_dc,0,0);
+
+	SDL_UpdateRect(gui_surface, 0, 0, 0, 0);
+	while (SDL_PollEvent(&event));
+	SDL_Delay(1000);
+
+	{
+		const unsigned int sw = dw/4,sh = dh/4;
+		const unsigned int sx = dw - sw,sy = dh - sh;
+		for (unsigned int y=0;y < sx;y++) {
+			for (unsigned int x=0;x < sy;x++) {
+				WLGUI::DC::SetPixel(gui_surface_dc,x,y,
+					WLGUI::DC::GetPixel(gui_surface_dc,sx+(x/4),sy+(y/4)));
+			}
+		}
 	}
 
 	SDL_UpdateRect(gui_surface, 0, 0, 0, 0);
@@ -1943,7 +2021,7 @@ public:
         cmd->raise();
     }
 
-    void actionExecuted(GUI::ActionEventSource *b, const GUI::String &arg) {
+    void actionExecuted(GUI::ActionEventSource *b, const GUI::String &arg) override {
         (void)b;//UNUSED
         if (arg == MSG_Get("OK")) {
             ParseCommand(cmd->getText());
@@ -1958,7 +2036,7 @@ public:
             close();
     }
 
-    bool keyUp(const GUI::Key &key) {
+    bool keyUp(const GUI::Key &key) override {
         if (GUI::ToplevelWindow::keyUp(key)) return true;
 
         if (key.special == GUI::Key::Enter) {
@@ -1988,7 +2066,7 @@ public:
         move(parent->getWidth()>this->getWidth()?(parent->getWidth()-this->getWidth())/2:0,parent->getHeight()>this->getHeight()?(parent->getHeight()-this->getHeight())/2:0);
     };
 
-    void actionExecuted(GUI::ActionEventSource *b, const GUI::String &arg) {
+    void actionExecuted(GUI::ActionEventSource *b, const GUI::String &arg) override {
         (void)b;//UNUSED
         if (arg == MSG_Get("DEBUGCMD")) {
             logwin = true;
@@ -2021,7 +2099,7 @@ public:
         move(parent->getWidth()>this->getWidth()?(parent->getWidth()-this->getWidth())/2:0,parent->getHeight()>this->getHeight()?(parent->getHeight()-this->getHeight())/2:0);
     };
 
-    void actionExecuted(GUI::ActionEventSource *b, const GUI::String &arg) {
+    void actionExecuted(GUI::ActionEventSource *b, const GUI::String &arg) override {
         (void)b;//UNUSED
         if (arg == MSG_Get("DEBUGCMD")) {
             logwin = false;
