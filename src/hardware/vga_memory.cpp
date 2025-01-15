@@ -386,7 +386,10 @@ template <const bool chained> static inline void VGA_Generic_Write_Handler(PhysP
     /* FIXME: A better method (I think) is to have the VGA text drawing code
      *        directly reference the font data in bitplane #2 instead of
      *        this hack */
-    vga.draw.font[planeaddr] = pixels.b[2];
+    if (planeaddr < (512*1024)) {
+        /* 2025/01/12: Range checking is required in order not to overrun the array and corrupt emulator state */
+        vga.draw.font[planeaddr] = pixels.b[2];
+    }
 
     ((uint32_t*)vga.mem.linear)[planeaddr]=pixels.d;
 }
@@ -462,11 +465,13 @@ public:
 		// planar byte offset = addr & ~3u      (discard low 2 bits)
 		// planer index = addr & 3u             (use low 2 bits as plane index)
 		// FIXME: Does chained mode use the lower 2 bits of the CPU address or does it use the read mode select???
+		addr &= vga.mem.memmask;
 		return VGA_Generic_Read_Handler(addr&~3u, addr, (uint8_t)(addr&3u));
 	}
 	static INLINE void writeHandler8(PhysPt addr, Bitu val) {
 		// planar byte offset = addr & ~3u      (discard low 2 bits)
 		// planer index = addr & 3u             (use low 2 bits as plane index)
+		addr &= vga.mem.memmask;
 		return VGA_Generic_Write_Handler<true/*chained*/>(addr&~3u, addr, (uint8_t)val);
 	}
 	uint8_t readb(PhysPt addr ) override {
@@ -529,11 +534,13 @@ public:
 	static INLINE Bitu readHandler8(PhysPt addr ) {
 		// planar byte offset = addr >> 2       (shift 2 bits to the right)
 		// planer index = addr & 3u             (use low 2 bits as plane index)
+		addr &= vga.mem.memmask;
 		return VGA_Generic_Read_Handler(addr>>2u, addr, (uint8_t)(addr&3u));
 	}
 	static INLINE void writeHandler8(PhysPt addr, Bitu val) {
 		// planar byte offset = addr >> 2       (shift 2 bits to the right)
 		// planer index = addr & 3u             (use low 2 bits as plane index)
+		addr &= vga.mem.memmask;
 		return VGA_Generic_Write_Handler<true/*chained*/>(addr>>2u, addr, (uint8_t)val);
 	}
 	uint8_t readb(PhysPt addr ) override {
@@ -593,6 +600,7 @@ public:
 class VGA_UnchainedVGA_Handler : public PageHandler {
 public:
 	Bitu readHandler(PhysPt start) {
+		start &= vga.mem.memmask >> 2u;
 		return VGA_Generic_Read_Handler(start, start, vga.config.read_map_select);
 	}
 public:
@@ -625,6 +633,7 @@ public:
 	}
 public:
 	void writeHandler(PhysPt start, uint8_t val) {
+		start &= vga.mem.memmask >> 2u;
 		VGA_Generic_Write_Handler<false/*chained*/>(start, start, val);
 	}
 public:
@@ -663,11 +672,11 @@ public:
 class VGA_UnchainedVGA_Fast_Handler : public VGA_UnchainedVGA_Handler {
 public:
 	void writeHandler(PhysPt start, uint8_t val) {
-		start &= 0xFFFFu;
+		start &= vga.mem.memmask >> 2u;
 		((uint32_t*)vga.mem.linear)[start] = (((uint32_t*)vga.mem.linear)[start] & vga.config.full_not_map_mask) + (ExpandTable[val] & vga.config.full_map_mask);
 	}
 	void writeHandlerFull(PhysPt start, uint8_t val) {
-		start &= 0xFFFFu;
+		start &= vga.mem.memmask >> 2u;
 		((uint32_t*)vga.mem.linear)[start] = ExpandTable[val];
 	}
 public:
@@ -2134,7 +2143,7 @@ public:
 	VGA_LFB_Handler(const unsigned int fl) : PageHandler(fl) {}
 	HostPt GetHostReadPt( Bitu phys_page ) override {
 		phys_page -= vga.lfb.page;
-		phys_page &= (vga.mem.memsize >> 12) - 1;
+		phys_page &= vga.mem.memmask >> 12u;
 		return &vga.mem.linear[CHECKED3(phys_page * 4096)];
 	}
 	HostPt GetHostWritePt( Bitu phys_page ) override {
