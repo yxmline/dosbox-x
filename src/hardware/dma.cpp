@@ -352,6 +352,7 @@ Bitu DmaController::ReadControllerReg(Bitu reg,Bitu /*len*/) {
 	/* read base address of DMA transfer (1st byte low part, 2nd byte high part) */
 	case 0x0:case 0x2:case 0x4:case 0x6:
 		chan=GetChannel((uint8_t)(reg >> 1));
+		chan->DoCallBack(DMA_READ_COUNTER);
 		flipflop=!flipflop;
 		if (flipflop) {
 			return chan->curraddr & 0xff;
@@ -361,6 +362,7 @@ Bitu DmaController::ReadControllerReg(Bitu reg,Bitu /*len*/) {
 	/* read DMA transfer count (1st byte low part, 2nd byte high part) */
 	case 0x1:case 0x3:case 0x5:case 0x7:
 		chan=GetChannel((uint8_t)(reg >> 1));
+		chan->DoCallBack(DMA_READ_COUNTER);
 		flipflop=!flipflop;
 		if (flipflop) {
 			return chan->currcnt & 0xff;
@@ -371,6 +373,7 @@ Bitu DmaController::ReadControllerReg(Bitu reg,Bitu /*len*/) {
 		ret=0;
 		for (uint8_t ct=0;ct<4;ct++) {
 			chan=GetChannel(ct);
+			chan->DoCallBack(DMA_READ_COUNTER);
 			if (chan->tcount) ret |= (Bitu)1U << ct;
 			chan->tcount=false;
 			if (chan->request) ret |= (Bitu)1U << (4U + ct);
@@ -491,6 +494,31 @@ Bitu DmaChannel::Read(Bitu want, uint8_t * buffer) {
                 curraddr = baseaddr;
                 UpdateEMSMapping();
             } else {
+                /* NTS: This is what the 8237 actually does: Sets TC and sets the mask bit of the channel.
+                 *
+                 *      "8237A
+                 *      Table 1. Pin Description (Continued)
+                 *      Symbol Type Name and Function
+                 *      EOP I/O END OF PROCESS: End of Process is an active low bidirectional
+                 *      signal. Information concerning the completion of DMA services is
+                 *      available at the bidirectional EOP pin. The 8237A allows an
+                 *      external signal to terminate an active DMA service. This is
+                 *      accomplished by pulling the EOP input low with an external EOP
+                 *      signal. The 8237A also generates a pulse when the terminal count
+                 *      (TC) for any channel is reached. This generates an EOP signal
+                 *      which is output through the EOP line. The reception of EOP, either
+                 *      internal or external, will cause the 8237A to terminate the service,
+                 *      reset the request, and, if Autoinitialize is enabled, to write the base
+                 *      registers to the current registers of that channel. The mask bit and
+                 *      TC bit in the status word will be set for the currently active channel
+                 *      by EOP unless the channel is programmed for Autoinitialize. In that
+                 *      case, the mask bit remains unchanged. During memory-to-memory
+                 *      transfers, EOP will be output when the TC for channel 1 occurs.
+                 *      EOP should be tied high with a pull-up resistor if it is not used to
+                 *      prevent erroneous end of process inputs."
+                 *
+                 *      [http://hackipedia.org/browse.cgi/Computer/Platform/PC%2c%20IBM%20compatible/DMA%20controller/8237/8237A%20HIGH%20PERFORMANCE%20PROGRAMMABLE%20DMA%20CONTROLLER%20%288237A%2d5%29%20%281993%2d09%29%2epdf]
+                 */
                 masked = true;
                 UpdateEMSMapping();
                 DoCallBack(DMA_MASKED);
@@ -577,6 +605,31 @@ Bitu DmaChannel::Write(Bitu want, uint8_t * buffer) {
                 curraddr = baseaddr;
                 UpdateEMSMapping();
             } else {
+                /* NTS: This is what the 8237 actually does: Sets TC and sets the mask bit of the channel.
+                 *
+                 *      "8237A
+                 *      Table 1. Pin Description (Continued)
+                 *      Symbol Type Name and Function
+                 *      EOP I/O END OF PROCESS: End of Process is an active low bidirectional
+                 *      signal. Information concerning the completion of DMA services is
+                 *      available at the bidirectional EOP pin. The 8237A allows an
+                 *      external signal to terminate an active DMA service. This is
+                 *      accomplished by pulling the EOP input low with an external EOP
+                 *      signal. The 8237A also generates a pulse when the terminal count
+                 *      (TC) for any channel is reached. This generates an EOP signal
+                 *      which is output through the EOP line. The reception of EOP, either
+                 *      internal or external, will cause the 8237A to terminate the service,
+                 *      reset the request, and, if Autoinitialize is enabled, to write the base
+                 *      registers to the current registers of that channel. The mask bit and
+                 *      TC bit in the status word will be set for the currently active channel
+                 *      by EOP unless the channel is programmed for Autoinitialize. In that
+                 *      case, the mask bit remains unchanged. During memory-to-memory
+                 *      transfers, EOP will be output when the TC for channel 1 occurs.
+                 *      EOP should be tied high with a pull-up resistor if it is not used to
+                 *      prevent erroneous end of process inputs."
+                 *
+                 *      [http://hackipedia.org/browse.cgi/Computer/Platform/PC%2c%20IBM%20compatible/DMA%20controller/8237/8237A%20HIGH%20PERFORMANCE%20PROGRAMMABLE%20DMA%20CONTROLLER%20%288237A%2d5%29%20%281993%2d09%29%2epdf]
+                 */
                 masked = true;
                 UpdateEMSMapping();
                 DoCallBack(DMA_MASKED);
