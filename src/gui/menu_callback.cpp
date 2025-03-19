@@ -2299,6 +2299,13 @@ bool doublescan_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const m
     return true;
 }
 
+bool modeswitch_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
+    (void)menu;//UNUSED
+    (void)menuitem;//UNUSED
+    MENU_SetBool("render", "modeswitch");
+    return true;
+}
+
 bool scaler_set_menu_callback(DOSBoxMenu * const menu,DOSBoxMenu::item * const menuitem) {
     (void)menu;//UNUSED
 
@@ -3246,6 +3253,10 @@ void AllocCallback1() {
 #endif
                 mainMenu.alloc_item(DOSBoxMenu::item_type_id,"doublescan").set_text("Doublescan").
                     set_callback_function(doublescan_menu_callback);
+#if C_SDL2
+                mainMenu.alloc_item(DOSBoxMenu::item_type_id,"modeswitch").set_text("Modeswitch").
+                    set_callback_function(modeswitch_menu_callback);
+#endif
             }
             {
                 DOSBoxMenu::item &item = mainMenu.alloc_item(DOSBoxMenu::submenu_type_id,"VideoVsyncMenu");

@@ -401,6 +401,8 @@ static const char *def_menu_video_output[] =
     "doublescan",
 #if !defined(C_SDL2)
     "doublebuf",
+#else
+    "modeswitch",
 #endif
     NULL
 };
