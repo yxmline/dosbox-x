@@ -1,4 +1,7 @@
 Next
+  - Fixed Host key (F11, F12) handling in Codepage 932 (Japanese Shift-JIS).
+    (maron2000)
+  - Fixed SSE PSADBW to match the Intel SDM. (fuel-pcbox) 
   - Bumped ESFMu to ver 1.2.6 (maron2000)
   - Fixed regression of adding a dot to CD labels when longer than 8 characters,
     required for games such as Descent 2 CD installer (maron2000)
@@ -21,6 +24,8 @@ Next
   - Fixed direct input of half-width kana (maron2000)
   - Fixed PC-98 INT 1Fh, AH=90h source and destination address (drachen6jp)
   - Fixed unnecessary trailing backslash in path name (maron2000)
+  - Fixed SSE MOVSS, UNPCKLPS, UNPCKHPS, and PSADBW instruction
+    implementations (fuel-pcbox)
 
 2025.02.01
   - Added new experimental dosbox.conf option that turns off the
