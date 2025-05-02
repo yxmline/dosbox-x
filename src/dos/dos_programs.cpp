@@ -563,9 +563,9 @@ void MenuBrowseCDImage(char drive, int num) {
 
     if (Drives[drive-'A']&&!strncmp(Drives[drive-'A']->GetInfo(), "isoDrive ", 9)) {
 #if !defined(HX_DOS)
-        std::string drive_warn = "CD drive "+(dos_kernel_disabled?std::to_string(num):std::string(1, drive)+":")+" is currently mounted with the image:\n\n"+std::string(Drives[drive-'A']->GetInfo()+9)+"\n\nDo you want to change the CD image now?";
         std::string drive_info = std::string(Drives[drive - 'A']->GetInfo() + 9);
-        drive_warn = formatString(MSG_Get("PROGRAM_CDDRIVE_WARN"), (dos_kernel_disabled ? std::to_string(num) : (std::string(1, drive) + ":").c_str(), drive_info.c_str()));
+        std::string drive_letter = dos_kernel_disabled ? std::to_string(num) : (std::string(1, drive) + ":");
+        std::string drive_warn = formatString(MSG_Get("PROGRAM_CDDRIVE_WARN"), drive_letter.c_str(), drive_info.c_str());
         if (!systemmessagebox("Change CD Image",drive_warn.c_str(),"yesno","question", 1)) return;
 #endif
     } else
@@ -786,6 +786,8 @@ void MenuBrowseImageFile(char drive, bool arc, bool boot, bool multiple) {
 #endif
 }
 
+bool CodePageGuestToHostUTF8(char *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/) ;
+
 void MenuBrowseFolder(char drive, std::string const& drive_type) {
     std::string str(1, drive);
 	if (Drives[drive-'A']) {
@@ -803,7 +805,15 @@ void MenuBrowseFolder(char drive, std::string const& drive_type) {
     std::string title = formatString(MSG_Get("PROGRAM_MOUNT_SELECT_DRIVE"), str.c_str(),MSG_Get(msg_key.c_str()));
     if(drive_type=="CDROM")
         title += "\n" + std::string(MSG_Get("PROGRAM_MOUNT_CDROM_SUPPORT"));
+#ifdef LINUX
+    size_t aMessageLength = strlen(title.c_str());
+    char *lMessage = (char *)malloc((aMessageLength * 2 + 1) * sizeof(char)); 
+    CodePageGuestToHostUTF8(lMessage, title.c_str()) ;
+    char const * lTheSelectFolderName = tinyfd_selectFolderDialog(lMessage, NULL);
+    free(lMessage);
+#else
     char const * lTheSelectFolderName = tinyfd_selectFolderDialog(title.c_str(), NULL);
+#endif
     if (lTheSelectFolderName) {
         MountHelper(drive,GetNewStr(lTheSelectFolderName).c_str(),drive_type);
         std::string drive_warn = formatString(MSG_Get("PROGRAM_MOUNT_SUCCESS"), std::string(1, drive).c_str(), lTheSelectFolderName);
@@ -10085,6 +10095,8 @@ void DOS_SetupPrograms(void) {
 #endif
         "  \033[32;1m-examples: Show some usage examples.\033[0m"
         );
+    MSG_Add("IMAGEMOUNT_CHANGE_DOSVER", "Mounting this type of disk images requires a reported DOS version of %s or higher.\n"
+        "Do you want to auto - change the reported DOS version to %s now and mount the disk image ? ");
     MSG_Add("PROGRAM_IMGMAKE_EXAMPLE",
         "Some usage examples of IMGMAKE:\n\n"
         "  \033[32;1mIMGMAKE -t fd\033[0m                   - create a 1.44MB floppy image \033[33;1mIMGMAKE.IMG\033[0m\n"
@@ -10430,6 +10442,38 @@ void DOS_SetupPrograms(void) {
     MSG_Add("PROGRAM_ASK_CHCP","Drive %c: may require code page %d to be properly accessed.\n\n"
             "Do you want to change the current code page to %d now?\n");
     MSG_Add("PROGRAM_CHANGING_CODEPAGE","Changing code page");
+    MSG_Add("MENU_DRIVE_NOTEXIST", "Drive does not exist or is mounted from disk image.");
+    MSG_Add("MENU_SAVE_IMAGE_FAILED","Failed to save disk image.");
+    MSG_Add("MENU_JP_CPONLY","This function is only available for the Japanese code page (932).");
+    MSG_Add("MENU_CN_CPONLY","This function is only available for the Chinese code pages (936 or 950).");
+    MSG_Add("MENU_GLIDE_ERROR","Glide passthrough cannot be enabled. Check the Glide wrapper installation.");
+    MSG_Add("MENU_HIGH_INTENSITY_ERROR", "High intensity is not supported for the current video mode.");
+    MSG_Add("MENU_SAVE_FILE_ERROR","Cannot save to the file: %s");
+    MSG_Add("MENU_INT2F_SUCCESS","The INT 2Fh hook has been successfully set.");
+    MSG_Add("MENU_INT2F_ALREADY_SET","The INT 2Fh hook was already set up.");
+    MSG_Add("QUIT_DISABLED","Quitting from DOSBox-X with this is currently disabled.");
+    MSG_Add("QUIT_CONFIRM","This will quit from DOSBox-X.\nAre you sure?");
+    MSG_Add("QUIT_GUEST_DISABLED","You cannot quit DOSBox-X while running a guest system.");
+    MSG_Add("QUIT_GUEST_CONFIRM", "You are currently running a guest system.\nAre you sure to quit anyway now?");
+    MSG_Add("QUIT_FILE_OPEN_DISABLED","You cannot quit DOSBox-X while one or more files are open.");
+    MSG_Add("QUIT_FILE_OPEN_CONFIRM", "It may be unsafe to quit from DOSBox-X right now\n"
+            "because one or more files are currently open.\nAre you sure to quit anyway now?");
+    MSG_Add("QUIT_PROGRAM_DISABLED","You cannot quit DOSBox-X while running a program or game.");
+    MSG_Add("QUIT_PROGRAM_CONFIRM","You are currently running a program or game.\nAre you sure to quit anyway now?");
+    MSG_Add("SCALER_LOAD_WARN","This scaler may not work properly or have undesired effect:\n\n%s\n\n"
+            "Do you want to force load the scaler?");
+    MSG_Add("PIXEL_SHADER_WARN","This pixel shader may be unneeded or have undesired effect:\n\n%s\n\n"
+            "Do you want to load the pixel shader anyway?\n\n"
+            "(You may append 'forced' to the pixelshader setting to force load the pixel shader without this message)");
+    MSG_Add("PIXEL_SHADER_LOADED", "Loaded pixel shader - %s");
+    MSG_Add("MAPPEREDITOR_NOT_AVAILABLE","Mapper Editor is not currently available.");
+    MSG_Add("OPL_REC_COMPLETED","Saved Raw OPL output to the file:\n\n%s");
+    MSG_Add("OPL_CAPTURE_FAILED","Cannot capture Raw OPL output because ESFM native mode is being used by the current "
+            "application, which is not supported by the Raw OPL format.");
+    MSG_Add("TTF_DBCS_ONLY","This function is only available for the Chinese/Japanese/Korean code pages.");
+    MSG_Add("SAVE_FAILED","Failed to save the current state.");
+    MSG_Add("SAVE_CORRUPTED","Save state corrupted! Program may not work.");
+    MSG_Add("SAVE_SCREENSHOT","Saved screenshot to the file:\n\n%s");
     
     const Section_prop * dos_section=static_cast<Section_prop *>(control->GetSection("dos"));
     hidefiles = dos_section->Get_string("drive z hide files");

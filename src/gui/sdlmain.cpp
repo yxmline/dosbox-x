@@ -84,6 +84,11 @@ void MenuBrowseProgramFile(void), OutputSettingMenuUpdate(void), aspect_ratio_me
 extern int tryconvertcp, Reflect_Menu(void);
 bool kana_input = false; // true if a half-width kana was typed
 
+#ifndef LINUX
+char* convert_escape_newlines(const char* aMessage);
+char* revert_escape_newlines(const char* aMessage);
+#endif
+
 #ifndef _GNU_SOURCE
 # define _GNU_SOURCE
 #endif
@@ -1085,6 +1090,7 @@ void GFX_SetTitle(int32_t cycles, int frameskip, Bits timing, bool paused) {
     }
 
     if (paused) strcat(title," PAUSED");
+    if (ticksLocked) strcat(title, " TURBO");
 #if C_DEBUG
     if (IsDebuggerActive()) strcat(title," DEBUGGER");
 #endif
@@ -1096,19 +1102,144 @@ void GFX_SetTitle(int32_t cycles, int frameskip, Bits timing, bool paused) {
 }
 
 bool warn_on_mem_write = false;
+bool CodePageGuestToHostUTF8(char *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/) ;
+
+#if defined(WIN32)
+char* convert_escape_newlines(const char* aMessage) {
+    size_t len = strlen(aMessage);
+    char* lMessage = (char*)malloc(len * 2 + 1); // Allocate memory considering convert to UTF8
+
+    if(!lMessage) return nullptr;
+
+    const char* src = aMessage;
+    char* dst = lMessage;
+
+    while(*src) {
+        if(*src == '\n') {
+            *dst++ = '\\';
+            *dst++ = 'n';
+            src++;
+        }
+        else {
+            *dst++ = *src++;
+        }
+    }
+
+    *dst = '\0'; // Terminate with NULL character
+    return lMessage;
+}
+
+char* revert_escape_newlines(const char* aMessage) {
+    size_t len = strlen(aMessage);
+    char* lMessage = (char*)malloc(len * 2 + 1); // Allocate memory considering convert to UTF8
+
+    if(!lMessage) return nullptr;
+
+    const char* src = aMessage;
+    char* dst = lMessage;
+
+    while(*src) {
+        if(src[0] == '\\' && src[1] == 'n') {
+            *dst++ = '\n';
+            src += 2;
+        }
+        else {
+            *dst++ = *src++;
+        }
+    }
+
+    *dst = '\0'; // Terminate with NULL character
+    return lMessage;
+}
+#elif defined(MACOSX)
+std::string replaceNewlineWithEscaped(const std::string& input) {
+    std::string output;
+    for (size_t i = 0; i < input.length(); ++i) {
+        if (input[i] == '\'') {  // Close, escape and open
+            output += "'\\''";
+        }
+        else if (input[i] == '\n'){
+            output += "\\n";   // '\n' needs to be replaced to "\\n" 
+            i++;
+        }
+        //else if (input[i] == '\"'){
+        //    output += "\\\"";   // '"' needs to be replaced to "\\\"" 
+        //    i++;
+        //}
+        else {
+            output += input[i];
+        }
+    }
+    return output;
+}
+#else
+std::string replaceNewlineWithEscaped(const std::string& input) {
+    std::string output;
+    size_t i = 0;
+
+    while(i < input.length()) {
+        if(input[i] == '\\') {
+            if(input[i + 1] != 'n') output += '\\'; // "\n" needs to be escaped to "\\n" 
+        }
+        else if(input[i] == '\n') {
+            output += "\\\\n";   // '\n' needs to be replaced to "\\n" 
+            i++;
+        }
+        else if(input[i] == '`') {
+            output += "\\`";  // '`' needs to be replaced to "\\`" 
+            i++;
+        }
+        else if(input[i] == '"') {
+            output += "\\\"";  // '"' needs to be replaced to "\\\"" 
+            i++;
+        }
+        else {
+            output += input[i];
+            i++;
+        }
+    }
+
+    return output;
+}
+#endif
 
 bool systemmessagebox(char const * aTitle, char const * aMessage, char const * aDialogType, char const * aIconType, int aDefaultButton) {
 #if !defined(HX_DOS)
     if(!aMessage) aMessage = "";
     std::string lDialogString(aMessage);
+    std::string lTitleString(aTitle);
     std::replace(lDialogString.begin(), lDialogString.end(), '\"', ' ');
-
+    std::replace(lTitleString.begin(), lTitleString.end(), '\"', ' ');
     bool fs=sdl.desktop.fullscreen;
     if (fs) GFX_SwitchFullScreen();
     MAPPER_ReleaseAllKeys();
     GFX_LosingFocus();
     GFX_ReleaseMouse();
-    bool ret=tinyfd_messageBox(aTitle, lDialogString.c_str(), aDialogType, aIconType, aDefaultButton);
+
+#ifndef WIN32
+    size_t aMessageLength = strlen(aMessage);
+    size_t aTitleLength = strlen(aTitle);
+    char* lMessage = (char*)malloc((aMessageLength * 2 + 1) * sizeof(char));  // DBCS may expand to 3 to 4 bytes when converted to UTF-8
+    char* lTitle = (char*)malloc((aTitleLength * 2 + 1) * sizeof(char));  // DBCS may expand to 3 to 4 bytes when converted to UTF-8
+    lDialogString = replaceNewlineWithEscaped(lDialogString); // String may include "\n" which needs to be escaped to "\\n" 
+    CodePageGuestToHostUTF8(lMessage, lDialogString.c_str());
+    lTitleString = replaceNewlineWithEscaped(lTitleString); // String may include "\n" which needs to be escaped to "\\n" 
+    CodePageGuestToHostUTF8(lTitle, lTitleString.c_str());
+    bool ret=tinyfd_messageBox(lTitle, lMessage, aDialogType, aIconType, aDefaultButton);
+    free(lMessage);
+    free(lTitle);
+#else
+    char* temp_message = convert_escape_newlines(aMessage); //FIX_ME: CodePageGuestToHostUTF8() gives weird results for '\n'
+    size_t max_utf8_len = strlen(temp_message) * 3 + 1;
+    char* lMessage = (char*)malloc(max_utf8_len);
+    if(!isDBCSCP() && temp_message && lMessage) CodePageGuestToHostUTF8(lMessage, temp_message);
+    else strcpy(lMessage, temp_message);
+    free(temp_message);
+    temp_message = revert_escape_newlines(lMessage);        //FIX_ME: CodePageGuestToHostUTF8() gives weird results for '\n'
+    bool ret = tinyfd_messageBox(aTitle, temp_message, aDialogType, aIconType, aDefaultButton);
+    free(temp_message);
+    free(lMessage);
+#endif
     MAPPER_ReleaseAllKeys();
     GFX_LosingFocus();
     if (fs&&!sdl.desktop.fullscreen) GFX_SwitchFullScreen();
@@ -1126,35 +1257,35 @@ bool CheckQuit(void) {
     if (sdl.desktop.fullscreen) GFX_SwitchFullScreen();
     if (warn == "true") {
         if (!quit) {
-            systemmessagebox("Quit DOSBox-X warning","Quitting from DOSBox-X with this is currently disabled.","ok", "warning", 1);
+            systemmessagebox("Quit DOSBox-X warning", MSG_Get("QUIT_DISABLED"),"ok", "warning", 1);
             return false;
         } else
-            return systemmessagebox("Quit DOSBox-X warning","This will quit from DOSBox-X.\nAre you sure?","yesno", "question", 1);
+            return systemmessagebox("Quit DOSBox-X warning", MSG_Get("QUIT_CONFIRM"),"yesno", "question", 1);
     } else if (warn == "false")
         return true;
     if (dos_kernel_disabled&&strcmp(RunningProgram, "DOSBOX-X")) {
         if (!quit) {
-            systemmessagebox("Quit DOSBox-X warning","You cannot quit DOSBox-X while running a guest system.","ok", "warning", 1);
+            systemmessagebox("Quit DOSBox-X warning", MSG_Get("QUIT_GUEST_DISABLED"),"ok", "warning", 1);
             return false;
         } else
-            return systemmessagebox("Quit DOSBox-X warning","You are currently running a guest system.\nAre you sure to quit anyway now?","yesno", "question", 1);
+            return systemmessagebox("Quit DOSBox-X warning", MSG_Get("QUIT_GUEST_CONFIRM"),"yesno", "question", 1);
     }
     if (warn == "autofile")
         for (uint8_t handle = 0; handle < DOS_FILES; handle++) {
             if (Files[handle] && (Files[handle]->GetName() == NULL || strcmp(Files[handle]->GetName(), "CON")) && (Files[handle]->GetInformation()&DeviceInfoFlags::Device) == 0) {
                 if (!quit) {
-                    systemmessagebox("Quit DOSBox-X warning","You cannot quit DOSBox-X while one or more files are open.","ok", "warning", 1);
+                    systemmessagebox("Quit DOSBox-X warning", MSG_Get("QUIT_FILE_OPEN_DISABLED"),"ok", "warning", 1);
                     return false;
                 } else
-                    return systemmessagebox("Quit DOSBox-X warning","It may be unsafe to quit from DOSBox-X right now\nbecause one or more files are currently open.\nAre you sure to quit anyway now?","yesno", "question", 1);
+                    return systemmessagebox("Quit DOSBox-X warning", MSG_Get("QUIT_FILE_OPEN_CONFIRM"),"yesno", "question", 1);
             }
         }
     else if (RunningProgram&&strcmp(RunningProgram, "DOSBOX-X")&&strcmp(RunningProgram, "COMMAND")&&strcmp(RunningProgram, "4DOS")) {
         if (!quit) {
-            systemmessagebox("Quit DOSBox-X warning","You cannot quit DOSBox-X while running a program or game.","ok", "warning", 1);
+            systemmessagebox("Quit DOSBox-X warning",MSG_Get("QUIT_PROGRAM_DISABLED"),"ok", "warning", 1);
             return false;
         } else
-            return systemmessagebox("Quit DOSBox-X warning","You are currently running a program or game.\nAre you sure to quit anyway now?","yesno", "question", 1);
+            return systemmessagebox("Quit DOSBox-X warning", MSG_Get("QUIT_PROGRAM_CONFIRM"),"yesno", "question", 1);
     }
 #endif
     return true;
@@ -6427,7 +6558,7 @@ void SDL_SetupConfigSection() {
     Pint->SetBasic(true);
 
     Pstring = sdl_sec->Add_string("output", Property::Changeable::Always, "default");
-    Pstring->Set_help("What video system to use for output (openglnb = OpenGL nearest; openglpp = OpenGL perfect; ttf = TrueType font output).");
+    Pstring->Set_help("What video system to use for output (surface = software (SDL_Surface); openglnb = OpenGL nearest; openglpp = OpenGL perfect; ttf = TrueType font output).");
     Pstring->Set_values(outputs);
     Pstring->SetBasic(true);
 
