@@ -83,6 +83,10 @@ extern bool PS1AudioCard;
 # define S_ISREG(x) ((x & S_IFREG) == S_IFREG)
 #endif
 
+static unsigned char ig_cpu_cycles_set = 0;
+static uint32_t ig_cpu_cycles_value = 0;
+static uint8_t ig_cpu_cycles_max_percent = 0;
+
 struct BIOS_E280_entry {
 	uint64_t	base = 0;
 	uint64_t	length = 0;
@@ -619,6 +623,7 @@ static const char *dosbox_int_version = "DOSBox-X integration device v" STRINGIZ
 static const char *dosbox_int_ver_read = NULL;
 
 struct dosbox_int_saved_state {
+    const char*     dosbox_int_ver_read;
     unsigned char   dosbox_int_register_shf;
     uint32_t        dosbox_int_register;
     unsigned char   dosbox_int_regsel_shf;
@@ -637,42 +642,43 @@ int                                 dosbox_int_saved_sp = -1;
  * with anything userspace is doing (as an alternative to wrapping all access
  * in CLI/STI or PUSHF/CLI/POPF) */
 bool dosbox_int_push_save_state(void) {
+	if (dosbox_int_saved_sp >= (DOSBOX_INT_SAVED_STATE_MAX-1))
+		return false;
 
-    if (dosbox_int_saved_sp >= (DOSBOX_INT_SAVED_STATE_MAX-1))
-        return false;
+	struct dosbox_int_saved_state *ss = &dosbox_int_saved[++dosbox_int_saved_sp];
 
-    struct dosbox_int_saved_state *ss = &dosbox_int_saved[++dosbox_int_saved_sp];
-
-    ss->dosbox_int_register_shf =       dosbox_int_register_shf;
-    ss->dosbox_int_register =           dosbox_int_register;
-    ss->dosbox_int_regsel_shf =         dosbox_int_regsel_shf;
-    ss->dosbox_int_regsel =             dosbox_int_regsel;
-    ss->dosbox_int_error =              dosbox_int_error;
-    ss->dosbox_int_busy =               dosbox_int_busy;
-    return true;
+	ss->dosbox_int_ver_read =           dosbox_int_ver_read;
+	ss->dosbox_int_register_shf =       dosbox_int_register_shf;
+	ss->dosbox_int_register =           dosbox_int_register;
+	ss->dosbox_int_regsel_shf =         dosbox_int_regsel_shf;
+	ss->dosbox_int_regsel =             dosbox_int_regsel;
+	ss->dosbox_int_error =              dosbox_int_error;
+	ss->dosbox_int_busy =               dosbox_int_busy;
+	return true;
 }
 
 bool dosbox_int_pop_save_state(void) {
-    if (dosbox_int_saved_sp < 0)
-        return false;
+	if (dosbox_int_saved_sp < 0)
+		return false;
 
-    struct dosbox_int_saved_state *ss = &dosbox_int_saved[dosbox_int_saved_sp--];
+	struct dosbox_int_saved_state *ss = &dosbox_int_saved[dosbox_int_saved_sp--];
 
-    dosbox_int_register_shf =           ss->dosbox_int_register_shf;
-    dosbox_int_register =               ss->dosbox_int_register;
-    dosbox_int_regsel_shf =             ss->dosbox_int_regsel_shf;
-    dosbox_int_regsel =                 ss->dosbox_int_regsel;
-    dosbox_int_error =                  ss->dosbox_int_error;
-    dosbox_int_busy =                   ss->dosbox_int_busy;
-    return true;
+	dosbox_int_ver_read =               ss->dosbox_int_ver_read;
+	dosbox_int_register_shf =           ss->dosbox_int_register_shf;
+	dosbox_int_register =               ss->dosbox_int_register;
+	dosbox_int_regsel_shf =             ss->dosbox_int_regsel_shf;
+	dosbox_int_regsel =                 ss->dosbox_int_regsel;
+	dosbox_int_error =                  ss->dosbox_int_error;
+	dosbox_int_busy =                   ss->dosbox_int_busy;
+	return true;
 }
 
 bool dosbox_int_discard_save_state(void) {
-    if (dosbox_int_saved_sp < 0)
-        return false;
+	if (dosbox_int_saved_sp < 0)
+		return false;
 
-    dosbox_int_saved_sp--;
-    return true;
+	dosbox_int_saved_sp--;
+	return true;
 }
 
 extern bool user_cursor_locked;
@@ -871,6 +877,30 @@ void dosbox_integration_trigger_read() {
 			break;
 
 		case DOSBOX_ID_RESET_INDEX_CODE: /* interface reset result */
+			break;
+
+		case DOSBOX_ID_REG_CPU_CYCLES:
+			ig_cpu_cycles_set = 0;
+			if (CPU_CycleMax < 0x80000000)
+				dosbox_int_register = (uint32_t)CPU_CycleMax;
+			else
+				dosbox_int_register = (uint32_t)0x7FFFFFFFUL;
+			break;
+
+		case DOSBOX_ID_REG_CPU_MAX_PERCENT:
+			dosbox_int_register = CPU_CyclePercUsed;
+			ig_cpu_cycles_set = 0;
+			break;
+
+		case DOSBOX_ID_REG_CPU_CYCLES_INFO:
+			ig_cpu_cycles_set = 0;
+			dosbox_int_register = 0;
+			if (CPU_CycleAutoAdjust)
+			       dosbox_int_register |= DOSBOX_ID_REG_CPU_CYCLES_INFO_MAX;
+			else if (CPU_AutoDetermineMode &CPU_AUTODETERMINE_CYCLES)
+			       dosbox_int_register |= DOSBOX_ID_REG_CPU_CYCLES_INFO_AUTO;
+			else
+			       dosbox_int_register |= DOSBOX_ID_REG_CPU_CYCLES_INFO_FIXED;
 			break;
 
 		default:
@@ -1106,6 +1136,66 @@ void dosbox_integration_trigger_write() {
 #endif
 			if (dosbox_int_register & 4)
 				CAPTURE_WaveEvent(true);
+			break;
+
+		case DOSBOX_ID_REG_CPU_CYCLES:
+			ig_cpu_cycles_set |= 1u;
+			ig_cpu_cycles_value = dosbox_int_register;
+			if (ig_cpu_cycles_value == 0) ig_cpu_cycles_value = 3000;
+			if (ig_cpu_cycles_value > 0x7FFFFFFFul) ig_cpu_cycles_value = 0x7FFFFFFFul;
+			break;
+
+		case DOSBOX_ID_REG_CPU_MAX_PERCENT:
+			ig_cpu_cycles_set |= 2u;
+			ig_cpu_cycles_max_percent = dosbox_int_register;
+			if (ig_cpu_cycles_max_percent == 0) ig_cpu_cycles_max_percent = 100;
+			if (ig_cpu_cycles_max_percent > 100) ig_cpu_cycles_max_percent = 100;
+			break;
+
+		case DOSBOX_ID_REG_CPU_CYCLES_INFO:
+			dosbox_int_error = false;
+			{
+				unsigned int mode = dosbox_int_register & DOSBOX_ID_REG_CPU_CYCLES_INFO_MODE_MASK;
+				char setting[256] = {0};
+
+				if (mode == 0) {
+					if (CPU_CycleAutoAdjust)
+						mode = DOSBOX_ID_REG_CPU_CYCLES_INFO_MAX;
+					else if (CPU_AutoDetermineMode &CPU_AUTODETERMINE_CYCLES)
+						mode = DOSBOX_ID_REG_CPU_CYCLES_INFO_AUTO;
+					else
+						mode = DOSBOX_ID_REG_CPU_CYCLES_INFO_FIXED;
+				}
+
+				switch (mode) {
+					case DOSBOX_ID_REG_CPU_CYCLES_INFO_MAX:
+						if (ig_cpu_cycles_set & 2)
+							sprintf(setting,"cycles=max %lu%%",(unsigned long)ig_cpu_cycles_max_percent);
+						break;
+					case DOSBOX_ID_REG_CPU_CYCLES_INFO_AUTO:
+						if (ig_cpu_cycles_set & 2)
+							sprintf(setting,"cycles=auto %lu%%",(unsigned long)ig_cpu_cycles_max_percent);
+						break;
+					case DOSBOX_ID_REG_CPU_CYCLES_INFO_FIXED:
+						if (ig_cpu_cycles_set & 1)
+							sprintf(setting,"cycles=fixed %lu",(unsigned long)ig_cpu_cycles_value);
+						break;
+					default:
+						dosbox_int_error = true;
+						break;
+				};
+
+				if (setting) {
+					LOG(LOG_MISC,LOG_DEBUG)("Integratoin device cycle change: %s\n",setting);
+					Section* sec = control->GetSection("cpu");
+					if (sec) sec->HandleInputline(setting);
+				}
+				else {
+					LOG(LOG_MISC,LOG_DEBUG)("Integratoin device cycle change ignored (setmask 0x%x mode 0x%x)\n",
+						ig_cpu_cycles_set,mode);
+				}
+			}
+			ig_cpu_cycles_set = 0;
 			break;
 
 		default:
