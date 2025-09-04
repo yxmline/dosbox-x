@@ -2436,6 +2436,11 @@ void DOSBOX_SetupConfigSections(void) {
                     "at driver startup AND when INT 33h AX=0 is called. This is NEC MOUSE.COM behavior and default\n"
                     "enabled. To emulate other drivers like QMOUSE that do not follow this behavior, set to false.");
 
+    Pbool = secprop->Add_bool("pc-98 chargen vsync-limited access",Property::Changeable::WhenIdle,true);
+    Pbool->Set_help("If set, reading pixels from the character generator while in Code Access mode (or always, for ANK\n"
+                    "characters) will be invalid. Some models (i.e. PC-9821As3) dont seem to have this limitation, but\n"
+                    "many others do.");
+
     secprop=control->AddSection_prop("dosv",&Null_Init,true);
 
     Pstring = secprop->Add_string("dosv",Property::Changeable::OnlyAtStart,"off");
@@ -4496,6 +4501,9 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool->Set_help("If enabled, and loading a program below the 64kb boundary, turn off the A20 gate.\n"
                     "This can help with any program with startup code that assumes the segment wraparound of the 8086.\n"
                     "Depending on DOS configuration the A20 gate may be re-enabled later such as calling INT 21h.");
+
+    Pbool = secprop->Add_bool("xms log memmove",Property::Changeable::WhenIdle,false);
+    Pbool->Set_help("If set, XMS move/copy operations are logged for debugging purposes.");
 
     Pbool = secprop->Add_bool("xms memmove causes flat real mode",Property::Changeable::WhenIdle,true);
     Pbool->Set_help("If set, any call to XMS to move/copy memory sets up flat real mode for segment registers DS and ES.");
