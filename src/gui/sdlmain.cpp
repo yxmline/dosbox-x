@@ -2686,6 +2686,14 @@ static void CaptureMouse(bool pressed) {
     GFX_CaptureMouse();
 }
 
+#if defined(C_SDL2)
+static void CaptureKeyboard(bool pressed) {
+    if (pressed) {
+        GFX_KeyboardCapture(!sdl.capture_keyboard);
+    }
+}
+#endif
+
 #if defined (WIN32)
 STICKYKEYS stick_keys = {sizeof(STICKYKEYS), 0};
 void sticky_keys(bool restore){
@@ -3770,6 +3778,11 @@ static void GUI_StartUp() {
     sdl.mouse.ysensitivity = p3->GetSection()->Get_int("ysens");
 
 #if defined(C_SDL2)
+    // Because we have the option of a dedicated keyboard shortcut to exit
+    // fullscreen, we don't need an Alt+Tab escape hatch. This lets us
+    // block it along with everything else, so you can use it in Windows etc.
+    SDL_SetHint(SDL_HINT_ALLOW_ALT_TAB_WHILE_GRABBED, "0");
+
     // Apply raw mouse input setting
     SDL_SetHintWithPriority(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, section->Get_bool("raw_mouse_input") ? "0" : "1", SDL_HINT_OVERRIDE);
 #endif
@@ -3814,6 +3827,11 @@ static void GUI_StartUp() {
         MAPPER_AddHandler(CaptureMouse,MK_f10,MMOD1,"capmouse","Capture mouse", &item); /* KEEP: Most DOSBox-X users may have muscle memory for this */
         item->set_text("Capture mouse");
     }
+
+#if defined(C_SDL2)
+    MAPPER_AddHandler(CaptureKeyboard,MK_f11,MMOD1,"capkeyboard","Capture keyboard", &item);
+    item->set_text("Capture keyboard");
+#endif
 
 #if defined(C_SDL2) || defined(WIN32) || defined(MACOSX)
     MAPPER_AddHandler(QuickEdit,MK_nothing, 0,"fastedit", "Quick edit mode", &item);
@@ -4144,6 +4162,10 @@ static void GUI_StartUp() {
     SDL_WM_SetCaption("DOSBox-X",VERSION);
 #endif
 
+#if defined(C_SDL2)
+    GFX_KeyboardCapture(section->Get_bool("keyboard_capture"));
+#endif
+
     /* Please leave the Splash screen stuff in working order in DOSBox-X. We spend a lot of time making DOSBox-X. */
     //ShowSplashScreen();   /* I will keep the splash screen alive. But now, the BIOS will do it --J.C. */
 
@@ -4179,6 +4201,28 @@ bool Mouse_IsLocked()
 {
     return sdl.mouse.locked;
 }
+
+#if defined(C_SDL2)
+void GFX_KeyboardCapture(bool enable) {
+    if (sdl.window) {
+        SDL_SetWindowKeyboardGrab(sdl.window, enable ? SDL_TRUE : SDL_FALSE);
+
+        // Make sure we're using the true value of the current grabbed state.
+        bool grabbed = SDL_GetWindowKeyboardGrab(sdl.window) == SDL_TRUE;
+        sdl.capture_keyboard = grabbed;
+
+        if (grabbed)
+            LOG_MSG("Capturing keyboard");
+        else
+            LOG_MSG("Releasing keyboard");
+    }
+
+    // Make sure our menu item is refreshed, to ensure the checkmark value next
+    // to the item is up-to-date.
+    if (mainMenu.item_exists("mapper_capkeyboard"))
+            mainMenu.get_item("mapper_capkeyboard").check(sdl.capture_keyboard).refresh_item(mainMenu);
+}
+#endif
 
 static void RedrawScreen(uint32_t nWidth, uint32_t nHeight) {
     (void)nWidth;//UNUSED
@@ -6693,6 +6737,18 @@ void SDL_SetupConfigSection() {
         "Putting a minus sign in front will disable the conversion for guest systems.");
     Pint->SetBasic(true);
 
+#if defined(C_SDL2)
+    Pbool = sdl_sec->Add_bool("keyboard_capture", Property::Changeable::Always, false);
+    Pbool->Set_help("Capture the keyboard, inhibiting window manager shortcuts.\n"
+        "Be warned, enabling this runs the risk of getting trapped inside "
+        "DOSBox-X, however it can be useful for passing combinations like Alt+F4 "
+        "through to DOS applications that use them, like WordPerfect.\n"
+        "Note that if another application attempts to grab the keyboard, DOSBox-X "
+        "will lose its grab over the keyboard. Additionally, not all shortcuts "
+        "can be inhibited on all platforms, for example Ctrl+Alt+Del on Windows.");
+    Pbool->SetBasic(true);
+#endif
+
     Pbool = sdl_sec->Add_bool("waitonerror",Property::Changeable::Always, true);
     Pbool->Set_help("Wait before closing the console if DOSBox-X has an error.");
     Pbool->SetBasic(true);
@@ -6840,8 +6896,8 @@ static void launcheditor(std::string edit) {
     if (control->configfiles.size() && control->configfiles.front().size())
         execlp(edit.c_str(),edit.c_str(),control->configfiles.front().c_str(),(char*) 0);
     std::string path,file;
-    Cross::CreatePlatformConfigDir(path);
-    Cross::GetPlatformConfigName(file);
+    path = Cross::CreatePlatformConfigDir();
+    file = Cross::GetPlatformConfigName();
     path += file;
     FILE* f = fopen(path.c_str(),"r");
     if(!f && !control->PrintConfig(path.c_str())) {
@@ -6881,7 +6937,7 @@ static void launchcaptures(std::string const& edit) {
         exit(1);
     } else {
         path = "";
-        Cross::CreatePlatformConfigDir(path);
+        path = Cross::CreatePlatformConfigDir();
         path += file;
         Cross::CreateDir(path);
         stat(path.c_str(),&cstat);
@@ -6911,7 +6967,7 @@ static void launchsaves(std::string const& edit) {
         exit(1);
     } else {
         path = "";
-        Cross::CreatePlatformConfigDir(path);
+        path = Cross::CreatePlatformConfigDir();
         path += file;
         Cross::CreateDir(path);
         stat(path.c_str(),&cstat);
@@ -6928,8 +6984,8 @@ static void launchsaves(std::string const& edit) {
 
 static void printconfiglocation() {
     std::string path,file;
-    Cross::CreatePlatformConfigDir(path);
-    Cross::GetPlatformConfigName(file);
+    path =Cross::CreatePlatformConfigDir();
+    file = Cross::GetPlatformConfigName();
     path += file;
 
     FILE* f = fopen(path.c_str(),"r");
@@ -6950,8 +7006,8 @@ static void eraseconfigfile() {
         show_warning("Warning: dosbox-x.conf (or dosbox.conf) exists in current working directory.\nThis will override the configuration file at runtime.\n");
     }
     std::string path,file;
-    Cross::GetPlatformConfigDir(path);
-    Cross::GetPlatformConfigName(file);
+    path = Cross::GetPlatformConfigDir();
+    file = Cross::GetPlatformConfigName();
     path += file;
     f = fopen(path.c_str(),"r");
     if (!f) exit(0);
@@ -6970,7 +7026,7 @@ static void erasemapperfile() {
     }
 
     std::string path,file=MAPPERFILE;
-    Cross::GetPlatformConfigDir(path);
+    path = Cross::GetPlatformConfigDir();
     path += file;
     FILE* f = fopen(path.c_str(),"r");
     if (!f) exit(0);
@@ -8120,8 +8176,8 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         std::string tmp,config_path,config_combined;
 
         /* -- Parse configuration files */
-        Cross::GetPlatformConfigDir(config_path);
-        Cross::GetPlatformConfigName(tmp);
+        config_path = Cross::GetPlatformConfigDir();
+        tmp = Cross::GetPlatformConfigName();
 
         if (exepath.size()) {
             control->ParseConfigFile((exepath + "dosbox-x.conf").c_str());
@@ -8159,7 +8215,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         usecfgdir = false;
     } else if (workdiropt == "userconfig") {
         std::string config_path;
-        Cross::GetPlatformConfigDir(config_path);
+        config_path = Cross::GetPlatformConfigDir();
         if (config_path.size()) {
             if (chdir(config_path.c_str()) == -1) {
                 LOG(LOG_GUI, LOG_ERROR)("sdlmain.cpp main() failed to change directories for workdiropt 'userconfig'.");
@@ -8203,7 +8259,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             }
 #endif
             std::string res_path;
-            Cross::GetPlatformResDir(res_path);
+            res_path = Cross::GetPlatformResDir();
             if(stat((res_path + "dosbox-x.conf").c_str(), &st) == 0) {
                 if(S_ISREG(st.st_mode)) {
                     control->opt_promptfolder = 0;
@@ -8340,9 +8396,9 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 #endif
     std::string tmp, config_path, res_path, config_combined;
     /* -- Parse configuration files */
-    Cross::GetPlatformConfigDir(config_path);
-    Cross::GetPlatformResDir(res_path);
-    Cross::GetPlatformConfigName(tmp);
+    config_path = Cross::GetPlatformConfigDir();
+    res_path = Cross::GetPlatformResDir();
+    tmp = Cross::GetPlatformConfigName();
     config_combined = config_path + tmp;
     {
 
@@ -8396,7 +8452,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                         tsec->HandleInputline("working directory option=autoprompt");
                 }
                 //Try to create the userlevel configfile.
-                Cross::CreatePlatformConfigDir(config_path);
+                config_path = Cross::CreatePlatformConfigDir();
 
                 LOG(LOG_MISC,LOG_DEBUG)("Attempting to write config file according to -userconf, to %s",config_combined.c_str());
                 if (control->PrintConfig(config_combined.c_str())) {
@@ -8764,7 +8820,7 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             }
         } else if (workdiropt == "userconfig") {
             std::string config_path;
-            Cross::GetPlatformConfigDir(config_path);
+            config_path = Cross::GetPlatformConfigDir();
             if(config_path.size()) {
                 if(chdir(config_path.c_str()) == -1) {
                     LOG(LOG_GUI, LOG_ERROR)("sdlmain.cpp main() failed to change directories for workdiropt 'userconfig'.");
