@@ -39,7 +39,7 @@ Apart from the Windows installers, you can also find portable zip files starting
 Regarding Joystick support, the *SDL1 builds requires XInput compatible devices*. If your joystick is not Xinput compatible, you may want to try the SDL2 builds or DirectInput to XInput wrappers such as [Xoutput](https://github.com/csutorasa/XOutput) or [Xbox 360 controller emulator](https://www.x360ce.com/).
 
 * Modern Windows users (7 and after) should use the standard (non-XP, non-lowend) builds but may try the non-standard builds if you prefer, although officially not supported.
-* Windows 9x(95 OSR2+)/NT4/2000 users should use the MinGW lowend 9x builds (32-bit SDL1 only).
+* Windows 9x/NT4/2000 users should use the MinGW lowend 9x builds (32-bit SDL1 only).
 * Windows XP users must use the XP compatible installer with "XP" in the file name, which includes Visual Studio XP builds and the 32-bit MinGW low-end builds. Note that not all features are available in the MinGW low-end builds, currently Slirp support is known to be missing. You also need to install the [DirectX runtime](https://www.microsoft.com/en-us/download/details.aspx?id=8109) or DOSBox-X will complain you're missing `XInput9_1_0.dll`. XP compatible builds works in ReactOS as well, but support is considered experimental.
 * Windows Vista users can use the XP installer or standard (non-XP) Visual Studio portable builds, because standard (non-XP) installer doesn't work in Vista. MinGW dropped support for XP/Vista, so install the 32-bit low-end builds from the XP compatible installer if you prefer MinGW builds.
 
@@ -163,7 +163,7 @@ You should be able to solve the problem by running the following command once in
 2. Run ``xattr -cr .``
 
 ### macOS Packages (Homebrew)
-Homebrew provides packages for macOS Ventura and after.
+Homebrew provides [packages](https://formulae.brew.sh/formula/dosbox-x) for macOS Ventura and after.
 You can install the package by the following steps.
 1. Install [Homebrew](https://brew.sh)
 2. In macOS Terminal (Applications -> Utilities -> Terminal) run `brew install dosbox-x`
@@ -172,7 +172,7 @@ You can install the package by the following steps.
 Please note that these packages are NOT built or updated by the DOSBox-X team.
 
 ### macOS Packages (MacPorts)
-[MacPorts](https://www.macports.org/) provides packages for High Sierra (10.13) and after. 
+[MacPorts](https://www.macports.org/) provides [packages](https://ports.macports.org/port/dosbox-x/details/) for High Sierra (10.13) and after. 
 You can install the package by the following steps.
 1. [Install MacPorts](https://www.macports.org/install.php)
 2. In macOS terminal (Applications -> Utilities -> Terminal) run `sudo port install dosbox-x`
@@ -205,3 +205,4 @@ You could use either the released source code package or the latest source code 
 ## Development nightly builds
 
 The development (preview) builds intended for testing purposes for the supported platforms can be found [here](https://dosbox-x.com/devel-build.html).
+
