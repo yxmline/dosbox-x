@@ -1,10 +1,31 @@
 NEXT VERSION
+  - VGA output will now automatically disable doublescan mode whenever an
+    advanced scaler, such as the "XBRZ" or the Advanced MAME scalers, are
+    selected, so that the scalers can do their job properly on the low
+    resolution graphics mode automatically. The user no longer has to
+    manaully turn off doublescan mode for those scalers to work. (joncampbell123).
+  - Added TV, Scanline, and RGB scaler variants appropriate for VGA
+    200-line modes with doublescan enabled (renders to 400 lines). In fact
+    supporting those scalers with 400-line VGA is arguably more visually
+    accurate than applying them to 200 lines of graphics, because it
+    better reflects the actual 400-line raster as it would be displayed
+    on a VGA monitor. (joncampbell123).
+  - Apparently at random, VGA render will call RENDER_DrawLine too much,
+    causing buffer overruns at random, so, instead of directly assigning
+    the scaler line handler, assign a function that checks the rendered
+    line count and ensures that rendering stops at the correct line
+    count. This should fix some random crashes or corruptions, especially
+    on Linux with the OpenGL output which likes to allocate EXACTLY the
+    amount of memory required for the frame. (joncampbell123).
   - A patch was submitted to DOSLIB DSXMENU to incorporate non-selectable
     informational lines of text. Incorporate the updated DSXMENU binaries
     into DOSBox-X (joncampbell123).
   - Wrote IPS patching tools IPSMAKE and IPSPATCH in DOSLIB, then incorporated
     them as builtin executables on drive Z: under Z:\PATCHING. You can
     now use IPS patch files to "ROM hack" your MS-DOS games. (joncampbell123)
+  - Add map13/map14 CGA/HGC like interleaved rendering support for VGA
+    256-color mode. There is a game engine in development that is willing to
+    use such oddball modes. (joncampbell123)
 
 2025.12.01
   - Video debug overlay: For Tandy and PCjr emulation, add information on

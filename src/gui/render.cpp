@@ -253,6 +253,9 @@ static INLINE void cn_ScalerAddLines( Bitu changed, Bitu count ) {
 static void RENDER_DrawLine_countdown(const void * s);
 
 static void RENDER_DrawLine_countdown_wait(const void * s) {
+    if (render.disablerender)
+        return;
+
     if (RENDER_DrawLine_scanline_cacheHit(s)) { // line has not changed
         render.scale.inLine++;
         render.scale.cacheRead += render.scale.cachePitch;
@@ -266,13 +269,30 @@ static void RENDER_DrawLine_countdown_wait(const void * s) {
 }
 
 static void RENDER_DrawLine_countdown(const void * s) {
+    if (render.disablerender)
+        return;
+
     render.scale.lineHandler(s);
     if (--RENDER_scaler_countdown == 0)
         RENDER_DrawLine = RENDER_DrawLine_countdown_wait;
 }
 #endif
 
+static void RENDER_ScalerLineHandler(const void * s) {
+	if (render.scale.outLine < render.src.height) {
+		render.scale.lineHandler(s);
+	}
+	else {
+		LOG(LOG_MISC,LOG_WARN)("RENDER: Attempted to render too much (in=%u/out=%u/height=%u)",
+			(unsigned int)render.scale.inLine,(unsigned int)render.scale.outLine,(unsigned int)render.src.height);
+		RENDER_DrawLine = RENDER_EmptyLineHandler;
+	}
+}
+
 static void RENDER_StartLineHandler(const void * s) {
+    if (render.disablerender)
+        return;
+
     if (RENDER_DrawLine_scanline_cacheHit(s)) { // line has not changed
         render.scale.cacheRead += render.scale.cachePitch;
         Scaler_ChangedLines[0] += Scaler_Aspect[ render.scale.inLine ];
@@ -289,13 +309,26 @@ static void RENDER_StartLineHandler(const void * s) {
         RENDER_scaler_countdown = RENDER_scaler_countdown_init;
         RENDER_DrawLine = RENDER_DrawLine_countdown;
 #else
-        RENDER_DrawLine = render.scale.lineHandler;
+	// apparently the render code is randomly drawing too many scanlines, so,
+	// to avoid crashes and buffer overruns, we're going to have to use a line
+	// handler that watches the scaler line handler and stops rendering automatically
+	// at the end of the render height. No more uncontrolled rendering and trusting
+	// VGA output not to write too much.
+	//
+	// Sorry, but I just wasted my entire Saturday trying to track down random
+	// OpenGL output crashes (buffer overruns and glibc "double free or corruption"
+	// runtime termination) and this was the only way I could stop it. --J.C.
+        //RENDER_DrawLine = render.scale.lineHandler;
+	RENDER_DrawLine = RENDER_ScalerLineHandler;
 #endif
         RENDER_DrawLine( s );
     }
 }
 
 static void RENDER_FinishLineHandler(const void * s) {
+    if (render.disablerender)
+        return;
+
     if (s) {
         const Bitu *src = (Bitu*)s;
         Bitu *cache = (Bitu*)(render.scale.cacheRead);
@@ -309,6 +342,9 @@ static void RENDER_FinishLineHandler(const void * s) {
 
 
 static void RENDER_ClearCacheHandler(const void * src) {
+    if (render.disablerender)
+        return;
+
     Bitu x, width;
     uint32_t *srcLine, *cacheLine;
     srcLine = (uint32_t *)src;
@@ -325,6 +361,8 @@ bool RENDER_StartUpdate(void) {
     if (GCC_UNLIKELY(render.updating))
         return false;
     if (GCC_UNLIKELY(!render.active))
+        return false;
+    if (GCC_UNLIKELY(render.disablerender))
         return false;
     if (GCC_UNLIKELY(render.frameskip.count<render.frameskip.max)) {
         render.frameskip.count++;
@@ -347,6 +385,7 @@ bool RENDER_StartUpdate(void) {
         if (GCC_UNLIKELY(!GFX_StartUpdate( render.scale.outWrite, render.scale.outPitch )))
             return false;
         render.fullFrame = true;
+        vga.draw.must_complete_frame = true;
         RENDER_DrawLine = RENDER_ClearCacheHandler;
     } else {
         if (render.pal.changed) {
@@ -354,6 +393,7 @@ bool RENDER_StartUpdate(void) {
             if (GCC_UNLIKELY(!GFX_StartUpdate( render.scale.outWrite, render.scale.outPitch )))
                 return false;
             RENDER_DrawLine = render.scale.linePalHandler;
+            vga.draw.must_complete_frame = true;
             render.fullFrame = true;
         } else {
             RENDER_DrawLine = RENDER_StartLineHandler;
@@ -394,45 +434,50 @@ void RENDER_EndUpdate( bool abort ) {
     if (GCC_UNLIKELY(!render.updating))
         return;
 
-    if (video_debug_overlay && !abort && render.active)
+    if (video_debug_overlay && !abort && render.active && render.scale.outLine != 0)
         VGA_DebugOverlay();
 
     if (!abort && render.active && RENDER_DrawLine == RENDER_ClearCacheHandler)
         render.scale.clearCache = false;
 
     RENDER_DrawLine = RENDER_EmptyLineHandler;
-    if (GCC_UNLIKELY(CaptureState & (CAPTURE_IMAGE|CAPTURE_VIDEO))) {
-        Bitu pitch, flags;
-        flags = 0;
-        if (render.src.dblw != render.src.dblh) {
-            if (render.src.dblw) flags|=CAPTURE_FLAG_DBLW;
-            if (render.src.dblh) flags|=CAPTURE_FLAG_DBLH;
-        }
-        float fps = render.src.fps;
-        pitch = render.scale.cachePitch;
-        if (render.frameskip.max)
-            fps /= 1+render.frameskip.max;
-
-        if (Scaler_ChangedLineIndex == 0)
-            flags |= CAPTURE_FLAG_NOCHANGE;
-
-        CAPTURE_AddImage( render.src.width, render.src.height, render.src.bpp, pitch,
-            flags, fps, (uint8_t *)&scalerSourceCache, (uint8_t*)&render.pal.rgb );
+    if (render.disablerender) {
+        GFX_EndUpdate(nullptr);
     }
-    if ( render.scale.outWrite ) {
-        GFX_EndUpdate( abort? NULL : Scaler_ChangedLines );
-        render.frameskip.hadSkip[render.frameskip.index] = 0;
-    } else {
+    else {
+        if (GCC_UNLIKELY(CaptureState & (CAPTURE_IMAGE|CAPTURE_VIDEO))) {
+            Bitu pitch, flags;
+            flags = 0;
+            if (render.src.dblw != render.src.dblh) {
+                if (render.src.dblw) flags|=CAPTURE_FLAG_DBLW;
+                if (render.src.dblh) flags|=CAPTURE_FLAG_DBLH;
+            }
+            float fps = render.src.fps;
+            pitch = render.scale.cachePitch;
+            if (render.frameskip.max)
+                fps /= 1+render.frameskip.max;
+
+            if (Scaler_ChangedLineIndex == 0)
+                flags |= CAPTURE_FLAG_NOCHANGE;
+
+            CAPTURE_AddImage( render.src.width, render.src.height, render.src.bpp, pitch,
+                flags, fps, (uint8_t *)&scalerSourceCache, (uint8_t*)&render.pal.rgb );
+        }
+        if ( render.scale.outWrite ) {
+            GFX_EndUpdate( abort? NULL : Scaler_ChangedLines );
+            render.frameskip.hadSkip[render.frameskip.index] = 0;
+        } else {
 #if 0
-        Bitu total = 0, i;
-        render.frameskip.hadSkip[render.frameskip.index] = 1;
-        for (i = 0;i<RENDER_SKIP_CACHE;i++) 
-            total += render.frameskip.hadSkip[i];
-        LOG_MSG( "Skipped frame %d %d", PIC_Ticks, (total * 100) / RENDER_SKIP_CACHE );
+            Bitu total = 0, i;
+            render.frameskip.hadSkip[render.frameskip.index] = 1;
+            for (i = 0;i<RENDER_SKIP_CACHE;i++) 
+                total += render.frameskip.hadSkip[i];
+            LOG_MSG( "Skipped frame %d %d", PIC_Ticks, (total * 100) / RENDER_SKIP_CACHE );
 #endif
-        // Force output to update the screen even if nothing changed...
-        // works only with Direct3D output (GFX_StartUpdate() was probably not even called)
-        if (RENDER_GetForceUpdate()) GFX_EndUpdate(nullptr);
+            // Force output to update the screen even if nothing changed...
+            // works only with Direct3D output (GFX_StartUpdate() was probably not even called)
+            if (RENDER_GetForceUpdate()) GFX_EndUpdate(nullptr);
+        }
     }
     render.frameskip.index = (render.frameskip.index + 1) & (RENDER_SKIP_CACHE - 1);
     render.updating=false;
@@ -483,8 +528,12 @@ void RENDER_Reset( void ) {
 	double gfx_scaleh;
 	const std::string scaler = RENDER_GetScaler();
 
-	if (width == 0 || height == 0)
+	render.disablerender = false;
+
+	if (width == 0 || height == 0) {
+		render.disablerender = true;
 		return;
+	}
 
 	Bitu gfx_flags, xscale, yscale;
 	ScalerSimpleBlock_t     *simpleBlock = &ScaleNormal1x;
@@ -602,6 +651,21 @@ void RENDER_Reset( void ) {
 	} else if (dblw && !render.scale.hardware) {
 		if(scalerOpGray == render.scale.op){
 			simpleBlock = &ScaleGrayDw;
+		}else if(scalerOpTV == render.scale.op){
+			if (render.scale.size >= 3)
+				simpleBlock = &ScaleTV3xDw;
+			else
+				simpleBlock = &ScaleTV2xDw;
+		}else if(scalerOpRGB == render.scale.op){
+			if (render.scale.size >= 3)
+				simpleBlock = &ScaleRGB3xDw;
+			else
+				simpleBlock = &ScaleRGB2xDw;
+		}else if(scalerOpScan == render.scale.op){
+			if (render.scale.size >= 3)
+				simpleBlock = &ScaleScan3xDw;
+			else
+				simpleBlock = &ScaleScan2xDw;
 		}else{
 			if (render.scale.forced && render.scale.size >= 2)
 				simpleBlock = &ScaleNormal2xDw;
@@ -782,6 +846,19 @@ forcenormal:
 			height = MakeAspectTable( skip, render.src.height, (double)yscale, yscale);
 		}
 	}
+
+	/* avoid crashes by not drawing any mode larger than the simple scaler.
+	 * the code above has already switched to the simple scaler from complex if it exceeds what the complex scalers can do */
+	if (simpleBlock && !complexBlock) {
+		if (render.src.width > SCALER_MAXWIDTH || render.src.height > SCALER_MAXHEIGHT) {
+			LOG_MSG("Video resolution is too high for render scaler architecture (%ux%u > %ux%u)",
+				(unsigned int)render.src.width,(unsigned int)render.src.height,
+				(unsigned int)SCALER_MAXWIDTH,(unsigned int)SCALER_MAXHEIGHT);
+			RENDER_DrawLine = RENDER_EmptyLineHandler;
+			render.disablerender = true;
+		}
+	}
+
 	/* update the aspect ratio */
 	sdl.srcAspect.x = aspect_ratio_x>0?aspect_ratio_x:(int)(render.src.width * (render.src.dblw ? 2 : 1));
 	sdl.srcAspect.y = aspect_ratio_y>0?aspect_ratio_y:(int)floor((render.src.height * (render.src.dblh ? 2 : 1) * render.src.ratio) + 0.5);
@@ -874,7 +951,8 @@ forcenormal:
 	render.pal.changed = false;
 	memset(render.pal.modified, 0, sizeof(render.pal.modified));
 	//Finish this frame using a copy only handler
-	RENDER_DrawLine = RENDER_FinishLineHandler;
+	if (!render.disablerender) RENDER_DrawLine = RENDER_FinishLineHandler;
+	vga.draw.must_complete_frame = true;
 	render.scale.outWrite = nullptr;
 	/* Signal the next frame to first reinit the cache */
 	render.scale.clearCache = true;
@@ -1210,6 +1288,25 @@ void RENDER_OnSectionPropChange(Section *x) {
 
 extern const char *scaler_menu_opts[][2];
 
+bool RENDER_IsScalerCompatibleWithDoublescan(void) {
+    switch (render.scale.op) {
+        case scalerOpAdvMame:
+        case scalerOpAdvInterp:
+        case scalerOpHQ:
+        case scalerOpSaI:
+        case scalerOpSuperSaI:
+        case scalerOpSuperEagle:
+            return false;
+        default:
+#if C_XBRZ
+            if (sdl_xbrz.enable) return false;
+#endif
+            break;
+    };
+
+    return true;
+}
+
 void RENDER_UpdateScalerMenu(void) {
     const std::string scaler = RENDER_GetScaler();
 
@@ -1219,6 +1316,8 @@ void RENDER_UpdateScalerMenu(void) {
         mainMenu.get_item(name).check(scaler == scaler_menu_opts[i][0]).refresh_item(mainMenu);
     }
 }
+
+extern bool vga_render_wait_for_changes;
 
 void RENDER_UpdateFromScalerSetting(void) {
     Section_prop * section=static_cast<Section_prop *>(control->GetSection("render"));
@@ -1231,6 +1330,7 @@ void RENDER_UpdateFromScalerSetting(void) {
     sdl_xbrz.enable = false;
 #endif
 
+    bool p_dscompat = RENDER_IsScalerCompatibleWithDoublescan();
     bool p_forced = render.scale.forced;
     unsigned int p_size = (unsigned int)(render.scale.size);
     bool p_hardware = render.scale.hardware;
@@ -1277,13 +1377,14 @@ void RENDER_UpdateFromScalerSetting(void) {
         render.scale.op = scalerOpNormal; 
         render.scale.size = 1; 
         render.scale.hardware = false; 
-        vga.draw.doublescan_set = false; 
         sdl_xbrz.enable = true; 
         sdl_xbrz.postscale_bilinear = (scaler == "xbrz_bilinear");
     }
 #endif
 
     bool reset = false;
+
+    bool dscompat = RENDER_IsScalerCompatibleWithDoublescan();
 
 #if C_XBRZ
     if (old_xBRZ_enable != sdl_xbrz.enable) reset = true;
@@ -1294,6 +1395,8 @@ void RENDER_UpdateFromScalerSetting(void) {
     if (p_op != render.scale.op) reset = true;
 
     if (reset) RENDER_CallBack(GFX_CallBackReset);
+    if (p_dscompat != dscompat) VGA_SetupDrawing(0);
+    vga.draw.must_complete_frame = true;
 }
 
 #if C_OPENGL

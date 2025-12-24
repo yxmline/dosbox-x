@@ -120,6 +120,7 @@
 
 #include <assert.h>
 
+#include "vga.h"
 #include "dosbox.h"
 #include "logging.h"
 #include "setup.h"
@@ -131,6 +132,7 @@
 #include "support.h"
 #include "setup.h"
 #include "timer.h"
+#include "../ints/int10.h"
 #include "mem.h"
 #include "pci_bus.h"
 #include "util_units.h"
@@ -152,6 +154,13 @@
 #include <stdlib.h>
 #include <string>
 #include <stdio.h>
+
+#define DOSBOX_INCLUDE
+#include "iglib.h"
+
+void dosbox_integration_trigger_write_direct32(const uint32_t reg,const uint32_t val);
+bool dosbox_int_push_save_state(void);
+bool dosbox_int_pop_save_state(void);
 
 #if defined(_MSC_VER)
 # pragma warning(disable:4244) /* const fmath::local::uint64_t to double possible loss of data */
@@ -181,6 +190,8 @@ bool                                ignore_sequencer_blanking = false;
 bool                                memio_complexity_optimization = true;
 bool                                vga_render_on_demand = false; // Render at vsync or specific changes to hardware instead of every scanline
 signed char                         vga_render_on_demand_user = -1;
+bool                                vga_render_wait_for_changes = false; // Skip rendering entirely, even at vsync, unless anything changes
+signed char                         vga_render_wait_for_changes_user = -1;
 
 bool                                pc98_crt_mode = false;      // see port 6Ah command 40h/41h.
                                                                 // this boolean is the INVERSE of the bit.
@@ -261,14 +272,20 @@ double vga_force_refresh_rate = -1;
 uint8_t CGAPal2[2] = {0,0};
 uint8_t CGAPal4[4] = {0,0,0,0};
 
+void VGA_RenderOnDemandUpTo(void);
+
 void page_flip_debug_notify() {
-	if (enable_page_flip_debugging_marker)
+	if (enable_page_flip_debugging_marker) {
+		if (vga_render_on_demand) VGA_RenderOnDemandUpTo();
 		vga_page_flip_occurred = true;
+	}
 }
 
 void vsync_poll_debug_notify() {
-	if (enable_vretrace_poll_debugging_marker)
+	if (enable_vretrace_poll_debugging_marker) {
+		if (vga_render_on_demand) VGA_RenderOnDemandUpTo();
 		vga_3da_polled = true;
+	}
 }
 
 void VGA_SetModeNow(VGAModes mode) {
@@ -316,8 +333,39 @@ void VGA_DetermineMode_StandardVGA(void) { /* and EGA, the extra regs are not us
 	}
 }
 
+enum VGAModes VGA_DOSBoxIG_FmtToVGA(void) {
+	switch (vga.dosboxig.vidformat) {
+		case DBIGVF_NONE:
+			return M_CGA4; // which should be ignored
+		case DBIGVF_1BPP:
+			return M_CGA2;
+		case DBIGVF_4BPP:
+			return M_PACKED4;
+		case DBIGVF_8BPP:
+			return M_LIN8;
+		case DBIGVF_15BPP:
+			return M_LIN15;
+		case DBIGVF_16BPP:
+			return M_LIN16;
+		case DBIGVF_24BPP8:
+			return M_LIN24;
+		case DBIGVF_32BPP8:
+			return M_LIN32;
+		case DBIGVF_32BPP10:
+			return M_LIN32;
+		case DBIGVF_1BPP4PLANE:
+			return M_LIN4;
+		default:
+			break;
+	}
+
+	return M_ERROR;
+}
+
 void VGA_DetermineMode(void) {
-	if (svga.determine_mode)
+	if (vga.dosboxig.svga)
+		VGA_SetMode(VGA_DOSBoxIG_FmtToVGA());
+	else if (svga.determine_mode)
 		svga.determine_mode();
 	else
 		VGA_DetermineMode_StandardVGA();
@@ -848,6 +896,7 @@ void VGA_Reset(Section*) {
 	memio_complexity_optimization = section->Get_bool("memory io optimization 1");
 
 	vga_render_on_demand = false;
+	vga_render_wait_for_changes = false;
 
 	{
 		const char *str = section->Get_string("scanline render on demand");
@@ -859,6 +908,16 @@ void VGA_Reset(Section*) {
 			vga_render_on_demand_user = -1;
 	}
 
+	{
+		const char *str = section->Get_string("skip render if nothing changed");
+		if (!strcmp(str,"true") || !strcmp(str,"1"))
+			vga_render_wait_for_changes_user = 1;
+		else if (!strcmp(str,"false") || !strcmp(str,"0"))
+			vga_render_wait_for_changes_user = 0;
+		else
+			vga_render_wait_for_changes_user = -1;
+	}
+
 	if (memio_complexity_optimization)
 		LOG_MSG("Memory I/O complexity optimization enabled aka option 'memory io optimization 1'. If the game or demo is unable to draw to the screen properly, set the option to false.");
 
@@ -866,6 +925,9 @@ void VGA_Reset(Section*) {
 		LOG_MSG("'scanline render on demand' option is enabled. If this option breaks the game or demo effects or display, set the option to false.");
 	else if (vga_render_on_demand_user < 0)
 		LOG_MSG("The 'scanline render on demand' option is available and may provide a modest boost in video render performance if set to true.");
+
+	if (vga_render_wait_for_changes_user > 0)
+		LOG_MSG("The option to skip rendering entirely if nothing changes is enabled.");
 
 	vga_memio_lfb_delay = section->Get_bool("lfb vmemdelay");
 
@@ -1715,6 +1777,147 @@ void SVGA_Setup_JEGA(void) {
 	phys_writeb(rom_base + 0x40 * 512 - 18 + 3, 'A');
 }
 
+extern VideoModeBlock* CurMode;
+
+void FinishSetMode_DOSBoxIG(Bitu /*crtc_base*/, VGA_ModeExtraData* modeData) {
+	uint32_t htadd = CurMode->htotal - CurMode->hdispend, vtadd = CurMode->vtotal - CurMode->vdispend;
+	uint32_t fmtc = 0,cwidth = (CurMode->pitch != 0) ? CurMode->pitch : CurMode->swidth;
+	uint32_t width = CurMode->swidth,height = CurMode->sheight;
+	uint32_t refresh = (uint32_t)(70.09 * 0x10000);
+	uint8_t hscale = 0,vscale = 0;
+	uint32_t darctl = 0;
+	uint32_t ctl = 0;
+
+	/* 16-color planar modes and standard VGA modes use standard VGA emulation */
+	if (CurMode->type == M_ERROR || CurMode->type == M_TEXT || modeData->modeNo <= 0x13) {
+		/* switch off Integration Graphics */
+		dosbox_int_push_save_state();
+
+		if (width > 640 || height > 480) {
+			ctl |= DOSBOX_ID_REG_VGAIG_CTL_OVERRIDE_REFRESH;
+			vga.config.compatible_chain4 = false; /* or else >800x600 16-color planar modes will not work properly */
+			vga.config.line_compare=0x7FFu;
+		}
+		else {
+			vga.config.line_compare=0x3FFu;
+		}
+
+		dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_CTL,0);
+		dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_REFRESHRATE,refresh);
+		dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_BANKWINDOW,0);
+		dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_CTL,ctl);
+
+		dosbox_int_pop_save_state();
+
+		/* VGA draw code still uses S3 extended horz/vert regs so put it there so >800x600 modes work correctly */
+		vga.s3.ex_hor_overflow=(uint8_t)modeData->hor_overflow;
+		vga.s3.ex_ver_overflow=(uint8_t)modeData->ver_overflow;
+		vga.config.scan_len=modeData->offset;
+		return;
+	}
+
+	htadd *= 8u;
+	vga.config.line_compare=0x7FFu;
+	vga.config.compatible_chain4 = false; /* or else bank switching support does not work properly */
+	ctl = DOSBOX_ID_REG_VGAIG_CTL_OVERRIDE|DOSBOX_ID_REG_VGAIG_CTL_VGAREG_LOCKOUT;
+	switch (CurMode->type) {
+		case M_CGA2:
+			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_1BPP;
+			break;
+		case M_LIN4:
+		case M_EGA:
+			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_1BPP4PLANE;
+			fmtc |= (uint16_t)(((cwidth+15U)/8U)&(~1U)); // must match code in VESA BIOS emulation
+			ctl &= ~DOSBOX_ID_REG_VGAIG_CTL_VGAREG_LOCKOUT; // VGA registers are REQUIRED in order to use planar modes properly
+			break;
+		case M_PACKED4:
+			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_4BPP;
+			fmtc |= (uint16_t)((((cwidth+15U)/8U)&(~1U))*4); // must match code in VESA BIOS emulation
+			break;
+		case M_VGA:
+		case M_LIN8:
+			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_8BPP;
+			fmtc |= cwidth;
+			break;
+		case M_LIN15:
+			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_15BPP;
+			fmtc |= cwidth * 2u;
+			break;
+		case M_LIN16:
+			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_16BPP;
+			fmtc |= cwidth * 2u;
+			break;
+		case M_LIN24:
+			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_24BPP8;
+			fmtc |= cwidth * 3u;
+			break;
+		case M_LIN32:
+			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_32BPP8;
+			fmtc |= cwidth * 4u;
+			break;
+		default:
+			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_NONE;
+			break;
+	}
+
+	/* for specific video modes, make sure to display it correctly.
+	 * Most of the time the mode is 4:3.
+	 * Some modes like 640x400 and 1280x1024 must be slightly distorted to display at the intended 4:3.
+	 * For everything else, leave the aspect ratio setting as zero, the DOSBox IG handling will assume a square 1:1 pixel aspect ratio. */
+	if (height >= 480) {
+		double ar = (double)width / height;
+
+		if (ar >= 1.65) /* NTS: 640x400 mode 0x100 would be mistaken as 16:9 otherwise (ar=1.6) */
+			darctl = (9 << 16u) | 16u; /* 16:9 */
+		else /* including modes such as 320x480 */
+			darctl = (3 << 16u) | 4u; /* 4:3 */
+	}
+	else {
+		/* 640x400, 640x350, etc. are always 4:3 */
+		darctl = (3 << 16u) | 4u; /* 4:3 */
+	}
+
+	/* pixel doubling */
+	while ((width * (1+hscale)) < 640)
+		hscale++;
+	while ((height * (1+vscale)) < 400)
+		vscale++;
+
+	dosbox_int_push_save_state();
+
+	dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_FMT_BYTESPERSCANLINE,fmtc);
+	dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_HVTOTALADD,(vtadd << 16u) | htadd);
+	dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_DISPLAYSIZE,(height << 16u) | width);
+	dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_HVPELSCALE,(vscale << 24u) | (hscale << 16u));
+	dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_REFRESHRATE,refresh);
+	dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_ASPECTRATIO,darctl);
+	dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_DISPLAYOFFSET,0);
+	dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_BANKWINDOW,0);
+
+	dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_CTL,ctl);
+
+	dosbox_int_pop_save_state();
+
+	/* INT 10h at this point still has the screen blanked, having not yet written bit 5 of the attr control index.
+	 * It won't be able to with our lockout in effect, do it now directly */
+	vga.attr.disabled = 0;
+
+	LOG(LOG_MISC,LOG_DEBUG)("DOSBox Integration Device is active");
+}
+
+void SVGA_Setup_DOSBoxIG(void) {
+	if (vga.mem.memsize == 0)
+		vga.mem.memsize = 512*1024;
+	if (vga.mem.memsize < (256*1024))
+		vga.mem.memsize = (256*1024);
+	if (vga.mem.memsize > (128*1024*1024))
+		vga.mem.memsize = (128*1024*1024);
+
+	svga.set_video_mode = &FinishSetMode_DOSBoxIG;
+
+	PCI_AddSVGADOSBoxIG_Device();
+}
+
 void SVGA_Setup_Driver(void) {
 	memset(&svga, 0, sizeof(SVGA_Driver));
 
@@ -1733,6 +1936,9 @@ void SVGA_Setup_Driver(void) {
 			break;
 		case SVGA_ATI:
 			SVGA_Setup_ATI();
+			break;
+		case SVGA_DOSBoxIG:
+			SVGA_Setup_DOSBoxIG();
 			break;
 		default:
 			if (IS_JEGA_ARCH) SVGA_Setup_JEGA();

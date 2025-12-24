@@ -1251,6 +1251,7 @@ void DOSBOX_RealInit() {
     else if (mtype == "pc9821")        { machine = MCH_PC98; } /* Future differentiation */
 
     else if (mtype == "fm_towns")      { machine = MCH_VGA; want_fm_towns = true; /*machine = MCH_FM_TOWNS;*/ }
+    else if (mtype == "svga_dosbox")   { machine = MCH_VGA; svgaCard = SVGA_DOSBoxIG; } /* special emulator accelerator graphics adapter */
 
     else E_Exit("DOSBOX-X:Unknown machine type %s",mtype.c_str());
 
@@ -1508,6 +1509,7 @@ void DOSBOX_SetupConfigSections(void) {
 	"svga_ati_mach8",
 	"svga_ati_mach32",
 	"svga_ati_mach64",
+	"svga_dosbox",
 	"fm_towns", // STUB
         nullptr };
 
@@ -2592,7 +2594,7 @@ void DOSBOX_SetupConfigSections(void) {
 	    "This option may be useful if you would like to prevent your DOS gaming from appearing in the Windows 11 Recall feature");
 
     Pint = secprop->Add_int("vmemsize", Property::Changeable::WhenIdle,-1);
-    Pint->SetMinMax(-1,16);
+    Pint->SetMinMax(-1,128);
     Pint->Set_help(
         "Amount of video memory in megabytes.\n"
         "  The maximum resolution and color depth the svga_s3 will be able to display\n"
@@ -2941,11 +2943,20 @@ void DOSBOX_SetupConfigSections(void) {
 		    "If graphical artifacts or errors occur, try turning this off first. May provide a performance benefit.");
     Pbool->SetBasic(true);
 
+    Pstring = secprop->Add_string("skip render if nothing changed",Property::Changeable::Always,"auto");
+    Pstring->Set_values(truefalseautoopt);
+    Pstring->Set_help("If set, DOSBox-X will skip rendering entirely unless any change is made to the guest display.\n"
+                      "This may provide a performance benefit, especially in SVGA modes. This option has no effect unless render on demand is true or auto.\n"
+                      "Normally in DOSBox and DOSBox-X, video is rendered constantly, whether or not anything changed,\n"
+                      "and then compared with the previous frame to determine where to update the host display.\n"
+                      "In addition to the render on demand option, this option may further break timing dependent effects and/or cause problems with some games.");
+    Pstring->SetBasic(true);
+
     Pstring = secprop->Add_string("scanline render on demand",Property::Changeable::Always,"auto");
     Pstring->Set_values(truefalseautoopt);
     Pstring->Set_help("Render video output at vsync or when something is changed mid frame, instead of stopping to render every scanline.\n"
-		    "May provide a performance benefit to most DOS games. However this may also break timing-dependent game or Demoscene effects.\n"
-		    "Default auto, which will turn if off for VGA modes and turn it on for SVGA modes.");
+                      "This may provide a performance benefit to most DOS games. However this may also break timing-dependent game or Demoscene effects.\n"
+                      "Default is auto, which will turn it off for VGA modes and turn it on for SVGA modes.");
     Pstring->SetBasic(true);
 
     secprop=control->AddSection_prop("vsync",&Null_Init,true);//done

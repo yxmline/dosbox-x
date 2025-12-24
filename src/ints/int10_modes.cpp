@@ -37,6 +37,13 @@
 
 #include <output/output_ttf.h>
 
+#define DOSBOX_INCLUDE
+#include "iglib.h"
+
+void dosbox_integration_trigger_write_direct32(const uint32_t reg,const uint32_t val);
+bool dosbox_int_push_save_state(void);
+bool dosbox_int_pop_save_state(void);
+
 #define SEQ_REGS 0x05
 #define GFX_REGS 0x09
 #define ATT_REGS 0x15
@@ -716,11 +723,11 @@ static bool SetCurMode(VideoModeBlock modeblock[],uint16_t mode) {
 			if ((!int10.vesa_oldvbe) || (ModeList_VGA[i].mode<0x120)) {
 				CurMode=&modeblock[i];
 #if defined(USE_TTF)
-                conf_output = static_cast<Section_prop*>(control->GetSection("sdl"))->Get_string("output");
-                if(conf_output.empty())conf_output = "default";
-                if(finish_prepare) ttf_switch_off();
+				conf_output = static_cast<Section_prop*>(control->GetSection("sdl"))->Get_string("output");
+				if(conf_output.empty())conf_output = "default";
+				if(finish_prepare) ttf_switch_off();
 #endif
-                return true;
+				return true;
 			}
 			return false;
 		}
@@ -750,6 +757,13 @@ static void SetTextLines(void) {
 
 bool DISP2_Active(void);
 bool INT10_SetCurMode(void) {
+	// bug fix: This code might match a VBE mode properly, but then revert it to some entirely different mode.
+	//          This fixes a bug where VBETEST was getting weird wacky incorrect results for mode 0x10D (320x200 15bpp)
+	//          because mode 0x10D is INT 10h mode 0x75, and mode 0x75 is also a JEGA mode in the modelist, causing
+	//          VBE scanling and panning to behave as if M_CGA4.
+	if (CurMode && CurMode->mode >= 0x100)
+		return false;
+
 	bool mode_changed=false;
 	uint16_t bios_mode=(uint16_t)real_readb(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
 	if (CurMode == NULL || CurMode->mode != bios_mode) {
@@ -1315,6 +1329,13 @@ bool INT10_SetVideoMode(uint16_t mode) {
 	}
 
 	if (IS_VGA_ARCH && svgaCard == SVGA_None && mode > 0x13) return false; /* Standard VGA does not have anything above 0x13 */
+
+	if (IS_VGA_ARCH && svgaCard == SVGA_DOSBoxIG) {
+		/* switch off Integration Graphics */
+		dosbox_int_push_save_state();
+		dosbox_integration_trigger_write_direct32(DOSBOX_ID_REG_VGAIG_CTL,0);
+		dosbox_int_pop_save_state();
+	}
 
 	if (unmask_irq0_on_int10_setmode) {
 		/* setting the video mode unmasks certain IRQs as a matter of course */
@@ -2482,7 +2503,7 @@ Bitu VideoModeMemSize(Bitu mode) {
 	        return ~0ul;
 
 	switch(vmodeBlock->type) {
-    case M_PACKED4:
+        case M_PACKED4:
 		if (mode >= 0x100 && !(mode >= 0x202 && mode <= 0x208)/*S3 Windows 95 driver needs these*/ && !allow_vesa_4bpp_packed) return ~0ul;
 		return vmodeBlock->swidth*vmodeBlock->sheight/2;
 	case M_LIN4:
