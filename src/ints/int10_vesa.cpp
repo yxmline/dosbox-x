@@ -166,16 +166,26 @@ uint32_t GetReportedVideoMemorySize(void) {
 	 * can cause problems if the granularity is small enough
 	 * that the reported video memory exceeds 128 (if 64KB
 	 * banks) or 256 (if not 64KB banks) possible values
-	 * of granularity. */
-	if (vbe_window_granularity != 0) {
-		unsigned int banks = (unsigned int)sz / vbe_window_granularity;
+	 * of granularity.
+	 *
+	 * The DOSBox Integrated Graphics device does not have this limit */
+	if (svgaCard == SVGA_S3Trio) {
+		unsigned int banks,maxsz;
+
+		if (vbe_window_granularity != 0)
+			banks = (unsigned int)sz / (unsigned int)vbe_window_granularity;
+		else
+			banks = (unsigned int)sz / (unsigned int)0x10000;
 
 		if (vbe_window_granularity >= (64*1024) && banks > 128)
 			banks = 128; /* ref: vga_s3.cpp port 6Ah */
 		else if (banks > 256)
 			banks = 256; /* ref: vga_s3.cpp port 6Ah hack for < 64KB granularity */
 
-		uint32_t maxsz = (uint32_t)banks * (uint32_t)vbe_window_granularity;
+		if (vbe_window_granularity != 0)
+			maxsz = (unsigned int)banks * (unsigned int)vbe_window_granularity;
+		else
+			maxsz = (unsigned int)banks * (unsigned int)0x10000;
 
 		if (vga.svga.bank_size > vbe_window_granularity)
 			maxsz -= (vga.svga.bank_size - vbe_window_granularity);
@@ -467,7 +477,7 @@ foundit:
 	Bitu pages = 0;
 	Bitu calcmemsize = GetReportedVideoMemorySize();
 	if (mblock->type == M_LIN4) calcmemsize /= 4u; /* 4bpp planar = 4 bytes per video memory byte */
-	if (pageSize > calcmemsize || (mblock->special & _USER_DISABLED)) {
+	if (pageSize > calcmemsize || (mblock->special & (_USER_DISABLED|_BIOS_DISABLED))) {
 		// mode not supported by current hardware configuration
 		modeAttributes &= ~0x1;
 	} else if (pageSize) {
@@ -568,7 +578,7 @@ uint8_t VESA_SetCPUWindow(uint8_t window,uint16_t address) {
 	 * full DX value. DOSBox SVN and forks achieve equivalent behavior
 	 * here by defining this function prototype with an 8-bit "address"
 	 * parameter. */
-	address &= 0xFFu;
+	address &= vga.svga.bank_mask;
 
 	Bitu calcmemsize = GetReportedVideoMemorySize();
 	if (CurMode->type == M_LIN4) calcmemsize /= 4u; /* 4bpp planar = 4 bytes per video memory byte */
@@ -1124,11 +1134,11 @@ Bitu INT10_WriteVESAModeList(Bitu max_modes) {
                     bool allow4 =
                         allow_unusual_vesa_modes ||
                         !(ModeList_VGA[i].special & _UNUSUAL_MODE);
-                    bool allow5 = /* either user modified or within the limits of the render scaler architecture */
-                        (ModeList_VGA[i].special & _USER_MODIFIED) ||
-                        (ModeList_VGA[i].swidth <= SCALER_MAXWIDTH && ModeList_VGA[i].sheight <= SCALER_MAXHEIGHT);
+                    bool allow5 =
+                        ModeList_VGA[i].swidth <= vga.max_svga_width && ModeList_VGA[i].sheight <= vga.max_svga_height &&
+                        ModeList_VGA[i].vtotal <= vga.max_svga_height;
                     bool allow_res = allow1 && allow2 && allow3 && allow4 && allow5;
-		    bool allow_s3_packed4 = (ModeList_VGA[i].mode >= 0x202 && ModeList_VGA[i].mode <= 0x208);
+                    bool allow_s3_packed4 = (ModeList_VGA[i].mode >= 0x202 && ModeList_VGA[i].mode <= 0x208 && ModeList_VGA[i].type == M_PACKED4);
 
                     switch (ModeList_VGA[i].type) {
                         case M_LIN32:	canuse_mode=allow_vesa_32bpp && allow_res; break;
@@ -1185,6 +1195,24 @@ void INT10_SetupVESA(void) {
 	 * Stop wasting ROM space! --J.C. */
 	if (machine != MCH_VGA) return;
 	if (svgaCard == SVGA_None) return;
+
+	/* default 8-bit mask, because of legacy code and Demoscene bugs */
+	vga.svga.bank_mask = 0xFFu;
+
+	/* if there are enough SVGA banks to need more than 256, then allow the full 16 bits */
+	{
+		unsigned int banks = GetReportedVideoMemorySize();
+
+		if (vbe_window_granularity != 0)
+			banks /= vbe_window_granularity;
+		else
+			banks /= 0x10000;
+
+		if (banks > 256u)
+			vga.svga.bank_mask = 0xFFFFu;
+
+		LOG(LOG_MISC,LOG_DEBUG)("VESA total banks=%u bank mask=0x%x",banks,vga.svga.bank_mask);
+	}
 
 	/* Put the mode list somewhere in memory */
 	int10.rom.vesa_alloc_modes = (uint16_t)(~0u);
