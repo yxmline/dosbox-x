@@ -384,6 +384,22 @@ VideoModeBlock ModeList_VGA[]={
 { 0x3A4  ,M_LIN32  ,4096,2160,512,135,8 ,16 ,1 ,0xA0000 ,0x10000,612 ,2260,512 ,2160,_HIGH_DEFINITION, 0},
 { 0x3A5  ,M_LIN24  ,4096,2160,512,135,8 ,16 ,1 ,0xA0000 ,0x10000,612 ,2260,512 ,2160,_HIGH_DEFINITION, 0},
 
+// 3840x2880 4:3 modes
+{ 0x3B0  ,M_LIN4   ,3840,2880,480,180,8 ,16 ,1 ,0xA0000 ,0x10000,500 ,2960,480 ,2880,_HIGH_DEFINITION, 0},
+{ 0x3B1  ,M_LIN8   ,3840,2880,480,180,8 ,16 ,1 ,0xA0000 ,0x10000,500 ,2960,480 ,2880,_HIGH_DEFINITION, 0},
+{ 0x3B2  ,M_LIN15  ,3840,2880,480,180,8 ,16 ,1 ,0xA0000 ,0x10000,1000,2960,960 ,2880,_HIGH_DEFINITION, 0},
+{ 0x3B3  ,M_LIN16  ,3840,2880,480,180,8 ,16 ,1 ,0xA0000 ,0x10000,1000,2960,960 ,2880,_HIGH_DEFINITION, 0},
+{ 0x3B4  ,M_LIN32  ,3840,2880,480,180,8 ,16 ,1 ,0xA0000 ,0x10000,500 ,2960,480 ,2880,_HIGH_DEFINITION, 0},
+{ 0x3B5  ,M_LIN24  ,3840,2880,480,180,8 ,16 ,1 ,0xA0000 ,0x10000,500 ,2960,480 ,2880,_HIGH_DEFINITION, 0},
+
+// 4096x3072 4:3 modes
+{ 0x3C0  ,M_LIN4   ,4096,3072,512,192,8 ,16 ,1 ,0xA0000 ,0x10000,612 ,3172,512 ,3072,_HIGH_DEFINITION, 0},
+{ 0x3C1  ,M_LIN8   ,4096,3072,512,192,8 ,16 ,1 ,0xA0000 ,0x10000,612 ,3172,512 ,3072,_HIGH_DEFINITION, 0},
+{ 0x3C2  ,M_LIN15  ,4096,3072,512,192,8 ,16 ,1 ,0xA0000 ,0x10000,1224,3172,1024,3072,_HIGH_DEFINITION, 0},
+{ 0x3C3  ,M_LIN16  ,4096,3072,512,192,8 ,16 ,1 ,0xA0000 ,0x10000,1224,3172,1024,3072,_HIGH_DEFINITION, 0},
+{ 0x3C4  ,M_LIN32  ,4096,3072,512,192,8 ,16 ,1 ,0xA0000 ,0x10000,612 ,3172,512 ,3072,_HIGH_DEFINITION, 0},
+{ 0x3C5  ,M_LIN24  ,4096,3072,512,192,8 ,16 ,1 ,0xA0000 ,0x10000,612 ,3172,512 ,3072,_HIGH_DEFINITION, 0},
+
 // packed 16-color (4bpp) modes seen on a Toshiba Libretto VESA BIOS (Chips & Technologies 65550)
 { 0x25F  ,M_PACKED4,320 ,200 ,40 ,25 ,8 ,8  ,1 ,0xA0000 ,0x10000,50  ,449 ,40  ,400 , _REPEAT1, 0},
 { 0x260  ,M_PACKED4,640 ,400 ,80 ,25 ,8 ,16 ,1 ,0xA0000 ,0x10000,100 ,449 ,80  ,400 ,0, 0},
@@ -399,6 +415,13 @@ VideoModeBlock ModeList_VGA[]={
 { 0x26A  ,M_PACKED4,1600,1200,200,75 ,8 ,16 ,1 ,0xA0000 ,0x10000,264 ,1240,200 ,1200,0, 0},
 { 0x26B  ,M_PACKED4,1920,1080,240,67 ,8 ,16 ,1 ,0xA0000 ,0x10000,264 ,1188,240 ,1080,_HIGH_DEFINITION, 0},
 { 0x356  ,M_PACKED4,1920,1440,240,90 ,8 ,16 ,1 ,0xA0000 ,0x10000,264 ,1584,240 ,1440,_HIGH_DEFINITION, 0},
+
+// dosbox IG 1bpp monochrome modes. 640x480 is already provided by MCGA 640x480 mode
+{ 0x400  ,M_CGA2   ,640 ,400 ,80 ,25 ,8 ,16 ,1 ,0xA0000 ,0x10000,100 ,449 ,80 ,400 ,0, 0},
+{ 0x401  ,M_CGA2   ,640 ,480 ,80 ,30 ,8 ,16 ,1 ,0xA0000 ,0x10000,100 ,525 ,80 ,480 ,0, 0},
+{ 0x402  ,M_CGA2   ,800 ,600 ,100,37 ,8 ,16 ,1 ,0xA0000 ,0x10000,132 ,628 ,100,600 ,0, 0},
+{ 0x403  ,M_CGA2   ,1024,768 ,128,48 ,8 ,16 ,1 ,0xA0000 ,0x10000,168 ,806 ,128,768 ,0, 0},
+{ 0x404  ,M_CGA2   ,1280,1024,160,64 ,8 ,16 ,1 ,0xA0000 ,0x10000,212 ,1066,160,1024,0, 0},
 
 {0xFFFF  ,M_ERROR  ,0   ,0   ,0  ,0  ,0 ,0  ,0 ,0x00000 ,0x0000 ,0   ,0   ,0  ,0   ,0 , 0},
 };
@@ -1352,8 +1375,10 @@ bool INT10_SetVideoMode(uint16_t mode) {
 	}
 	//LOG_MSG("set mode %x",mode);
 	bool clearmem=true;Bitu i;
+	bool lfb=false;
 	if (mode>=0x100) {
-		if ((mode & 0x4000) && int10.vesa_nolfb) return false;
+		lfb = !!(mode & 0x4000);
+		if (lfb && int10.vesa_nolfb) return false;
 		if (mode & 0x8000) clearmem=false;
 		mode&=0xfff;
 	}
@@ -1496,6 +1521,12 @@ bool INT10_SetVideoMode(uint16_t mode) {
 				}
 		}
 		if (CurMode->type==M_TEXT) SetTextLines();
+
+		// if the mode says to require LFB, reject non-LFB modeset
+		if (mode >= 0x100 && !lfb && (CurMode->special & _REQUIRE_LFB)) {
+			LOG(LOG_INT10,LOG_ERROR)("Attempt to set VESA mode %X as non-LFB, but mode requires LFB",mode);
+			return false;
+		}
 
 		// INT 10h modeset will always clear 8-bit DAC mode (by VESA BIOS standards)
 		vga_8bit_dac = false;
@@ -1880,6 +1911,8 @@ bool INT10_SetVideoMode(uint16_t mode) {
 	/* Mode Control */
 	uint8_t mode_control=0;
 
+	bool dosboxIGsvga = (svgaCard == SVGA_DOSBoxIG) && CurMode->mode >= 0x100;
+
 	switch (CurMode->type) {
 		case M_DCGA:
 			mode_control=0xc4;
@@ -1985,41 +2018,44 @@ bool INT10_SetVideoMode(uint16_t mode) {
 			gfx_data[0x6]|=mono_mode ? 0x0a : 0x0e;		//Either b800 or b000, chain odd/even enable
 			break;
 		case M_LIN8:
-	case M_LIN15:
-	case M_LIN16:
-	case M_LIN24:
-	case M_LIN32:
-	case M_PACKED4:
-		gfx_data[0x5] |= 0x40;		//256 color mode
-		if (int10_vesa_map_as_128kb)
-			gfx_data[0x6] |= 0x01;	//graphics mode at 0xa000-bffff
-		else
-			gfx_data[0x6] |= 0x05;	//graphics mode at 0xa000-affff
-		break;
-	case M_VGA:
-		gfx_data[0x5]|=0x40;		//256 color mode
-		gfx_data[0x6]|=0x05;		//graphics mode at 0xa000-affff
-		break;
-	case M_LIN4:
-	case M_EGA:
-		if (IS_EGA_ARCH && vga.mem.memsize < 0x20000 && CurMode->vdispend==350 && CurMode->type == M_EGA) {
-			gfx_data[0x5]|=0x10;		//Odd-Even Mode
-			gfx_data[0x6]|=0x02;		//Odd-Even Mode
-			gfx_data[0x7]=0xF;			/* Color don't care */
-		}
-		gfx_data[0x6]|=0x05;		//graphics mode at 0xa000-affff
-		break;
-	case M_CGA4:
-		gfx_data[0x5]|=0x20;		//CGA mode
-		gfx_data[0x6]|=0x0f;		//graphics mode at 0xb800=0xbfff
-		if (IS_EGAVGA_ARCH) gfx_data[0x5]|=0x10;
-		break;
-	case M_DCGA:
-	case M_CGA2:
-		gfx_data[0x6]|=0x0d;		//graphics mode at 0xb800=0xbfff, chain odd/even disabled
-		break;
-	default:
-		break;
+		case M_LIN15:
+		case M_LIN16:
+		case M_LIN24:
+		case M_LIN32:
+		case M_PACKED4:
+			gfx_data[0x5] |= 0x40;		//256 color mode
+			if (int10_vesa_map_as_128kb)
+				gfx_data[0x6] |= 0x01;	//graphics mode at 0xa000-bffff
+			else
+				gfx_data[0x6] |= 0x05;	//graphics mode at 0xa000-affff
+			break;
+		case M_VGA:
+			gfx_data[0x5]|=0x40;		//256 color mode
+			gfx_data[0x6]|=0x05;		//graphics mode at 0xa000-affff
+			break;
+		case M_LIN4:
+		case M_EGA:
+			if (IS_EGA_ARCH && vga.mem.memsize < 0x20000 && CurMode->vdispend==350 && CurMode->type == M_EGA) {
+				gfx_data[0x5]|=0x10;		//Odd-Even Mode
+				gfx_data[0x6]|=0x02;		//Odd-Even Mode
+				gfx_data[0x7]=0xF;			/* Color don't care */
+			}
+			gfx_data[0x6]|=0x05;		//graphics mode at 0xa000-affff
+			break;
+		case M_CGA4:
+			gfx_data[0x5]|=0x20;		//CGA mode
+			gfx_data[0x6]|=0x0f;		//graphics mode at 0xb800=0xbfff
+			if (IS_EGAVGA_ARCH) gfx_data[0x5]|=0x10;
+			break;
+		case M_DCGA:
+		case M_CGA2:
+			if (dosboxIGsvga)
+				gfx_data[0x6]|=0x05;		//graphics mode at 0xa000-affff
+			else
+				gfx_data[0x6]|=0x0d;		//graphics mode at 0xb800=0xbfff, chain odd/even disabled
+			break;
+		default:
+			break;
 	}
 
 	if (vptable) {
@@ -2166,6 +2202,11 @@ att_text16:
 			att_data[i] = phys_readb(vptp+0x23+i); /* contents of attribute controller regs 0-13h */
 	}
 
+	if (dosboxIGsvga && CurMode->type == M_CGA2) {
+		for (uint8_t ct=0;ct<10;ct++)
+			att_data[ct] = (ct & 1) ? 1 : 0;
+	}
+
 	if ((modeset_ctl & 8)==0) {
 		for (uint8_t ct=0;ct<ATT_REGS;ct++) {
 			IO_Write(0x3c0,ct);
@@ -2217,6 +2258,14 @@ att_text16:
 					break;
 				}
 			case M_CGA2:
+				if (dosboxIGsvga) {
+					for (i=0;i<64;i++) {
+						IO_Write(0x3c9,i&1?63:0);
+						IO_Write(0x3c9,i&1?63:0);
+						IO_Write(0x3c9,i&1?63:0);
+					}
+					break;
+				}
 				if(IS_J3100) {
 					uint8_t r, g, b;
 					J3_GetPalette(0, r, g, b);
@@ -2495,6 +2544,41 @@ dac_text16:
 	return true;
 }
 
+Bitu VideoModeMemSize(VideoModeBlock* vmodeBlock,Bitu mode) {
+	switch(vmodeBlock->type) {
+		case M_PACKED4:
+			if (mode >= 0x100 && !(mode >= 0x202 && mode <= 0x208)/*S3 Windows 95 driver needs these*/ && !allow_vesa_4bpp_packed) return ~0ul;
+			return vmodeBlock->swidth*vmodeBlock->sheight/2;
+		case M_LIN4:
+			if (mode >= 0x100 && !allow_vesa_4bpp) return ~0ul;
+			return vmodeBlock->swidth*vmodeBlock->sheight/2;
+		case M_LIN8:
+			if (mode >= 0x100 && !allow_vesa_8bpp) return ~0ul;
+			return vmodeBlock->swidth*vmodeBlock->sheight;
+		case M_LIN15:
+			if (mode >= 0x100 && !allow_vesa_15bpp) return ~0ul;
+			return vmodeBlock->swidth*vmodeBlock->sheight*2;
+		case M_LIN16:
+			if (mode >= 0x100 && !allow_vesa_16bpp) return ~0ul;
+			return vmodeBlock->swidth*vmodeBlock->sheight*2;
+		case M_LIN24:
+			if (mode >= 0x100 && !allow_vesa_24bpp) return ~0ul;
+			if (mode >= 0x120 && !allow_explicit_vesa_24bpp) return ~0ul;
+			return vmodeBlock->swidth*vmodeBlock->sheight*3;
+		case M_LIN32:
+			if (mode >= 0x100 && !allow_vesa_32bpp) return ~0ul;
+			return vmodeBlock->swidth*vmodeBlock->sheight*4;
+		case M_TEXT:
+			if (mode >= 0x100 && !allow_vesa_tty) return ~0ul;
+			return vmodeBlock->twidth*vmodeBlock->theight*2;
+		default:
+			break;
+	}
+
+	// Return 0 for all other types, those always fit in memory
+	return 0;
+}
+
 Bitu VideoModeMemSize(Bitu mode) {
 	if (!IS_VGA_ARCH)
 		return 0;
@@ -2516,6 +2600,7 @@ Bitu VideoModeMemSize(Bitu mode) {
 
 	VideoModeBlock* vmodeBlock = NULL;
 	Bitu i=0;
+
 	while (modelist[i].mode!=0xffff) {
 		if (modelist[i].mode==mode) {
 			/* Hack for VBE 1.2 modes and 24/32bpp ambiguity */
@@ -2536,37 +2621,7 @@ Bitu VideoModeMemSize(Bitu mode) {
 	if (!vmodeBlock)
 	        return ~0ul;
 
-	switch(vmodeBlock->type) {
-        case M_PACKED4:
-		if (mode >= 0x100 && !(mode >= 0x202 && mode <= 0x208)/*S3 Windows 95 driver needs these*/ && !allow_vesa_4bpp_packed) return ~0ul;
-		return vmodeBlock->swidth*vmodeBlock->sheight/2;
-	case M_LIN4:
-		if (mode >= 0x100 && !allow_vesa_4bpp) return ~0ul;
-		return vmodeBlock->swidth*vmodeBlock->sheight/2;
-	case M_LIN8:
-		if (mode >= 0x100 && !allow_vesa_8bpp) return ~0ul;
-		return vmodeBlock->swidth*vmodeBlock->sheight;
-	case M_LIN15:
-		if (mode >= 0x100 && !allow_vesa_15bpp) return ~0ul;
-		return vmodeBlock->swidth*vmodeBlock->sheight*2;
-	case M_LIN16:
-		if (mode >= 0x100 && !allow_vesa_16bpp) return ~0ul;
-		return vmodeBlock->swidth*vmodeBlock->sheight*2;
-	case M_LIN24:
-		if (mode >= 0x100 && !allow_vesa_24bpp) return ~0ul;
-        if (mode >= 0x120 && !allow_explicit_vesa_24bpp) return ~0ul;
-		return vmodeBlock->swidth*vmodeBlock->sheight*3;
-	case M_LIN32:
-		if (mode >= 0x100 && !allow_vesa_32bpp) return ~0ul;
-		return vmodeBlock->swidth*vmodeBlock->sheight*4;
-	case M_TEXT:
-		if (mode >= 0x100 && !allow_vesa_tty) return ~0ul;
-		return vmodeBlock->twidth*vmodeBlock->theight*2;
-	default:
-		break;
-	}
-	// Return 0 for all other types, those always fit in memory
-	return 0;
+	return VideoModeMemSize(vmodeBlock,mode);
 }
 
 VideoModeBlock ModeList_DOSV[]={
@@ -2706,12 +2761,13 @@ public:
         int ch = -1;
         int newmode = -1;
         signed char enable = -1;
+        signed char lfbreq = -1;
         bool doDelete = false;
         bool modefind = false;
 		
         cmd->BeginOpt();
         while (cmd->GetOpt(/*&*/arg)) {
-			got_opt=true;
+            got_opt=true;
             if (arg == "?" || arg == "help") {
                 doHelp();
                 return;
@@ -2730,10 +2786,14 @@ public:
                     return;
                 }
             }
+            else if (arg == "require-lfb") {
+                cmd->NextOptArgv(/*&*/tmp);
+                lfbreq = (int)strtoul(tmp.c_str(),NULL,0);
+            }
             else if (arg == "fmt") {
                 cmd->NextOptArgv(/*&*/tmp);
 
-                     if (tmp == "LIN4")
+                if (tmp == "LIN4")
                     fmt = M_LIN4;
                 else if (tmp == "LIN8")
                     fmt = M_LIN8;
@@ -2799,7 +2859,7 @@ public:
             }
         }
         cmd->EndOpt();
-		if(!got_opt) {
+        if(!got_opt) {
             doHelp();
             return;
         }
@@ -2811,7 +2871,7 @@ public:
             while (ModeList_VGA[array_i].mode != 0xFFFF) {
                 bool match = true;
 
-                     if (w > 0 && (Bitu)w != ModeList_VGA[array_i].swidth)
+                if (w > 0 && (Bitu)w != ModeList_VGA[array_i].swidth)
                     match = false;
                 else if (h > 0 && (Bitu)h != ModeList_VGA[array_i].sheight)
                     match = false;
@@ -2850,9 +2910,16 @@ public:
         }
 
         if (enable == 0)
-            ModeList_VGA[array_i].special |= (uint16_t)  _USER_DISABLED;
+            ModeList_VGA[array_i].special |= (Bitu)  _USER_DISABLED;
         else if (enable == 1)
-            ModeList_VGA[array_i].special &= (uint16_t)(~_USER_DISABLED);
+            ModeList_VGA[array_i].special &= (Bitu)(~_USER_DISABLED);
+
+        if (lfbreq == 0)
+            ModeList_VGA[array_i].special &= (Bitu)(~_REQUIRE_LFB);
+        else if (lfbreq == 1)
+            ModeList_VGA[array_i].special |= (Bitu)  _REQUIRE_LFB;
+
+	LOG_MSG("%x %x",(unsigned int)ModeList_VGA[array_i].mode,(unsigned int)ModeList_VGA[array_i].special);
 
         if (doDelete) {
             if (ModeList_VGA[array_i].type != M_ERROR)
@@ -2873,7 +2940,7 @@ public:
         if (!modefind && (w > 0 || h > 0 || fmt >= 0 || ch > 0 || pitch >= 0)) {
             WriteOut("Changing mode 0x%x parameters\n",(unsigned int)ModeList_VGA[array_i].mode);
 
-            ModeList_VGA[array_i].special |= _USER_MODIFIED;
+            ModeList_VGA[array_i].special |= (Bitu)_USER_MODIFIED;
 
 	    LOG_MSG("pitch %d",pitch);
             if (pitch >= 0) {
@@ -2992,8 +3059,9 @@ public:
         WriteOut("  -delete                 Delete video mode\n");
         WriteOut("  -disable                Disable video mode (list but do not allow setting)\n");
         WriteOut("  -enable                 Enable video mode\n");
-	WriteOut("  -pitch <x>              Change display pitch (pixels per scanline).\n");
-	WriteOut("                          A value of zero will restore normal calculation.\n");
+        WriteOut("  -pitch <x>              Change display pitch (pixels per scanline).\n");
+        WriteOut("                          A value of zero will restore normal calculation.\n");
+        WriteOut("  -require-lfb <x>        Set/clear flag to require LFB for mode\n");
     }
 };
 

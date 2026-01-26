@@ -1198,6 +1198,7 @@ void DOSBOX_RealInit() {
     s3Card = S3_Generic;
     machine = MCH_VGA;
     jp_ega = false;
+    int10.vesa_vbe3 = false;
     int10.vesa_nolfb = false;
     int10.vesa_oldvbe = false;
     int10.vesa_oldvbe10 = false;
@@ -1241,6 +1242,7 @@ void DOSBOX_RealInit() {
     else if (mtype == "vesa_nolfb")    { svgaCard = SVGA_S3Trio; s3Card = S3_Trio32; int10.vesa_nolfb = true;}
     else if (mtype == "vesa_oldvbe")   { svgaCard = SVGA_S3Trio; s3Card = S3_Trio32; int10.vesa_oldvbe = true;}
     else if (mtype == "vesa_oldvbe10") { svgaCard = SVGA_S3Trio; s3Card = S3_Trio32; int10.vesa_oldvbe = true; int10.vesa_oldvbe10 = true;}
+    else if (mtype == "vesa_vbe3")     { svgaCard = SVGA_S3Trio; s3Card = S3_Trio32; int10.vesa_vbe3 = true;}
     else if (mtype == "svga_et4000")   { svgaCard = SVGA_TsengET4K; }
     else if (mtype == "svga_et3000")   { svgaCard = SVGA_TsengET3K; }
     else if (mtype == "svga_paradise") { svgaCard = SVGA_ParadisePVGA1A; }
@@ -1251,7 +1253,8 @@ void DOSBOX_RealInit() {
     else if (mtype == "pc9821")        { machine = MCH_PC98; } /* Future differentiation */
 
     else if (mtype == "fm_towns")      { machine = MCH_VGA; want_fm_towns = true; /*machine = MCH_FM_TOWNS;*/ }
-    else if (mtype == "svga_dosbox")   { machine = MCH_VGA; svgaCard = SVGA_DOSBoxIG; } /* special emulator accelerator graphics adapter */
+    else if (mtype == "svga_dosbox")   { machine = MCH_VGA; svgaCard = SVGA_DOSBoxIG; int10.vesa_vbe3 = true; } /* special emulator accelerator graphics adapter */
+    else if (mtype == "svga_dosbox_vbe2") { machine = MCH_VGA; svgaCard = SVGA_DOSBoxIG; } /* special emulator accelerator graphics adapter */
 
     else E_Exit("DOSBOX-X:Unknown machine type %s",mtype.c_str());
 
@@ -1462,7 +1465,7 @@ void DOSBOX_SetupConfigSections(void) {
     const char* aspectmodes[] = { "false", "true", "0", "1", "yes", "no", "nearest", "bilinear", nullptr };
     const char *vga_ac_mapping_settings[] = { "", "auto", "4x4", "4low", "first16", nullptr };
     const char* fpu_settings[] = { "true", "false", "1", "0", "auto", "8087", "287", "387", nullptr };
-    const char* sb_recording_sources[] = { "silence", "hiss", "1khz tone", nullptr };
+    const char* sb_recording_sources[] = { "silence", "hiss", "1khz tone", "microphone", nullptr };
     const char* int10usevp[] = { "auto", "true", "false", "1", "0", nullptr };
 
     const char* hostkeys[] = {
@@ -1499,7 +1502,7 @@ void DOSBOX_SetupConfigSections(void) {
         "svga_s3virge", "svga_s3virgevx",
         "svga_et3000", "svga_et4000",
         "svga_paradise",
-        "vesa_nolfb", "vesa_oldvbe", "vesa_oldvbe10",
+        "vesa_nolfb", "vesa_oldvbe", "vesa_oldvbe10", "vesa_vbe3",
         "pc98", "pc9801", "pc9821",
 	"svga_ati_egavgawonder",
 	"svga_ati_vgawonder",
@@ -1510,6 +1513,7 @@ void DOSBOX_SetupConfigSections(void) {
 	"svga_ati_mach32",
 	"svga_ati_mach64",
 	"svga_dosbox",
+	"svga_dosbox_vbe2",
 	"fm_towns", // STUB
         nullptr };
 
@@ -1534,7 +1538,9 @@ void DOSBOX_SetupConfigSections(void) {
 #if C_OPENGL
         "opengl", "openglnb", "openglhq", "openglpp",
 #endif
-        "direct3d",
+#if C_DIRECT3D
+        "direct3d", "direct3d11",
+#endif
         nullptr };
 
     const char* scalers[] = {
@@ -2593,6 +2599,22 @@ void DOSBOX_SetupConfigSections(void) {
 	    "\n"
 	    "This option may be useful if you would like to prevent your DOS gaming from appearing in the Windows 11 Recall feature");
 
+    Pint = secprop->Add_int("vbememsize", Property::Changeable::WhenIdle,0);
+    Pint->SetMinMax(0,128);
+    Pint->Set_help(
+        "Amount of video memory in kilobytes to report through the VESA BIOS extensions.\n"
+        "Set this value to an amount lower than vmemsize to handle DOS programs that cannot handle\n"
+        "more than the small amount of video memory they were designed for. This option also affects\n"
+        "what video modes are reported through the VBE."
+        );
+    Pint->SetBasic(true);
+
+    Pint = secprop->Add_int("vbememsizekb", Property::Changeable::WhenIdle,0);
+    Pint->SetMinMax(0,1024);
+    Pint->Set_help(
+        "Amount of video memory to report in kilobytes, in addition to vbememsize.");
+    Pint->SetBasic(true);
+
     Pint = secprop->Add_int("vmemsize", Property::Changeable::WhenIdle,-1);
     Pint->SetMinMax(-1,128);
     Pint->Set_help(
@@ -2605,6 +2627,7 @@ void DOSBOX_SetupConfigSections(void) {
         "  2: 1600x1200 at 256 colors or 1024x768 at 64k colors or 640x480 at 16M colors\n"
         "  4: 1600x1200 at 64k colors or 1024x768 at 16M colors\n"
         "  8: up to 1600x1200 at 16M colors\n"
+	"Larger values are available depending on machine type.\n"
         "For build engine games, use more memory than in the list above so it can\n"
         "use triple buffering and thus won't flicker.\n"
         );
@@ -2623,6 +2646,9 @@ void DOSBOX_SetupConfigSections(void) {
     Pint = secprop->Add_int("vbe window size", Property::Changeable::WhenIdle,0);
     Pint->SetMinMax(0,128);
     Pint->Set_help("Controls VESA BIOS non-linear framebuffer window size in KB. This affects ONLY the VESA BIOS extensions. Set 0 to functional normally.");
+
+    Pbool = secprop->Add_bool("vbe protected mode interface",Property::Changeable::OnlyAtStart,true);
+    Pbool->Set_help("If set, enable the VBE protected mode interface");
 
     Pbool = secprop->Add_bool("enable 8-bit dac",Property::Changeable::OnlyAtStart,true);
     Pbool->Set_help("If set, allow VESA BIOS calls in IBM PC mode to set DAC width. Has no effect in PC-98 mode.");
@@ -3710,7 +3736,7 @@ void DOSBOX_SetupConfigSections(void) {
 
 			Pstring = secprop->Add_string("recording source",Property::Changeable::WhenIdle,"silence");
 			Pstring->Set_values(sb_recording_sources);
-			Pstring->Set_help("Audio source to use when guest is recording audio. At this time only generated audio sources are available.");
+			Pstring->Set_help("Audio source to use when guest is recording audio. Options: silence, hiss, 1khz tone, or microphone (Windows WASAPI input).");
 			Pstring->SetBasic(true);
 
 			/* Sound Blaster IRQ hacks.
@@ -3824,7 +3850,7 @@ void DOSBOX_SetupConfigSections(void) {
 					"'nuked' is the most accurate (but the most CPU-intensive). See oplrate as well.");
 			Pstring->SetBasic(true);
 
-			Pint = secprop->Add_int("oplrate",Property::Changeable::WhenIdle,48000);
+			Pint = secprop->Add_int("oplrate",Property::Changeable::WhenIdle,49716);
 			Pint->Set_values(rates);
 			Pint->Set_help("Sample rate of OPL music emulation. Use 49716 for highest quality (set the mixer rate accordingly).");
 			Pint->SetBasic(true);

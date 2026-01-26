@@ -621,6 +621,7 @@ typedef struct VGA_Memory_t {
     uint32_t    memmask = 0;
     uint32_t    memmask_crtc = 0;       // in CRTC-visible units (depends on byte/word/dword mode)
     uint32_t    memsize_original = 0;	// memsize prior to rounding up to a power of 2
+    uint32_t    vbe_memsize = 0;        // memory size reported through the VBE
 } VGA_Memory;
 
 typedef struct {
@@ -688,20 +689,25 @@ typedef struct VGA_DOSBoxIG {
 	bool                    vga_reg_lockout = false; /* lock out standard VGA registers except 3BAh/3DAh and DAC registers */
 	bool                    vga_3da_lockout = false; /* lock out port 3BAh/3DAh */
 	bool                    vga_dac_lockout = false; /* lock out DAC registers */
-	bool			override_refresh = false;
-	unsigned int            width = 0;
-	unsigned int            height = 0;
+	bool			vga_acpal_bypass = false; /* VGA DAC bypass AC palette */
+	bool			override_refresh = false; /* force a refresh rate */
+	bool			vesa_bios_lockout = false; /* disable VESA BIOS modesetting (for Windows driver) */
+	bool			force_A0000 = false; /* force VGA memory map to A0000-AFFFF */
+	unsigned int            width = 16;
+	unsigned int            height = 16;
 	unsigned int		bytes_per_scanline = 0;
 	unsigned int            wa_total = 0,ha_total = 0; /* additional cols/rows to add to get htotal/vtotal */
 	uint16_t		dar_width = 0,dar_height = 0; /* display aspect ratio, if nonzero */
 	uint32_t                vratefp16 = 0; /* video sync rate as a fixed point 16.16 number */
 	uint32_t		display_offset = 0; /* offset in video memory to display */
-	uint32_t		bank_offset = 0; /* offset of 64KB bank window in video memory */
+	uint32_t		rbank_offset = 0; /* offset of 64KB bank window in video memory */
+	uint32_t		wbank_offset = 0; /* offset of 64KB bank window in video memory */
 	uint8_t                 vidformat = 0; /* video pixel format (VGA_DOSBoxIG_VidFormat) */
 	uint8_t			hpel = 0; /* horizontal pan */
 	uint8_t			vpel = 0; /* vertical pan */
 	uint8_t			hscale = 0; /* horizontal pixel duplication */
 	uint8_t			vscale = 0; /* vertical pixel duplication */
+	uint32_t		ctlreg = 0; /* raw data written to CTL register */
 } VGA_DOSBoxIG;
 
 typedef struct VGA_Type_t {

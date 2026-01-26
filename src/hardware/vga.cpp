@@ -178,6 +178,7 @@ bool                                VGA_PITsync = false;
 
 unsigned int                        vbe_window_granularity = 0;
 unsigned int                        vbe_window_size = 0;
+bool                                vbe_window_size_literal = false;
 
 /* current dosplay page (controlled by A4h) */
 unsigned char*                      pc98_pgraph_current_display_page;
@@ -186,6 +187,7 @@ unsigned char*                      pc98_pgraph_current_cpu_page;
 
 bool                                vga_8bit_dac = false;
 bool                                enable_vga_8bit_dac = true;
+bool                                enable_vbe_pmode_if = true;
 bool                                ignore_sequencer_blanking = false;
 bool                                memio_complexity_optimization = true;
 bool                                vga_render_on_demand = false; // Render at vsync or specific changes to hardware instead of every scanline
@@ -892,6 +894,7 @@ void VGA_Reset(Section*) {
 
 	vga_8bit_dac = false;
 	enable_vga_8bit_dac = section->Get_bool("enable 8-bit dac");
+	enable_vbe_pmode_if = section->Get_bool("vbe protected mode interface");
 	ignore_sequencer_blanking = section->Get_bool("ignore sequencer blanking");
 	memio_complexity_optimization = section->Get_bool("memory io optimization 1");
 
@@ -969,14 +972,26 @@ void VGA_Reset(Section*) {
 
 	LOG(LOG_VGA,LOG_DEBUG)("VGA memory I/O delay %uns",vga_memio_delay_ns);
 
+	vbe_window_size_literal = false;
 	vbe_window_granularity = (unsigned int)section->Get_int("vbe window granularity") << 10u; /* KB to bytes */
 	vbe_window_size = (unsigned int)section->Get_int("vbe window size") << 10u; /* KB to bytes */
 
-	if (vbe_window_granularity != 0 && !bitop::ispowerof2(vbe_window_granularity))
+	if (vbe_window_size == 0) {
+		vbe_window_size = 0x10000; // 64KB
+		vbe_window_size_literal = true;
+	}
+	if (vbe_window_granularity == 0) {
+		if (svgaCard == SVGA_ParadisePVGA1A)
+			vbe_window_granularity = 0x1000; // 4KB
+		else
+			vbe_window_granularity = 0x10000; // 64KB
+	}
+
+	if (!bitop::ispowerof2(vbe_window_granularity))
 		LOG(LOG_VGA,LOG_WARN)("User specified VBE window granularity is not a power of 2. May break some programs.");
-	if (vbe_window_size != 0 && !bitop::ispowerof2(vbe_window_size))
+	if (!bitop::ispowerof2(vbe_window_size))
 		LOG(LOG_VGA,LOG_WARN)("User specified VBE window size is not a power of 2. May break some programs.");
-	if (vbe_window_size != 0 && vbe_window_granularity != 0 && vbe_window_size < vbe_window_granularity)
+	if (vbe_window_size < vbe_window_granularity)
 		LOG(LOG_VGA,LOG_WARN)("VBE window size is less than window granularity, which prevents full access to video memory and may break some programs.");
 
 	/* mainline compatible vmemsize (in MB)
@@ -1092,18 +1107,6 @@ void VGA_Reset(Section*) {
 	if (IS_EGA_ARCH && vga.mem.memsize < _KB_bytes(128))
 		LOG_MSG("WARNING: EGA 64KB emulation is very experimental and not well supported");
 
-	/* If video memory is limited by bank switching, then reduce video memory */
-	if (vbe_window_granularity != 0 && !IS_PC98_ARCH) {
-		const uint32_t sz = GetReportedVideoMemorySize();
-
-		LOG(LOG_VGA,LOG_NORMAL)("Video RAM size %uKB exceeds maximum possible %uKB given VBE window granularity, reducing",
-				vga.mem.memsize>>10,(unsigned int)(sz>>10ul));
-
-		/* reduce by half, until video memory is reported or larger but not more than 2x */
-		while (vga.mem.memsize > _KB_bytes(512) && (vga.mem.memsize/2ul) >= sz)
-			vga.mem.memsize /= 2u;
-	}
-
 	// prepare for transition
 	if (want_fm_towns) {
 		if (vga.mem.memsize < _KB_bytes(640)) vga.mem.memsize = _KB_bytes(640); /* "640KB of RAM, 512KB VRAM and 128KB sprite RAM" */
@@ -1112,10 +1115,28 @@ void VGA_Reset(Section*) {
 	if (!IS_PC98_ARCH)
 		SVGA_Setup_Driver();        // svga video memory size is set here, possibly over-riding the user's selection
 
+	// By default, VBE reported memory size is the same as actual memory size
+	vga.mem.vbe_memsize = vga.mem.memsize;
+
+	// Allow the user to limit what is reported through the VBE in case of DOS programs that cannot handle too much video memory.
+	// Looking at you, SciTech VBETEST.EXE from 1994.
+	{
+		int sz_m = section->Get_int("vbememsize");
+		int sz_k = section->Get_int("vbememsizekb");
+		uint32_t b = _MB_bytes((unsigned int)sz_m) + _KB_bytes((unsigned int)sz_k);
+		/* does not need to be a power of 2, only larger than 256KB, and less than or equal to video memory size */
+		if (b != 0) {
+			if (b > vga.mem.memsize) b = vga.mem.memsize;
+			if (b < _KB_bytes(256u)) b = _KB_bytes(256u);
+			vga.mem.vbe_memsize = b; 
+		}
+	}
+
 	// NTS: This is WHY the memory size must be a power of 2
 	vga.mem.memmask = bitop::rounduppow2mask(vga.mem.memsize - 1u);
 
 	LOG(LOG_VGA,LOG_NORMAL)("Video RAM: %uKB (mask 0x%x)",vga.mem.memsize>>10,(unsigned int)vga.mem.memmask);
+	LOG(LOG_VGA,LOG_DEBUG)("VBE bios will report %uKB of video memory",vga.mem.vbe_memsize>>10);
 	LOG(LOG_VGA,LOG_DEBUG)("Maximum video resolution supported by card: %ux%u",vga.max_svga_width,vga.max_svga_height);
 
 	// TODO: If S3 emulation, and linear framebuffer bumps up against the CPU memalias limits,
@@ -1837,25 +1858,40 @@ void FinishSetMode_DOSBoxIG(Bitu /*crtc_base*/, VGA_ModeExtraData* modeData) {
 	htadd *= 8u;
 	vga.config.line_compare=0x7FFu;
 	vga.config.compatible_chain4 = false; /* or else bank switching support does not work properly */
-	ctl = DOSBOX_ID_REG_VGAIG_CTL_OVERRIDE|DOSBOX_ID_REG_VGAIG_CTL_VGAREG_LOCKOUT;
+	ctl = DOSBOX_ID_REG_VGAIG_CTL_OVERRIDE|DOSBOX_ID_REG_VGAIG_CTL_VGAREG_LOCKOUT|DOSBOX_ID_REG_VGAIG_CTL_ACPAL_BYPASS|DOSBOX_ID_REG_VGAIG_CTL_DAC_LOCKOUT;
 	switch (CurMode->type) {
 		case M_CGA2:
 			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_1BPP;
+			fmtc |= (uint16_t)(((cwidth+15U)/8U)&(~1U)); // must match code in VESA BIOS emulation
+
+			// must be able to change the palette with 3C6-3C9h
+			ctl &= ~DOSBOX_ID_REG_VGAIG_CTL_DAC_LOCKOUT;
 			break;
 		case M_LIN4:
 		case M_EGA:
 			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_1BPP4PLANE;
 			fmtc |= (uint16_t)(((cwidth+15U)/8U)&(~1U)); // must match code in VESA BIOS emulation
-			ctl &= ~DOSBOX_ID_REG_VGAIG_CTL_VGAREG_LOCKOUT; // VGA registers are REQUIRED in order to use planar modes properly
+
+			// VGA registers are REQUIRED in order to use planar modes properly.
+			// DOS games expect the 16-color planar VBE modes to remap colors through the AC palette
+			// such that colors 0-15 become colors 0x00-0x07 and 0x38-0x3F, same as EGA/VGA 16-color and EGA/VGA text mode.
+			// must be able to change the palette with 3C6-3C9h
+			ctl &= ~(DOSBOX_ID_REG_VGAIG_CTL_VGAREG_LOCKOUT|DOSBOX_ID_REG_VGAIG_CTL_ACPAL_BYPASS|DOSBOX_ID_REG_VGAIG_CTL_DAC_LOCKOUT);
 			break;
 		case M_PACKED4:
 			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_4BPP;
 			fmtc |= (uint16_t)((((cwidth+15U)/8U)&(~1U))*4); // must match code in VESA BIOS emulation
+
+			// must be able to change the palette with 3C6-3C9h
+			ctl &= ~DOSBOX_ID_REG_VGAIG_CTL_DAC_LOCKOUT;
 			break;
 		case M_VGA:
 		case M_LIN8:
 			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_8BPP;
 			fmtc |= cwidth;
+
+			// must be able to change the palette with 3C6-3C9h
+			ctl &= ~DOSBOX_ID_REG_VGAIG_CTL_DAC_LOCKOUT;
 			break;
 		case M_LIN15:
 			fmtc |= DOSBOX_ID_REG_VGAIG_FMT_15BPP;
@@ -1917,7 +1953,8 @@ void FinishSetMode_DOSBoxIG(Bitu /*crtc_base*/, VGA_ModeExtraData* modeData) {
 	dosbox_int_pop_save_state();
 
 	/* INT 10h at this point still has the screen blanked, having not yet written bit 5 of the attr control index.
-	 * It won't be able to with our lockout in effect, do it now directly */
+	 * It won't be able to with our lockout in effect, do it now directly.
+	 * 2026/01/07: We could leave it in the blanking state, the VGA draw code ignores this bit in DOSBox IG SVGA mode now, but, we won't */
 	vga.attr.disabled = 0;
 
 	LOG(LOG_MISC,LOG_DEBUG)("DOSBox Integration Device is active");

@@ -1,5 +1,5 @@
 dnl Init.
-AC_INIT(dosbox-x,2025.12.01,[https://github.com/joncampbell123/dosbox-x/issues],[],[https://dosbox-x.com])
+AC_INIT(dosbox-x,2026.01.02,[https://github.com/joncampbell123/dosbox-x/issues],[],[https://dosbox-x.com])
 COPYRIGHT_YEAR=`echo $PACKAGE_VERSION | cut -c1-4`
 AC_SUBST([COPYRIGHT_YEAR])
 AC_PREREQ(2.60)
@@ -96,6 +96,7 @@ AC_CACHE_CHECK([whether the compiler is clang],
 is_clang=$ac_cv_compiler_clang
 
 dnl End Utility function ============================
+
 
 dnl Detect the canonical host and target build environment
 AC_CANONICAL_HOST
@@ -630,10 +631,10 @@ fi
 pwd=`realpath $srcdir`
 if [[ -z "$pwd" ]]; then pwd=`pwd`; fi
 
-CFLAGS="$CFLAGS -I$pwd -I$pwd/vs/sdlnet/linux-host/include -I$pwd/vs/sdlnet/linux-host/include/SDL"
+#CFLAGS="$CFLAGS -I$pwd -I$pwd/vs/sdlnet/linux-host/include -I$pwd/vs/sdlnet/linux-host/include/SDL"
 LDFLAGS="$LDFLAGS -L$pwd/vs/sdlnet/linux-host/lib"
 CPPFLAGS="$CPPFLAGS -I$pwd -I$pwd/vs/sdlnet/linux-host/include -I$pwd/vs/sdlnet/linux-host/include/SDL"
-CXXFLAGS="$CXXFLAGS -I$pwd -I$pwd/vs/sdlnet/linux-host/include -I$pwd/vs/sdlnet/linux-host/include/SDL"
+#CXXFLAGS="$CXXFLAGS -I$pwd -I$pwd/vs/sdlnet/linux-host/include -I$pwd/vs/sdlnet/linux-host/include/SDL"
 
 if test x$enable_emscripten != xyes; then
 dnl Some target detection and actions for them
@@ -1404,6 +1405,34 @@ else
 fi
 
 AM_CONDITIONAL(C_DIRECT3D, test x"$do_d3d" = x"1")
+
+if test "x$SDL_STRING" = "xSDL2"; then 
+dnl FEATURE: Direct3D11 support on Windows
+AC_MSG_CHECKING([for D3D11 support])
+
+AC_LANG_PUSH([C++])
+
+AC_CHECK_HEADERS([d3d11.h dxgi.h], [have_d3d11_h=yes], [have_d3d11_h=no])
+AC_CHECK_HEADERS([d3dcompiler.h], [have_d3dcompiler_h=yes], [have_d3dcompiler_h=no])
+
+D3D11_LIBS=""
+
+if test "x$have_d3d11_h" = "xyes"; then
+  LIBS="$LIBS -ld3d11 -ldxgi"
+  AC_DEFINE([C_DIRECT3D], [1], [Define if D3D11 is available])
+  AC_MSG_RESULT([D3D11 support detected])
+else
+  AC_MSG_RESULT([D3D11 support not found])
+fi
+
+if test "x$have_d3d11_h" = "xyes" -a "x$have_d3dcompiler_h" = "xyes"; then
+  LIBS="$LIBS -ld3dcompiler_47"
+else
+  AC_MSG_RESULT([D3D compiler not found])
+fi
+
+AC_LANG_POP([C++])
+fi
 
 AH_TEMPLATE(C_ICONV,[Define to 1 to use iconv])
 if test x$have_iconv_h = xyes; then

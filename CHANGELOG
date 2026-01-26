@@ -1,4 +1,42 @@
 NEXT VERSION
+  - CPU Idle callback is now strictly limited to processing IRQs and one
+    CPU instruction, instead of however many CPU instructions can run
+    until the next scheduled emulator event. This fixes a bug where
+    system calls that use the Idle callback (INT 21h, etc) can sometimes
+    vary their delay time by emulator events, and if "scanline render on
+    demand is enabled", can cause the Idle call to take a full 1ms interval
+    of time. This fixes an issue where "scanline render on demand" caused
+    some DOS games like Xargon to take 5 to 10 times longer to transition
+    between title, main menu, gameplay, etc. (joncampbell123).
+  - Debugger LOGL command now includes the PIC_FullIndex() emulator time
+    in millseconds so that it can be used to determine time as well as
+    CPU state for debugging (joncampbell123).
+  - Add dosbox.conf option to control whether VBE emulation provides the
+    protected mode interface or not (joncampbell123).
+  - Add dosbox.conf option vbememsize and vbememsizekb to control how much
+    video memory is reported through the VESA BIOS, which can be less than
+    actual video memory (but must be at least 256KB). This option can help
+    with some DOS programs that have problems with "too much" video memory
+    in the system (joncampbell123).
+  - Add INT 10h mode flag _REQUIRE_LFB. When set, INT 10h calls to set
+    VESA BIOS modes will fail unless requesting to set the linear framebuffer
+    version of the mode (joncampbell123).
+  - S3 emulation will mark any more large enough to exceed bank switching
+    limits in S3 hardware as _REQUIRE_LFB (joncampbell123).
+  - I'm not sure why Adlib emulation defaults to 48KHz in most versions of
+    DOSBox, but the hardware rate is 49716 and that should be the default
+    (joncampbell123).
+  - Fixed crash on starting debugger on MinGW builds (maron2000)
+  - Use more ChinaSea/Big5-2003 extended characters for CP951 (1abcd)
+  - Replaced deprecated symbols to enable launching on old macOSs (maron2000)
+  - Converted all bash-dependent shell files to POSIX-shell compliant
+    (pandasoli)
+  - Removed 7 duplicate Chinese character mappings from CP951 (Big5-UAO) (1abcd)
+  - Added SoundBlaster microphone input support (Windows WASAPI)
+    (meldro364-glitch)
+  - Fixed segfault on launch of macOS builds (maron2000)
+    
+2026.01.02
   - VESA BIOS will remove 8-bit bank switching limit if the video memory
     is large enough to need more than 256 banks. Memory size will always
     be limited to no more than 64 banks (128 if smaller than 64KB

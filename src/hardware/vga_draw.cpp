@@ -54,6 +54,8 @@
 #include "../libs/zmbv/zmbv.h"
 #endif
 
+#include "../output/output_direct3d11.h"
+
 /* do not issue CPU-side I/O here -- this code emulates functions that the GDC itself carries out, not on the CPU */
 #include "cpu_io_is_forbidden.h"
 
@@ -348,11 +350,26 @@ static uint8_t * VGA_Draw_DOSBOXIG_None(Bitu vidstart, Bitu line) { // renders t
 }
 
 static uint8_t * VGA_Draw_DOSBOXIG_1bpp(Bitu vidstart, Bitu line) { // renders to 8bpp
-	(void)vidstart;
+	unsigned int xmax = vga.draw.width + (vga.draw.panning & 7u);
+	uint32_t *temp = (uint32_t*)TempLine;
+	unsigned char t;
+	unsigned int x;
+
 	(void)line;
 
-	memset(TempLine,0,vga.draw.width);
-	return TempLine;
+	for (x=0;x < xmax;x += 8,vidstart++) {
+		t = vga.mem.linear[vidstart & vga.draw.linear_mask];
+		temp[x+7] = vga.dac.xlat32[t&1u]; t >>= 1u;
+		temp[x+6] = vga.dac.xlat32[t&1u]; t >>= 1u;
+		temp[x+5] = vga.dac.xlat32[t&1u]; t >>= 1u;
+		temp[x+4] = vga.dac.xlat32[t&1u]; t >>= 1u;
+		temp[x+3] = vga.dac.xlat32[t&1u]; t >>= 1u;
+		temp[x+2] = vga.dac.xlat32[t&1u]; t >>= 1u;
+		temp[x+1] = vga.dac.xlat32[t&1u]; t >>= 1u;
+		temp[x+0] = vga.dac.xlat32[t&1u];
+	}
+
+	return (uint8_t*)(temp+(vga.draw.panning & 7u));
 }
 
 static uint8_t * VGA_Draw_DOSBOXIG_4bpp(Bitu vidstart, Bitu line) { // renders to 32bpp
@@ -3772,7 +3789,7 @@ again:
         }
 
         VGA_DAC_DeferredUpdateColorPalette();
-        if (GCC_UNLIKELY(vga.attr.disabled)) {
+        if (GCC_UNLIKELY(vga.attr.disabled && !vga.dosboxig.svga)) {
             switch(machine) {
                 case MCH_PCJR:
                     // Displays the border color when screen is disabled
@@ -3968,7 +3985,7 @@ static void VGA_DrawEGASingleLine(Bitu /*blah*/) {
         vga.draw.render_step = 0;
 
     if (!skiprender) {
-        if (GCC_UNLIKELY(vga.attr.disabled)) {
+        if (GCC_UNLIKELY(vga.attr.disabled && !vga.dosboxig.svga)) {
             memset(TempLine, 0, TempLineSize);
             RENDER_DrawLine(TempLine);
         } else {
@@ -4929,13 +4946,10 @@ void VGA_sof_debug_video_info(void) {
 		if (vga.dosboxig.svga) {
 			/* do not change */
 		}
-		else if (machine == MCH_CGA || machine == MCH_TANDY || machine == MCH_PCJR || machine == MCH_HERC || machine == MCH_AMSTRAD) {
-			if (rowdiv == 2 || rowdiv == 4) rowdiv = 1; /* CGA graphics use interleaving to accomplish 200 lines, Tandy and Hercules use 4-way interleaving in some modes */
-		}
-		else if (machine == MCH_EGA || machine == MCH_VGA) {
+		else if (machine == MCH_CGA || machine == MCH_TANDY || machine == MCH_PCJR || machine == MCH_HERC || machine == MCH_AMSTRAD || machine == MCH_EGA || machine == MCH_VGA) {
 			/* EGA/VGA have bits set to display video memory 2-way interleave like CGA and even 4-way interleave like Hercules */
-			if (vga.tandy.line_mask & 2) interleave_mul = 4;
-			else if (vga.tandy.line_mask & 1) interleave_mul = 2;
+			if ((vga.tandy.line_mask & 2) && rowdiv > 2) interleave_mul = 4;
+			else if ((vga.tandy.line_mask & 1) && rowdiv > 1) interleave_mul = 2;
 		}
 
 		/* render_max == 2 and address_line_total == 2 can happen if the user disabled doublescan mode */
@@ -5389,6 +5403,8 @@ void VGA_sof_debug_video_info(void) {
 			if (vga.dosboxig.svga) {
 				char *d = tmp;
 
+				y += 1; /* please do not overlap the rpal display */
+
 				d += sprintf(d,"HPL=%u VPL=%u HSC=%u VSC=%u",
 					(unsigned int)vga.dosboxig.hpel,(unsigned int)vga.dosboxig.vpel,
 					(unsigned int)vga.dosboxig.hscale,(unsigned int)vga.dosboxig.vscale);
@@ -5434,6 +5450,7 @@ void VGA_sof_debug_video_info(void) {
 						else colors = 2;
 					}
 
+					VGA_debug_screen_func->rect(x-1,y,x,y+8,dkgray);
 					VGA_debug_screen_func->rect(x-1,y,x+(8*colors),y+1,dkgray);
 					VGA_debug_screen_func->rect(x-1,y+7,x+(8*colors),y+8,dkgray);
 					for (unsigned int c=0;c < colors;c++) {
@@ -5449,6 +5466,7 @@ void VGA_sof_debug_video_info(void) {
 				if (IS_VGA_ARCH) {
 					/* attribute controller PAL */
 					x = VGA_debug_screen_puts8(x,y,"ACPAL:",white) + 8;
+					VGA_debug_screen_func->rect(x-1,y,x,y+8,dkgray);
 					VGA_debug_screen_func->rect(x-1,y,x+(8*16),y+1,dkgray);
 					VGA_debug_screen_func->rect(x-1,y+7,x+(8*16),y+8,dkgray);
 					for (unsigned int c=0;c < 16;c++) {
@@ -5473,6 +5491,7 @@ void VGA_sof_debug_video_info(void) {
 
 					/* attribute controller PAL with color select and other in force */
 					x = VGA_debug_screen_puts8(x,y,"CSPAL:",white) + 8;
+					VGA_debug_screen_func->rect(x-1,y,x,y+8,dkgray);
 					VGA_debug_screen_func->rect(x-1,y,x+(8*16),y+1,dkgray);
 					VGA_debug_screen_func->rect(x-1,y+7,x+(8*16),y+8,dkgray);
 					for (unsigned int c=0;c < 16;c++) {
@@ -6212,8 +6231,13 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
 	RENDER_EndUpdate(renderAbort);
 	vga.draw.lines_done = 0;
 
-	//Check if we can actually render, else skip the rest
-	if (vga.draw.vga_override || !RENDER_StartUpdate()) return;
+#if C_DIRECT3D && defined(C_SDL2)
+    if(sdl.desktop.type == SCREEN_DIRECT3D11) {
+        OUTPUT_DIRECT3D11_CheckSourceResolution();
+    }
+#endif
+    //Check if we can actually render, else skip the rest
+    if (vga.draw.vga_override || !RENDER_StartUpdate()) return;
 
 	if (svgaCard == SVGA_S3Trio) {
 		if (s3Card >= S3_ViRGE || s3Card == S3_Trio64V) {
@@ -7639,6 +7663,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		else {
 			switch (vga.mode) {
 				case M_CGA2: // this is used for 1bpp
+					bpp = 32;
 					VGA_DrawLine = VGA_Draw_DOSBOXIG_1bpp;
 					break;
 				case M_PACKED4:
@@ -8385,7 +8410,8 @@ void POD_Save_VGA_Draw( std::ostream& stream )
 
 
 	// - pure data
-	WRITE_POD( &TempLine, TempLine );
+	WRITE_POD( &TempLineSize, TempLineSize );
+	WRITE_POD_SIZE( TempLine, TempLineSize );	
 
 
 	// - system data
@@ -8427,7 +8453,23 @@ void POD_Load_VGA_Draw( std::istream& stream )
 
 
 	// - pure data
-	READ_POD( &TempLine, TempLine );
+	const unsigned int oldTempLineSize = TempLineSize;
+
+	READ_POD( &TempLineSize, TempLineSize );
+
+	if( oldTempLineSize != TempLineSize ) {
+		TempLineFree();
+
+		if(	TempLineAlloc(( TempLineSize - 1024 ) / 4 )) {
+			READ_POD_SIZE( TempLine, TempLineSize );
+		} else {
+			LOG( LOG_VGA, LOG_ERROR )("Savestate load could not allocate TempLine");
+			stream.seekg( TempLineSize, stream.cur );
+		}
+	} else {
+		// read directly into the old address
+		READ_POD_SIZE( TempLine, TempLineSize );
+	}
 
 
 	// - system data

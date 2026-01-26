@@ -159,6 +159,7 @@ typedef struct {
 	bool vesa_nolfb;
 	bool vesa_oldvbe;
 	bool vesa_oldvbe10;
+	bool vesa_vbe3;
 	uint8_t text_row;
 } Int10Data;
 
@@ -182,6 +183,7 @@ typedef struct {
 #define _USER_DISABLED                  0x4000  /* user disabled (cannot set mode) but still listed in modelist */
 #define _USER_MODIFIED                  0x8000  /* user modified (through VESAMOED) */
 #define _BIOS_DISABLED                 0x10000  /* BIOS disabled (cannot set mode), may be listed in modelist but likely not */
+#define _REQUIRE_LFB                   0x20000  /* Require LFB, no bank switching permitted */
 
 extern Int10Data int10;
 
@@ -287,3 +289,6 @@ bool INT10_VideoState_Restore(Bitu state,RealPt buffer);
 /* Video Parameter Tables */
 uint16_t INT10_SetupVideoParameterTable(PhysPt basepos);
 void INT10_SetupBasicVideoParameterTable(void);
+
+Bitu VideoModeMemSize(VideoModeBlock* vmodeBlock,Bitu mode);
+
