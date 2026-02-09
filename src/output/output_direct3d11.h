@@ -26,6 +26,9 @@ using namespace std;
 #include <dxgi.h>
 
 void d3d11_init();
+bool d3d11_LoadDLL();
+void d3d11_UnloadDLL();
+
 void OUTPUT_DIRECT3D11_Select();
 Bitu OUTPUT_DIRECT3D11_GetBestMode(Bitu flags);
 Bitu OUTPUT_DIRECT3D11_SetSize();
@@ -49,12 +52,16 @@ public:
     void CheckSourceResolution();
     void ResizeCPUBuffer(uint32_t src_w, uint32_t src_h);
     bool CreateSamplers(void);
-    void SetSamplerMode(int mode);
+    void SetSamplerMode(void);
+    void GetRenderMode(void);
+
     uint32_t frame_width = 0, frame_height = 0;   // Framebuffer size (Internal resolution)
     uint32_t window_width = 0; // Window width (Used when returning from fullscreen)
     uint32_t window_height = 0; // Window width (Used when returning from fullscreen)
     bool was_fullscreen = false;
     bool device_ready = false;
+    int cpu_pitch = 0;
+    std::vector<uint8_t> cpu_buffer;
 
 private:
     ID3D11Device* device = nullptr;
@@ -80,15 +87,13 @@ private:
     UINT offset = 0;
 
     int width = 0, height = 0;
-    int cpu_pitch = 0;
-    std::vector<uint8_t> cpu_buffer;
     bool textureMapped = false;
     bool resizing = false;
     uint32_t last_window_w = 0;
     uint32_t last_window_h = 0;
     uint32_t last_tex_w = 0;
     uint32_t last_tex_h = 0;
-
+    int current_render_mode;
 };
 
 #endif // defined(C_SDL2)

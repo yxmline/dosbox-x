@@ -336,6 +336,10 @@ int macosx_yesnocancel(const char *title, const char *message);
 std::string macosx_prompt_folder(const char *default_folder);
 #endif
 
+#if defined(C_HAVE_DUKTAPE)
+duk_context *js_heap = NULL;
+#endif
+
 #if C_DIRECT3D
 void d3d_init(void);
 #endif
@@ -1769,8 +1773,19 @@ SDL_Window* GFX_SetSDLWindowMode(uint16_t width, uint16_t height, SCREEN_TYPES s
 //          || (fullscreen != (SDL_WINDOW_FULLSCREEN == (SDL_GetWindowFlags(sdl.window) & SDL_WINDOW_FULLSCREEN)))
 //          || (fullscreen && ((width != currWidth) || (height != currHeight)))
        ) {
+        /* Save window position before destroying it */
+        int saved_x = SDL_WINDOWPOS_UNDEFINED;
+        int saved_y = SDL_WINDOWPOS_UNDEFINED;
+        uint32_t saved_flags = 0;
+
         lastType = screenType;
         if (sdl.window) {
+            const uint32_t fs_flags =
+                SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP;
+            saved_flags = SDL_GetWindowFlags(sdl.window);
+            if(!(saved_flags & SDL_WINDOW_FULLSCREEN)) {
+                SDL_GetWindowPosition(sdl.window, &saved_x, &saved_y);
+            }
             SDL_DestroyWindow(sdl.window);
         }
 
@@ -1784,6 +1799,13 @@ SDL_Window* GFX_SetSDLWindowMode(uint16_t width, uint16_t height, SCREEN_TYPES s
                                       | (dpi_aware_enable ? SDL_WINDOW_ALLOW_HIGHDPI : 0));
         if (sdl.window) {
             GFX_SetTitle(-1, -1, -1, false); //refresh title.
+            if(saved_flags & SDL_WINDOW_MAXIMIZED) {
+                SDL_MaximizeWindow(sdl.window);
+            }
+            else if(saved_x != SDL_WINDOWPOS_UNDEFINED && saved_y != SDL_WINDOWPOS_UNDEFINED &&
+                !(saved_flags & SDL_WINDOW_MAXIMIZED)) {
+                SDL_SetWindowPosition(sdl.window, saved_x, saved_y); // restore position.
+            }
         }
         sdl.surface = SDL_GetWindowSurface(sdl.window);
         SDL_GetWindowSize(sdl.window, &currWidth, &currHeight);
@@ -4193,6 +4215,26 @@ static void GUI_StartUp() {
 #if defined(C_SDL2)
     SDL_SetWindowTitle(sdl.window,"DOSBox-X");
     if (posx >= 0 && posy >= 0) {
+#if WIN32
+        HWND hwnd = GetHWND();
+        HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO info;
+        info.cbSize = sizeof(info);
+        GetMonitorInfo(monitor, &info);
+
+        int x = info.rcWork.left;
+        int y = info.rcWork.top;
+
+        SetWindowPos(
+            hwnd, nullptr,
+            x, y,
+            0, 0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE
+        );
+
+        SDL_GetWindowPosition(sdl.window, &x, &y); // get (0,0) position
+        SDL_SetWindowPosition(sdl.window, posx, y + posy);
+#else
         if (sdl.displayNumber>0) {
             int displays = SDL_GetNumVideoDisplays();
             SDL_Rect bound;
@@ -4207,6 +4249,7 @@ static void GUI_StartUp() {
             }
         }
         SDL_SetWindowPosition(sdl.window, posx, posy);
+#endif
     }
 #else
     SDL_WM_SetCaption("DOSBox-X",VERSION);
@@ -8939,6 +8982,12 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         /* -- initialize logging first, so that higher level inits can report problems to the log file */
         LOG::Init();
 
+#if defined(C_HAVE_DUKTAPE)
+	LOG(LOG_MISC,LOG_NORMAL)("Initializing ECMA heap");
+	js_heap = duk_create_heap(NULL,NULL,NULL,NULL,NULL);//TODO: fatal exit handler that we can direct towards E_Exit()
+	if (!js_heap) E_Exit("Unable to initialize ECMA heap");//TODO: or maybe this emulator can run without ECMAScript even if compiled
+#endif
+
 #if defined(WIN32) && !defined(C_SDL2) && !defined(HX_DOS) && !defined(_WIN32_WINDOWS)
         {
             DISPLAY_DEVICE dd;
@@ -10138,6 +10187,14 @@ fresh_boot:
                         ent.function(NULL);
                         exitfunctions.pop_front();
                 }
+
+#if defined(C_HAVE_DUKTAPE)
+	if (js_heap) {
+		LOG(LOG_MISC,LOG_NORMAL)("Freeing ECMA heap");
+		duk_destroy_heap(js_heap);
+		js_heap = NULL;
+	}
+#endif
 
         LOG::Exit();
 
