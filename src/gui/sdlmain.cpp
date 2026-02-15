@@ -46,6 +46,10 @@
 #endif
 #endif
 
+#ifndef O_BINARY
+# define O_BINARY 0
+#endif
+
 int socknum=-1;
 int posx = -1;
 int posy = -1;
@@ -3370,6 +3374,9 @@ Bitu GFX_GetRGB(uint8_t red, uint8_t green, uint8_t blue) {
 
 #if C_DIRECT3D
         case SCREEN_DIRECT3D:
+#if defined(C_SDL2)
+        case SCREEN_DIRECT3D11:
+#endif
             return SDL_MapRGB(sdl.surface->format, red, green, blue);
 #endif
 
@@ -8075,6 +8082,137 @@ std::wstring win32_prompt_folder(const char *default_folder) {
 
 void CPU_OnReset(Section* sec);
 
+#if defined(C_HAVE_DUKTAPE)
+static void jsc_print_multiline_string(enum LOG_SEVERITIES lsev,const char *prefix,const char *s) {
+	std::string prefixspc;
+	std::string r;
+	int line = 0;
+
+	prefixspc.resize(strlen(prefix));
+	for (size_t i=0;i < prefixspc.length();i++) prefixspc[i] = ' ';
+
+	while (*s) {
+		if (*s == '\n') {
+			LOG(LOG_MISC,lsev)("%s: %s",line == 0 ? prefix : prefixspc.c_str(),r.c_str());
+			r.clear();
+			line++;
+		}
+		else if (*s >= ' ' || *s < 0) {
+			r += *s;
+		}
+
+		s++;
+	}
+
+	if (!r.empty())
+		LOG(LOG_MISC,lsev)("%s: %s",line == 0 ? prefix : prefixspc.c_str(),r.c_str());
+}
+
+/* console.log(...)
+ * _emu.log(...) */
+static duk_ret_t jsc_console_log(duk_context *ctx) {
+	std::string r;
+	const char *s;
+	int line = 0;
+
+	duk_idx_t tp = duk_get_top(ctx);
+	for (duk_idx_t i=0;i < tp;i++) {
+		if (!r.empty()) r += " ";
+
+		s = duk_to_string(ctx,i);
+		if (s) {
+			while (*s) {
+				if (*s == '\n') {
+					LOG(LOG_MISC,LOG_NORMAL)("%s: %s",line == 0 ? "console.log()" : "             ",r.c_str());
+					r.clear();
+					line++;
+				}
+				else if (*s >= ' ' || *s < 0) {
+					r += *s;
+				}
+
+				s++;
+			}
+		}
+	}
+
+	if (!r.empty())
+		LOG(LOG_MISC,LOG_NORMAL)("%s: %s",line == 0 ? "console.log()" : "             ",r.c_str());
+
+	return 0;
+}
+
+void jsc_load_file(const char *jskey,const char *script) {
+	/* eval("...") -> [js_idx] object */
+	duk_push_string(js_heap,"_emu._js");
+	duk_eval(js_heap);
+	if (!duk_is_object(js_heap,-1)) {
+		duk_pop(js_heap);
+		return;
+	}
+
+	duk_idx_t js_idx = duk_get_top(js_heap) - duk_idx_t(1);
+	char *tmp = NULL;
+	off_t sz = 0;
+	int fd = -1;
+
+	fd = open(script,O_RDONLY|O_BINARY);
+	if (fd >= 0) {
+		sz = lseek(fd,0,SEEK_END);
+		if (sz > 0 && sz <= (16*1024*1024) && lseek(fd,0,SEEK_SET) == 0)
+			tmp = (char*)malloc((size_t)sz + 1);
+
+		if (tmp) {
+			int r = read(fd,tmp,sz);
+			if (r < 0) r = 0;
+			tmp[r] = 0;
+
+			LOG(LOG_MISC,LOG_DEBUG)("Loading %s %s",jskey,script);
+
+			/* in:
+			 *    <string>
+			 * out:
+			 *    <function> */
+			duk_push_string(js_heap, script);
+			duk_compile_lstring_filename(js_heap,0,tmp,(duk_size_t)r);
+
+			duk_push_string(js_heap,jskey);//key
+			duk_dup(js_heap,-2);//value
+			duk_put_prop(js_heap,js_idx);//[js_idx].[jskey] = [function]
+			duk_pop(js_heap);//discard function
+
+			free((void*)tmp);
+		}
+
+		close(fd);
+	}
+
+	duk_pop(js_heap);//discard [js_idx] object
+}
+
+void jsc_run(const char *jskey) {
+	duk_push_string(js_heap,(std::string("_emu._js['")+jskey+"']").c_str());
+	duk_eval(js_heap);
+	if (duk_is_callable(js_heap,-1)) {
+		LOG(LOG_MISC,LOG_DEBUG)("JS calling %s",jskey);
+		if (duk_pcall(js_heap,0)) {
+			if (duk_is_error(js_heap,-1)) {
+				LOG(LOG_MISC,LOG_ERROR)("JS error in %s",jskey);
+
+				duk_dup(js_heap,-1);
+				jsc_print_multiline_string(LOG_ERROR,"JS error",duk_safe_to_string(js_heap,-1));
+				duk_pop(js_heap);
+
+				duk_dup(js_heap,-1);
+				jsc_print_multiline_string(LOG_DEBUG,"JS error stack",duk_safe_to_stacktrace(js_heap,-1));
+				duk_pop(js_heap);
+			}
+		}
+	}
+	duk_pop(js_heap);//discard retval or whatever was not a function. will be an error object if JS error
+}
+#endif
+
 void DISP2_Init(uint8_t color), DISP2_Shut();
 //extern void UI_Init(void);
 void grGlideShutdown(void);
@@ -9782,6 +9920,58 @@ fresh_boot:
 
 #if C_DEBUG
         if (control->opt_test) ::testing::InitGoogleTest(&argc, argv);
+#endif
+
+#if defined(C_HAVE_DUKTAPE)
+	if (js_heap) {
+		duk_idx_t global_idx = duk_get_top(js_heap);
+		duk_push_global_object(js_heap);
+
+		duk_idx_t emu_idx = duk_push_object(js_heap);
+		duk_idx_t js_idx = duk_push_object(js_heap);
+
+		duk_push_string(js_heap,"emulator");//key
+		duk_push_string(js_heap,"DOSBox-X");//value
+		duk_put_prop(js_heap,emu_idx);//[emu_idx].emulator = "DOSBox-X"
+
+		duk_push_string(js_heap,"version");//key
+		duk_push_string(js_heap,VERSION);//value
+		duk_put_prop(js_heap,emu_idx);//[emu_idx].version = ...
+
+		duk_push_string(js_heap,"_js");//key
+		duk_dup(js_heap,js_idx);//value
+		duk_put_prop(js_heap,emu_idx);//[emu_idx]._js = ...
+
+		duk_push_string(js_heap,"_emu");//key
+		duk_dup(js_heap,emu_idx);//value
+		duk_put_prop(js_heap,global_idx);//[global_idx]._emu = [emu_idx]
+
+		duk_idx_t console_idx = duk_push_object(js_heap);
+
+		{
+			duk_idx_t console_log_idx = duk_push_c_function(js_heap,jsc_console_log,DUK_VARARGS);
+
+			duk_push_string(js_heap,"log");//key
+			duk_dup(js_heap,console_log_idx);//value
+			duk_put_prop(js_heap,console_idx);//[console_idx].log = [console_log_idx]
+
+			duk_push_string(js_heap,"log");//key
+			duk_dup(js_heap,console_log_idx);//value
+			duk_put_prop(js_heap,emu_idx);//[emu_idx].log = [console_log_idx]
+		}
+
+		duk_push_string(js_heap,"console");//key
+		duk_dup(js_heap,console_idx);//value
+		duk_put_prop(js_heap,global_idx);//[global_idx].console = [console_idx]
+
+		Section_prop *section = static_cast<Section_prop *>(control->GetSection("script"));
+		{
+			const char *script = section->Get_string("startup.js");
+			if (script && *script) jsc_load_file("startup.js",script);
+		}
+
+		jsc_run("startup.js");
+	}
 #endif
 
         /* NTS: CPU reset handler, and BIOS init, has the instruction pointer poised to run through BIOS initialization,
