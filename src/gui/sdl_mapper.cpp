@@ -339,6 +339,10 @@ void                                            WindowsTaskbarResetPreviewRegion
 
 #if defined(MACOSX)
 void                        macosx_reload_touchbar(void);
+#if defined(C_SDL2) && C_METAL
+void OUTPUT_Metal_Shutdown();
+void change_output(int);
+#endif
 #endif
 
 bool systemmessagebox(char const * aTitle, char const * aMessage, char const * aDialogType, char const * aIconType, int aDefaultButton);
@@ -1231,7 +1235,9 @@ void setScanCode(Section_prop * section) {
 #endif //defined(MACOSX)
 }
 void loadScanCode();
+#if !defined(OSFREE)
 const char* DOS_GetLoadedLayout(void);
+#endif
 bool load=false;
 bool prev_ret;
 #endif // !defined(C_SDL2)
@@ -1245,6 +1251,7 @@ bool useScanCode() {
 	else if (!usescancodes)
 		return false;
 	else {
+# if !defined(OSFREE)
 		const char* layout_name = DOS_GetLoadedLayout();
 		bool ret = layout_name != NULL && !IS_PC98_ARCH;
 		if (!load)
@@ -1257,6 +1264,9 @@ bool useScanCode() {
 			load=true;
 		}
 		return ret;
+# else
+		return false;
+# endif
 	}
 #endif
 }
@@ -5557,6 +5567,16 @@ void MAPPER_RunInternal() {
 
 #if defined(WIN32) && !defined(HX_DOS) && !defined(_WIN32_WINDOWS)
     WindowsTaskbarUpdatePreviewRegion();
+#endif
+
+#if defined(MACOSX) && defined(C_SDL2) && C_METAL
+    if(sdl.desktop.want_type == SCREEN_METAL){
+        OUTPUT_Metal_Shutdown();
+#if defined(C_OPENGL)
+        change_output(3);
+#endif
+        change_output(14);
+    }  
 #endif
 
 //  KEYBOARD_ClrBuffer();

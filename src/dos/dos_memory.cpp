@@ -36,8 +36,10 @@ Bitu UMB_START_SEG = 0x9FFF;
  *        That means 0x9FFF if 640KB or more, or a lesser value if less than 640KB */
 //#define UMB_START_SEG 0x9fff
 
+#if !defined(OSFREE)
 uint16_t first_umb_seg = 0xd000;
 uint16_t first_umb_size = 0x2000;
+#endif
 
 static uint16_t memAllocStrategy = 0x00;
 
@@ -169,8 +171,11 @@ bool DOS_SetMemAllocStrategy(uint16_t strat) {
 	return false;
 }
 
+#if !defined(OSFREE)
 extern bool dbg_zero_on_dos_allocmem;
+#endif
 
+#if !defined(OSFREE)
 void DOS_zeromem(uint16_t seg,uint16_t para) {
 	uint32_t ofs,cnt;
 
@@ -184,6 +189,7 @@ void DOS_zeromem(uint16_t seg,uint16_t para) {
 		cnt--;
 	}
 }
+#endif
 
 static uint16_t GetMaximumMCBFreeSize(uint16_t mcb_segment)
 {
@@ -255,7 +261,9 @@ bool DOS_AllocateMemory(uint16_t * segment,uint16_t * blocks) {
 				mcb.SetPSPSeg(dos.psp());
 				*segment=mcb_segment+1;
 
+#if !defined(OSFREE)
 				if (dbg_zero_on_dos_allocmem) DOS_zeromem(*segment,*blocks);
+#endif
 #ifdef DEBUG_ALLOC
 				LOG(LOG_DOSMISC,LOG_DEBUG)("DOS_AllocateMemory(blocks=0x%04x) = 0x%04x-0x%04x",*blocks,*segment,*segment+*blocks-1);
 #endif
@@ -274,7 +282,9 @@ bool DOS_AllocateMemory(uint16_t * segment,uint16_t * blocks) {
 						//TODO Filename
 						*segment=mcb_segment+1;
 
+#if !defined(OSFREE)
 						if (dbg_zero_on_dos_allocmem) DOS_zeromem(*segment,*blocks);
+#endif
 #ifdef DEBUG_ALLOC
 						LOG(LOG_DOSMISC,LOG_DEBUG)("DOS_AllocateMemory(blocks=0x%04x) = 0x%04x-0x%04x",*blocks,*segment,*segment+*blocks-1);
 #endif
@@ -329,7 +339,9 @@ bool DOS_AllocateMemory(uint16_t * segment,uint16_t * blocks) {
 							mcb.SetFileName(psp_name);
 							*segment = found_seg+1;
 
+#if !defined(OSFREE)
 							if (dbg_zero_on_dos_allocmem) DOS_zeromem(*segment,*blocks);
+#endif
 #ifdef DEBUG_ALLOC
 							LOG(LOG_DOSMISC,LOG_DEBUG)("DOS_AllocateMemory(blocks=0x%04x) = 0x%04x-0x%04x",*blocks,*segment,*segment+*blocks-1);
 #endif
@@ -347,7 +359,9 @@ bool DOS_AllocateMemory(uint16_t * segment,uint16_t * blocks) {
 						mcb.SetType(0x4D);
 					}
 
+#if !defined(OSFREE)
 					if (dbg_zero_on_dos_allocmem) DOS_zeromem(*segment,*blocks);
+#endif
 #ifdef DEBUG_ALLOC
 					LOG(LOG_DOSMISC,LOG_DEBUG)("DOS_AllocateMemory(blocks=0x%04x) = 0x%04x-0x%04x",*blocks,*segment,*segment+*blocks-1);
 #endif
@@ -362,7 +376,7 @@ bool DOS_AllocateMemory(uint16_t * segment,uint16_t * blocks) {
 	}
 
 #ifdef DEBUG_ALLOC
-	LOG(LOG_DOSMISC,LOG_DEBUG)("DOS_AllocateMemory(blocks=0x%04x) = 0x%04x-0x%04x",*blocks,*segment,*segment+*blocks-1);
+	LOG(LOG_DOSMISC,LOG_DEBUG)("DOS_AllocateMemory(blocks=0x%04x) = 0x%04x-0x%04x failed",*blocks,*segment,*segment+*blocks-1);
 #endif
 	return false;
 }
@@ -463,6 +477,10 @@ bool DOS_ResizeMemory(uint16_t segment,uint16_t * blocks) {
 		return true;
 	}
 
+#ifdef DEBUG_ALLOC
+	LOG(LOG_DOSMISC,LOG_DEBUG)("DOS_ResizeMemory(seg=0x%04x) failed, maximum 0x%04x available",segment,(unsigned int)total);
+#endif
+
 	*blocks=total;	/* return maximum */
 	DOS_SetError(DOSERR_INSUFFICIENT_MEMORY);
 	return false;
@@ -494,6 +512,7 @@ bool DOS_FreeMemory(uint16_t segment) {
 
 Bitu GetEMSPageFrameSegment(void);
 
+#if !defined(OSFREE)
 void DOS_BuildUMBChain(bool umb_active,bool /*ems_active*/) {
 	unsigned int seg_limit = (unsigned int)(MEM_ConventionalPages()*256);
 
@@ -543,8 +562,10 @@ void DOS_BuildUMBChain(bool umb_active,bool /*ems_active*/) {
 		dos_infoblock.SetUMBChainState(0);
 	}
 }
+#endif
 
 bool DOS_LinkUMBsToMemChain(uint16_t linkstate) {
+#if !defined(OSFREE)
 	/* Get start of UMB-chain */
 	uint16_t umb_start=dos_infoblock.GetStartOfUMBChain();
 	if (umb_start!=UMB_START_SEG) {
@@ -596,6 +617,9 @@ bool DOS_LinkUMBsToMemChain(uint16_t linkstate) {
 	}
 
 	return true;
+#else
+	return false;
+#endif
 }
 
 

@@ -107,6 +107,23 @@ const char* MSG_Get(const char* msg) { // add messages to the translation messag
     return msg; // Return the original name if not found
 }
 
+const char* MSG_GetUTF8(const char* msg)
+{
+    thread_local std::string storage;
+
+    const char* guest = MSG_Get(msg);
+
+    size_t len = strlen(guest);
+    std::vector<char> buf(len * 4 + 1, 0);
+
+    CodePageGuestToHostUTF8(buf.data(), guest);
+
+    storage = buf.data();
+    return storage.c_str();
+}
+
+
+
 std::string formatString(const char* format, ...) {
     /**
       * @brief Generates a formatted string using a format specifier and variable arguments.
@@ -466,12 +483,14 @@ void LoadMessageFile(const char* fname) {
     update_bindbutton_text();
     dos.loaded_codepage = cp;
 
+#if !defined(OSFREE)
     if(loadlangcp && msgcodepage > 0) {
         const char* layoutname = DOS_GetLoadedLayout();
         if(!IS_DOSV && !IS_JEGA_ARCH && !IS_PC98_ARCH && layoutname != nullptr) {
             toSetCodePage(nullptr, msgcodepage, -1);
         }
     }
+#endif
 
     refreshExtChar();
     LOG_MSG("LoadMessageFile: Loaded language file: %s", fname);

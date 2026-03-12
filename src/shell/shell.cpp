@@ -76,7 +76,9 @@ int Reflect_Menu(void);
 void SetIMPosition(void);
 void SetKEYBCP();
 void initRand();
+#if !defined(OSFREE)
 void initcodepagefont(void);
+#endif
 void runMount(const char *str);
 void ResolvePath(std::string& in);
 void DOS_SetCountry(uint16_t countryNo);
@@ -120,7 +122,9 @@ typedef std::list<std::string>::iterator auto_it;
 
 void VFILE_Remove(const char *name,const char *dir="");
 void runRescan(const char *str), DOSBox_SetSysMenu(void);
+#if !defined(OSFREE)
 int toSetCodePage(DOS_Shell *shell, int newCP, int opt);
+#endif
 
 #if defined(WIN32)
 void MountAllDrives(bool quiet) {
@@ -251,6 +255,7 @@ void AutoexecObject::Uninstall() {
 				char* after_set = buf2 + 4;//move to variable that is being set
 				char* test2 = strpbrk(after_set,"=");
 				if (!test2) {
+					it++;
 					delete [] buf2;
 					continue;
 				}
@@ -433,7 +438,7 @@ public:
 void DOS_Shell::ParseLine(char * line) {
 	LOG(LOG_EXEC,LOG_DEBUG)("Parsing command line: %s",line);
 	/* Check for a leading @ */
- 	if (line[0] == '@') line[0] = ' ';
+	if (line[0] == '@') line[0] = ' ';
 	line = trim(line);
 
 	/* Do redirection and pipe checks */
@@ -448,15 +453,15 @@ void DOS_Shell::ParseLine(char * line) {
 	bool normalstdin  = false;	/* whether stdin/out are open on start. */
 	bool normalstdout = false;	/* Bug: Assumed is they are "con"      */
 
-    GetRedirection(line, &in, &out, &toc, &append);
+	GetRedirection(line, &in, &out, &toc, &append);
 
-    if(toc && *trim(toc) == '\0') {
-        SyntaxError(); /* No command to pass output */
-        if(in) free(in);
-        if(out) free(out);
-        if(toc) free(toc);
-        return;
-    }
+	if(toc && *trim(toc) == '\0') {
+		SyntaxError(); /* No command to pass output */
+		if(in) free(in);
+		if(out) free(out);
+		if(toc) free(toc);
+		return;
+	}
 
 	if (in || out || toc) {
 		normalstdin  = (psp->GetFileHandle(0) != 0xff);
@@ -470,53 +475,53 @@ void DOS_Shell::ParseLine(char * line) {
 			DOS_OpenFile(in,OPEN_READ,&dummy);	//Open new stdin
 		} else {
 			WriteOut(!*in?"File open error\n":(dos.errorcode==DOSERR_ACCESS_DENIED?MSG_Get("SHELL_CMD_FILE_ACCESS_DENIED"):"File open error - %s\n"), in);
-            if(in) free(in);
-            if(out) free(out);
-            if(toc) free(toc);
+			if(in) free(in);
+			if(out) free(out);
+			if(toc) free(toc);
 			return;
 		}
 	}
 	bool fail=false;
 	char pipetmp[270];
 	uint16_t fattr;
-    if(toc) {
-        // Initialize random number generator
-        initRand();
+	if(toc) {
+		// Initialize random number generator
+		initRand();
 
-        // Try to get TEMP or TMP environment variable
-        std::string tempPath;
-        if(!GetEnvStr("TEMP", tempPath) && !GetEnvStr("TMP", tempPath)) {
-            // Fallback: use current drive root as fallback directory (e.g., "C:\")
-            char currentDrive = DOS_GetDefaultDrive() + 'A';
-            tempPath = std::string(1, currentDrive) + ":\\";
-        }
-        else {
-            // Extract directory from environmental variable
-            std::string::size_type idx = tempPath.find('=');
-            if(idx != std::string::npos)
-                tempPath = tempPath.substr(idx + 1);
-        }
+		// Try to get TEMP or TMP environment variable
+		std::string tempPath;
+		if(!GetEnvStr("TEMP", tempPath) && !GetEnvStr("TMP", tempPath)) {
+			// Fallback: use current drive root as fallback directory (e.g., "C:\")
+			char currentDrive = DOS_GetDefaultDrive() + 'A';
+			tempPath = std::string(1, currentDrive) + ":\\";
+		}
+		else {
+			// Extract directory from environmental variable
+			std::string::size_type idx = tempPath.find('=');
+			if(idx != std::string::npos)
+				tempPath = tempPath.substr(idx + 1);
+		}
 
-        // Ensure the path ends with backslash
-        if(!tempPath.empty() && tempPath.back() != '\\') {
-            tempPath += '\\';
-        }
+		// Ensure the path ends with backslash
+		if(!tempPath.empty() && tempPath.back() != '\\') {
+			tempPath += '\\';
+		}
 
-        // Check if directory is valid
-        uint16_t fattr;
-        if(!(DOS_GetFileAttr(tempPath.c_str(), &fattr) && (fattr & DOS_ATTR_DIRECTORY))) {
-            // Fallback to current drive root again if directory is invalid
-            char currentDrive = DOS_GetDefaultDrive() + 'A';
-            tempPath = std::string(1, currentDrive) + ":\\";
-        }
+		// Check if directory is valid
+		uint16_t fattr;
+		if(!(DOS_GetFileAttr(tempPath.c_str(), &fattr) && (fattr & DOS_ATTR_DIRECTORY))) {
+			// Fallback to current drive root again if directory is invalid
+			char currentDrive = DOS_GetDefaultDrive() + 'A';
+			tempPath = std::string(1, currentDrive) + ":\\";
+		}
 
-        // Assign to tempEnv after fixing the path
-        const char* tempEnv = tempPath.c_str();
+		// Assign to tempEnv after fixing the path
+		const char* tempEnv = tempPath.c_str();
 
-        // Generate unique pipe file path
-        int pipeid = rand() % 10000;
-        snprintf(pipetmp, sizeof(pipetmp), "%spipe%d.tmp", tempEnv, pipeid);
-    }
+		// Generate unique pipe file path
+		int pipeid = rand() % 10000;
+		snprintf(pipetmp, sizeof(pipetmp), "%spipe%d.tmp", tempEnv, pipeid);
+	}
 
 	DOS_Device *tmpdev = NULL;
 	if (out||toc) {
@@ -526,13 +531,13 @@ void DOS_Shell::ParseLine(char * line) {
 		if(normalstdout) DOS_CloseFile(1);
 		if(!normalstdin && !in) DOS_OpenFile("con",OPEN_READWRITE,&dummy);
 		bool status = true;
-        /* Create if not exist. Open if exist. Both in read/write mode */
+		/* Create if not exist. Open if exist. Both in read/write mode */
 		if(!toc&&append) {
 			if (DOS_GetFileAttr(out, &fattr) && fattr&DOS_ATTR_READ_ONLY) {
 				DOS_SetError(DOSERR_ACCESS_DENIED);
 				status = false;
 			} else if( (status = DOS_OpenFile(out,OPEN_READWRITE,&dummy)) ) {
-				 DOS_SeekFile(1,&bigdummy,DOS_SEEK_END);
+				DOS_SeekFile(1,&bigdummy,DOS_SEEK_END);
 			} else {
 				status = DOS_CreateFile(out,DOS_ATTR_ARCHIVE,&dummy);	//Create if not exists.
 			}
@@ -540,50 +545,50 @@ void DOS_Shell::ParseLine(char * line) {
 			DOS_SetError(DOSERR_ACCESS_DENIED);
 			status = false;
 		} else {
-            bool device=DOS_FindDevice(pipetmp)!=DOS_DEVICES;
+			bool device=DOS_FindDevice(pipetmp)!=DOS_DEVICES;
 			if (toc&&!device&&DOS_FindFirst(pipetmp, ~DOS_ATTR_VOLUME)&&!DOS_UnlinkFile(pipetmp))
 				fail=true;
 			status = device?false:DOS_OpenFileExtended(toc&&!fail?pipetmp:out,OPEN_READWRITE,DOS_ATTR_ARCHIVE,0x12,&dummy,&dummy2);
-            bool pipetmp_is_zdrive = strncasecmp(pipetmp, "Z:\\", 3) == 0;
-            if (toc&&(fail||!status)&&(!strchr(pipetmp,'\\')|| pipetmp_is_zdrive)) {
-                Overlay_Drive *da = Drives[0] ? (Overlay_Drive *)Drives[0] : NULL, *dc = Drives[2] ? (Overlay_Drive *)Drives[2] : NULL;
-                if (!pipetmp_is_zdrive && ((Drives[0]&&!Drives[0]->readonly&&!(da&&da->ovlreadonly))||(Drives[2]&&!Drives[2]->readonly&&!(dc&&dc->ovlreadonly)))) {
-                    int len = (int)strlen(pipetmp);
-                    if(len > 266) {
-                        len = 266;
-                        pipetmp[len] = 0;
-                    }
-                    for(int i = len; i >= 0; i--)
-                        pipetmp[i + 3] = pipetmp[i];
-                    pipetmp[0] = Drives[2] ? 'c' : 'a';
-                    pipetmp[1] = ':';
-                    pipetmp[2] = '\\';
-                    fail = false;
-                } else if (!tmpdev && pipetmpdev) {
-                    char* filename_only = strrchr(pipetmp, '\\');
-                    if(!filename_only) filename_only = pipetmp;
-                    else filename_only++;
-                    char tmpname[270];
-                    strncpy(tmpname, filename_only, sizeof(tmpname));
-                    tmpname[sizeof(tmpname) - 1] = 0;
+			bool pipetmp_is_zdrive = strncasecmp(pipetmp, "Z:\\", 3) == 0;
+			if (toc&&(fail||!status)&&(!strchr(pipetmp,'\\')|| pipetmp_is_zdrive)) {
+				Overlay_Drive *da = Drives[0] ? (Overlay_Drive *)Drives[0] : NULL, *dc = Drives[2] ? (Overlay_Drive *)Drives[2] : NULL;
+				if (!pipetmp_is_zdrive && ((Drives[0]&&!Drives[0]->readonly&&!(da&&da->ovlreadonly))||(Drives[2]&&!Drives[2]->readonly&&!(dc&&dc->ovlreadonly)))) {
+					int len = (int)strlen(pipetmp);
+					if(len > 266) {
+						len = 266;
+						pipetmp[len] = 0;
+					}
+					for(int i = len; i >= 0; i--)
+						pipetmp[i + 3] = pipetmp[i];
+					pipetmp[0] = Drives[2] ? 'c' : 'a';
+					pipetmp[1] = ':';
+					pipetmp[2] = '\\';
+					fail = false;
+				} else if (!tmpdev && pipetmpdev) {
+					char* filename_only = strrchr(pipetmp, '\\');
+					if(!filename_only) filename_only = pipetmp;
+					else filename_only++;
+					char tmpname[270];
+					strncpy(tmpname, filename_only, sizeof(tmpname));
+					tmpname[sizeof(tmpname) - 1] = 0;
 
-                    char* p = strchr(tmpname, '.');
-                    if(p) *p = 0;
+					char* p = strchr(tmpname, '.');
+					if(p) *p = 0;
 
-                    tmpdev = new device_TMP(tmpname);
-                    if(p) *p = '.';
+					tmpdev = new device_TMP(tmpname);
+					if(p) *p = '.';
 
-                    if(tmpdev) {
-                        DOS_AddDevice(tmpdev);
-                        fail = false;
-                    }
-                } else
-                    fail=true;
-                if (!tmpdev && DOS_FindFirst(pipetmp, ~DOS_ATTR_VOLUME) && !DOS_UnlinkFile(pipetmp))
-                    fail=true;
-                else
-                    status = DOS_OpenFileExtended(pipetmp, OPEN_READWRITE, DOS_ATTR_ARCHIVE, 0x12, &dummy, &dummy2);
-            }
+					if(tmpdev) {
+						DOS_AddDevice(tmpdev);
+						fail = false;
+					}
+				} else
+					fail=true;
+				if (!tmpdev && DOS_FindFirst(pipetmp, ~DOS_ATTR_VOLUME) && !DOS_UnlinkFile(pipetmp))
+					fail=true;
+				else
+					status = DOS_OpenFileExtended(pipetmp, OPEN_READWRITE, DOS_ATTR_ARCHIVE, 0x12, &dummy, &dummy2);
+			}
 		}
 		if(!status && normalstdout) {
 			DOS_OpenFile("con", OPEN_READWRITE, &dummy);							// Read only file, open con again
@@ -625,19 +630,19 @@ void DOS_Shell::ParseLine(char * line) {
 		if (out) free(out);
 	}
 	if (toc) {
-        if(tmpdev != nullptr) {
-            std::string path(pipetmp);
-            size_t lastSlash = path.find_last_of("\\/");
-            if(lastSlash != std::string::npos)
-                path = path.substr(lastSlash + 1);
-            size_t dot = path.find_last_of('.');
-            if(dot != std::string::npos)
-                path = path.substr(0, dot);
-            strncpy(pipetmp, path.c_str(), sizeof(pipetmp) - 1);
-            pipetmp[sizeof(pipetmp) - 1] = '\0';
-        }
-        if (!fail&&DOS_OpenFile(pipetmp, OPEN_READ, &dummy))					// Test if file can be opened for reading
-			{
+		if(tmpdev != nullptr) {
+			std::string path(pipetmp);
+			size_t lastSlash = path.find_last_of("\\/");
+			if(lastSlash != std::string::npos)
+				path = path.substr(lastSlash + 1);
+			size_t dot = path.find_last_of('.');
+			if(dot != std::string::npos)
+				path = path.substr(0, dot);
+			strncpy(pipetmp, path.c_str(), sizeof(pipetmp) - 1);
+			pipetmp[sizeof(pipetmp) - 1] = '\0';
+		}
+		if (!fail&&DOS_OpenFile(pipetmp, OPEN_READ, &dummy))					// Test if file can be opened for reading
+		{
 			DOS_CloseFile(dummy);
 			if (normalstdin)
 				DOS_CloseFile(0);												// Close stdin
@@ -646,7 +651,7 @@ void DOS_Shell::ParseLine(char * line) {
 			DOS_CloseFile(0);
 			if (normalstdin)
 				DOS_OpenFile("con", OPEN_READWRITE, &dummy);
-			}
+		}
 		else
 			WriteOut("\nFailed to create/open a temporary file for piping. Check the %%TEMP%% variable.\n");
 		free(toc);
@@ -888,98 +893,112 @@ bool finish_prepare = false;
 void change_output(int type);
 bool setColors(const char* colorArray, int n);
 extern bool switch_to_d3d11_on_startup;
+extern bool switch_to_metal_on_startup;
 
 void DOS_Shell::Prepare(void) {
-    if (this == first_shell) {
+	if (this == first_shell) {
 #if C_DIRECT3D && C_SDL2
-        if(switch_to_d3d11_on_startup){
-            switch_to_d3d11_on_startup = false;
-            change_output(13);
-        }
+		if(switch_to_d3d11_on_startup){
+			switch_to_d3d11_on_startup = false;
+			change_output(13);
+		}
+#endif
+#if defined(MACOSX) && defined(C_SDL2) && C_METAL
+		if(switch_to_metal_on_startup){
+			switch_to_metal_on_startup = false;
+			change_output(14);
+		}
 #endif
 #if defined(USE_TTF)
-        if(CurMode->type == M_TEXT || (IS_PC98_ARCH && is_ttfswitched_on)) ttf_switch_on(true); // Initialization completed, M_TEXT modes can switch to TTF mode from now on.
-        if(ttf.inUse) {
-            int cols = static_cast<Section_prop*>(control->GetSection("ttf"))->Get_int("cols");
-            int lins = static_cast<Section_prop*>(control->GetSection("ttf"))->Get_int("lins");
-            if(cols || lins) ttf_setlines(cols, lins);
-            if(is_ttfswitched_on){
-                const char* colors = static_cast<Section_prop*>(control->GetSection("ttf"))->Get_string("colors");
-                if(*colors && !setColors(colors, -1)) {
-                    LOG_MSG("Incorrect color scheme: %s", colors);
-                }
-                is_ttfswitched_on = false;
-            }
-        }
+		if(CurMode->type == M_TEXT || (IS_PC98_ARCH && is_ttfswitched_on)) ttf_switch_on(true); // Initialization completed, M_TEXT modes can switch to TTF mode from now on.
+		if(ttf.inUse) {
+			int cols = static_cast<Section_prop*>(control->GetSection("ttf"))->Get_int("cols");
+			int lins = static_cast<Section_prop*>(control->GetSection("ttf"))->Get_int("lins");
+			if(cols || lins) ttf_setlines(cols, lins);
+			if(is_ttfswitched_on){
+				const char* colors = static_cast<Section_prop*>(control->GetSection("ttf"))->Get_string("colors");
+				if(*colors && !setColors(colors, -1)) {
+					LOG_MSG("Incorrect color scheme: %s", colors);
+				}
+				is_ttfswitched_on = false;
+			}
+		}
 #endif
-        const char* layoutname = DOS_GetLoadedLayout();
-        if(layoutname == NULL) {
-            int32_t cp = dos.loaded_codepage;
-            Bitu keyb_error = DOS_LoadKeyboardLayout("us", 437, "auto");
-            toSetCodePage(NULL, cp, -1);
-        }
-        Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));
-        bool startbanner = section->Get_bool("startbanner");
-        first_shell->perm = section->Get_bool("shell permanent");
-        if (!countryNo) {
-#if defined(WIN32)
+#if !defined(OSFREE)
+		const char* layoutname = DOS_GetLoadedLayout();
+		if(layoutname == NULL && !IS_PC98_ARCH) {/*Keyboard layouts and CPI/CPX files have no meaning in PC-98 mode*/
+			int32_t cp = dos.loaded_codepage;
+			Bitu keyb_error = DOS_LoadKeyboardLayout("us", 437, "auto");
+			toSetCodePage(NULL, cp, -1);
+		}
+#endif
+		Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+		bool startbanner = section->Get_bool("startbanner");
+		first_shell->perm = section->Get_bool("shell permanent");
+#if !defined(OSFREE)
+		if (!countryNo) {
+# if defined(WIN32)
 			char buffer[128];
-#endif
-            if (IS_PC98_ARCH || IS_JEGA_ARCH)
-                countryNo = 81;
-            else if (IS_DOSV)
-                countryNo = IS_PDOSV?86:(IS_TDOSV?886:(IS_KDOSV?82:81));
-#if defined(WIN32)
+# endif
+			if (IS_PC98_ARCH || IS_JEGA_ARCH)
+				countryNo = 81;
+			else if (IS_DOSV)
+				countryNo = IS_PDOSV?86:(IS_TDOSV?886:(IS_KDOSV?82:81));
+# if defined(WIN32)
 			else if (GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_ICOUNTRY, buffer, 128)) {
 				countryNo = uint16_t(atoi(buffer));
 				DOS_SetCountry(countryNo);
 			}
-#endif
+# endif
 			else {
-                const char *layout = DOS_GetLoadedLayout();
-                if (layout == NULL)
-                    countryNo = COUNTRYNO::United_States;
-                else if (country_code_map.find(layout) != country_code_map.end())
-                    countryNo = country_code_map.find(layout)->second;
-                else
-                    countryNo = COUNTRYNO::United_States;
-                DOS_SetCountry(countryNo);
+				const char *layout = DOS_GetLoadedLayout();
+				if (layout == NULL)
+					countryNo = COUNTRYNO::United_States;
+				else if (country_code_map.find(layout) != country_code_map.end())
+					countryNo = country_code_map.find(layout)->second;
+				else
+					countryNo = COUNTRYNO::United_States;
+				DOS_SetCountry(countryNo);
 			}
 		}
+#endif
 		section = static_cast<Section_prop *>(control->GetSection("dos"));
 		bool zdirpath = section->Get_bool("drive z expand path");
 		std::string layout = section->Get_string("keyboardlayout");
 		strcpy(config_data, "");
-        section = static_cast<Section_prop *>(control->GetSection("config"));
+		section = static_cast<Section_prop *>(control->GetSection("config"));
+#if !defined(OSFREE)
 		if ((section!=NULL&&!control->opt_noconfig)||control->opt_langcp) {
 			char *countrystr = (char *)section->Get_string("country"), *r=strchr(countrystr, ',');
 			int country = 0;
-            int32_t newCP = dos.loaded_codepage;
-            if((control->opt_langcp && msgcodepage > 0) || CheckDBCSCP(msgcodepage) || msgcodepage == dos.loaded_codepage) newCP = msgcodepage;
-            if ((r==NULL || !*(r+1)) && !control->opt_langcp)
+			int32_t newCP = dos.loaded_codepage;
+			if((control->opt_langcp && msgcodepage > 0) || CheckDBCSCP(msgcodepage) || msgcodepage == dos.loaded_codepage) newCP = msgcodepage;
+			if ((r==NULL || !*(r+1)) && !control->opt_langcp)
 				country = atoi(trim(countrystr));
 			else if(!msgcodepage){
 				if (r!=NULL) *r=0;
 				country = atoi(trim(countrystr));
 				newCP = r==NULL||IS_PC98_ARCH||IS_JEGA_ARCH||IS_DOSV?dos.loaded_codepage:atoi(trim(r+1));
 				if (r!=NULL) *r=',';
-            }
-            if (newCP != dos.loaded_codepage && (!TTF_using() || (TTF_using() && isSupportedCP(newCP)))) {
-                int missing = toSetCodePage(this, newCP, -1);
-            }
-            if (country>0&&!control->opt_noconfig) {
+			}
+			if (newCP != dos.loaded_codepage && (!TTF_using() || (TTF_using() && isSupportedCP(newCP)))) {
+				int missing = toSetCodePage(this, newCP, -1);
+			}
+			if (country>0&&!control->opt_noconfig) {
 				countryNo = country;
 				DOS_SetCountry(countryNo);
 			}
-            if(!chinasea)makestdcp950table();
-            if(chinasea) makeseacp951table();
-            InitCodePage();
-            if(startbanner && !control->opt_fastlaunch)
-                //showWelcome(this);
-                DoCommand((char *)std::string("z:\\system\\intro welcome").c_str());
-            else if((CurMode->type == M_TEXT || IS_PC98_ARCH) && ANSI_SYS_installed())
-                WriteOut("\033[2J");
-            const char * extra = section->data.c_str();
+			if(!chinasea)makestdcp950table();
+			if(chinasea) makeseacp951table();
+			InitCodePage();
+			if(startbanner && !control->opt_fastlaunch) {
+				//showWelcome(this);
+				DoCommand((char *)std::string("z:\\system\\intro welcome").c_str());
+			}
+			else if((CurMode->type == M_TEXT || IS_PC98_ARCH) && ANSI_SYS_installed()) {
+				WriteOut("\033[2J");
+			}
+			const char * extra = section->data.c_str();
 			if (extra&&!control->opt_securemode&&!control->SecureMode()&&!control->opt_noconfig) {
 				std::string vstr;
 				std::istringstream in(extra);
@@ -1035,19 +1054,27 @@ void DOS_Shell::Prepare(void) {
 				}
 			}
 		}
-        std::string line;
-        GetEnvStr("PATH",line);
+#else
+		WriteOut("\x1B[2J"); /* erase screen */
+		WriteOut("\x1B[H"); /* home cursor */
+#endif
+		std::string line;
+		GetEnvStr("PATH",line);
 		if (!strlen(config_data)) {
 			strcat(config_data, "rem=");
 			strcat(config_data, section->Get_string("rem"));
 			strcat(config_data, "\r\n");
 		}
-        if(dos.loaded_codepage == 932) toSetCodePage(this, 932, -1); // Workaround for corrupted box-drawing characters
-        runRescan("-A -Q");
-        internal_program = true;
+#if !defined(OSFREE)
+		if(dos.loaded_codepage == 932) toSetCodePage(this, 932, -1); // Workaround for corrupted box-drawing characters
+#endif
+		runRescan("-A -Q");
+		internal_program = true;
 		VFILE_Register("AUTOEXEC.BAT",(uint8_t *)autoexec_data,(uint32_t)strlen(autoexec_data));
+#if !defined(OSFREE)
 		VFILE_Register("CONFIG.SYS",(uint8_t *)config_data,(uint32_t)strlen(config_data));
-        internal_program = false;
+#endif
+		internal_program = false;
 #if defined(WIN32)
 		if (!control->opt_securemode&&!control->SecureMode())
 		{
@@ -1070,19 +1097,67 @@ void DOS_Shell::Prepare(void) {
 				}
 			}
 		}
-        internal_program = true;
+		internal_program = true;
 		VFILE_Register("4DOS.INI",(uint8_t *)i4dos_data,(uint32_t)strlen(i4dos_data), "/4DOS/");
-        internal_program = false;
-        //unsigned int cp=dos.loaded_codepage;
-        //if (!dos.loaded_codepage) InitCodePage();
-        //initcodepagefont();
-        //dos.loaded_codepage=cp;
-        finish_prepare = true;
-    }
+		internal_program = false;
+		//unsigned int cp=dos.loaded_codepage;
+		//if (!dos.loaded_codepage) InitCodePage();
+		//initcodepagefont();
+		//dos.loaded_codepage=cp;
+		finish_prepare = true;
+	}
 #if (defined(WIN32) && !defined(HX_DOS) || defined(LINUX) && C_X11 || defined(MACOSX)) && (defined(C_SDL2) || defined(SDL_DOSBOX_X_SPECIAL))
-    if (enableime) SetIMPosition();
+	if (enableime) SetIMPosition();
 #endif
 }
+
+#if defined(OSFREE)
+bool DOS_Shell::OSFreeOperatingSystemNotFound(void) {
+	uint16_t n;
+	uint8_t c;
+
+	WriteOut("\n");
+	WriteOut("Operating System Not Found.\n\n");
+	WriteOut("Press ENTER for more information, ESC to exit.\n");
+
+	do {
+		n=1;c=0;
+		if (!DOS_ReadFile(0/*STDIN*/,&c,&n)) break;
+
+		if (c == 0x04/*CTRL+D secret drop to command line--though you're not going to find much!*/) return true;
+		if (c == 27/*ESC*/) return false;
+		if (c == 13/*ENTER*/) break;
+	} while(1);
+
+	WriteOut("\n");
+	WriteOut("This version was built without MS-DOS emulation.\n");
+	WriteOut("\n");
+	WriteOut("The full version may be unavailable for your use for legal reasons including\n");
+	WriteOut("but not limited to OS level age verification requirements in your local\n");
+	WriteOut("state, province, or general jurisdiction.\n");
+	WriteOut("\n");
+	WriteOut("To use this emulator, you will need to obtain and use a working MS-DOS boot\n");
+	WriteOut("disk or bootable hard disk image. Then, modify your dosbox.conf to IMGMOUNT\n");
+	WriteOut("and/or BOOT the image to run your DOS application. Please read documentation\n");
+	WriteOut("for more information on how to boot disk images.\n");
+	WriteOut("\n");
+	WriteOut("Hit ENTER or ESC to close the emulator.\n");
+
+	do {
+		n=1;c=0;
+		if (!DOS_ReadFile(0/*STDIN*/,&c,&n)) break;
+
+		if (c == 0x04/*CTRL+D secret drop to command line--though you're not going to find much!*/) return true;
+		if (c == 13/*ENTER*/ || c == 27/*ESC*/) break;
+	} while(1);
+
+	return false;
+}
+#endif
+
+#if defined(OSFREE)
+static bool once_block = false;
+#endif
 
 void DOS_Shell::Run(void) {
 	shellrun=true;
@@ -1140,6 +1215,14 @@ void DOS_Shell::Run(void) {
 			} else input_line[0]='\0';
 		} else {
 			if (optInit && control->opt_exit) break;
+#if defined(OSFREE)
+			if (!once_block) {
+				once_block = true;
+				LOG_MSG("DOS shell not available in OSFREE mode");
+				if (!OSFreeOperatingSystemNotFound()) break;
+			}
+#endif
+
 			if (echo) ShowPrompt();
 			InputCommand(input_line);
 			if (echo && !input_eof) WriteOut("\n");

@@ -1,5 +1,5 @@
 dnl Init.
-AC_INIT(dosbox-x,2026.01.02,[https://github.com/joncampbell123/dosbox-x/issues],[],[https://dosbox-x.com])
+AC_INIT(dosbox-x,2026.03.06,[https://github.com/joncampbell123/dosbox-x/issues],[],[https://dosbox-x.com])
 COPYRIGHT_YEAR=`echo $PACKAGE_VERSION | cut -c1-4`
 AC_SUBST([COPYRIGHT_YEAR])
 AC_PREREQ(2.60)
@@ -142,6 +142,13 @@ AC_MSG_CHECKING([for Git commit hash])
 COMMIT_HASH=`git rev-parse --short=7 HEAD 2>/dev/null || echo "unknown"`
 AC_SUBST([COMMIT_HASH])
 AC_MSG_RESULT([$COMMIT_HASH])
+
+GITBRANCH=`git rev-parse --abbrev-ref HEAD`
+OSFREE=0
+AH_TEMPLATE(C_OSFREE,[Define to 1 to make an OSFREE version])
+if [[ x"$GITBRANCH" == x"main-osfree" ]]; then
+    AC_DEFINE(C_OSFREE,1,[Make an OSFREE build])
+fi
 
 dnl Setup for automake
 AM_INIT_AUTOMAKE([foreign subdir-objects])
@@ -636,6 +643,43 @@ case "$host" in
 esac
 fi
 
+dnl ==========================================
+dnl Check for Metal support (macOS only)
+dnl ==========================================
+
+AC_MSG_CHECKING([for Metal support])
+
+have_metal=no
+
+case "$host_os" in
+  darwin*)
+    AC_LANG_PUSH([Objective C++])
+
+    AC_LINK_IFELSE(
+      [AC_LANG_PROGRAM([[
+        #import <Metal/Metal.h>
+      ]], [[
+        id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+        return (device == nil);
+      ]])],
+      [have_metal=yes],
+      [have_metal=no]
+    )
+
+    AC_LANG_POP
+    ;;
+esac
+
+if test "x$have_metal" = "xyes"; then
+  AC_DEFINE([C_METAL], [1], [Define if Metal is available])
+  METAL_LIBS="-framework Metal -framework QuartzCore"
+  AC_SUBST(METAL_LIBS)
+  AC_MSG_RESULT([yes])
+else
+  AC_MSG_RESULT([no])
+fi
+AM_CONDITIONAL([C_METAL], [test "x$have_metal" = "xyes"])
+
 # FIXME: Arrggh we need the WHOLE PATH
 pwd=`realpath $srcdir`
 if [[ -z "$pwd" ]]; then pwd=`pwd`; fi
@@ -668,7 +712,7 @@ case "$host" in
            OBJCXXFLAGS="$OBJCXXFLAGS -std=gnu++11";
        fi
        AC_DEFINE(MACOSX, 1, [Compiling on Mac OS X])
-       LIBS="$LIBS -framework Carbon -framework CoreFoundation -framework CoreMIDI -framework AudioUnit -framework AudioToolbox -framework ApplicationServices -framework AppKit -framework IOKit"
+       LIBS="$LIBS -framework Carbon -framework CoreFoundation -framework CoreMIDI -framework AudioUnit -framework AudioToolbox -framework ApplicationServices -framework AppKit -framework IOKit "
        dnl FEATURE: Whether to support direct serial port pass-through
        AC_DEFINE(C_DIRECTSERIAL, 1, [ Define to 1 if you want serial pass-through support (Win32, Posix and OS/2).])
        ;;

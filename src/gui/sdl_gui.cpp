@@ -116,6 +116,11 @@ extern bool                 MSG_Write(const char *, const char *);
 extern void                 LoadMessageFile(const char * fname);
 extern void                 GFX_SetTitle(int32_t cycles, int frameskip, Bits timing, bool paused);
 
+#if defined(MACOSX) && defined(C_SDL2) && C_METAL
+void OUTPUT_Metal_Shutdown();
+void change_output(int);
+#endif
+
 static int                  cursor;
 static bool                 running;
 static int                  saved_bpp;
@@ -158,9 +163,15 @@ void getlogtext(std::string &str), getcodetext(std::string &text), ApplySetting(
 void ttf_switch_on(bool ss=true), ttf_switch_off(bool ss=true), setAspectRatio(Section_prop * section), GFX_ForceRedrawScreen(void), SetWindowTransparency(int trans);
 bool CheckQuit(void), OpenGL_using(void);
 char tmp1[CROSS_LEN*2], tmp2[CROSS_LEN];
+#if !defined(OSFREE)
 const char *aboutmsg = "DOSBox-X ver." VERSION " (" OS_PLATFORM " " SDL_STRING " " OS_BIT "-bit)\n" \
                        "Build date/time: " UPDATED_STR "\nCopyright 2011-" COPYRIGHT_END_YEAR \
                        " The DOSBox-X Team\nProject maintainer: joncampbell123\nDOSBox-X homepage: https://dosbox-x.com";
+#else
+const char *aboutmsg = "DOSBox-X ver." VERSION " (" OS_PLATFORM " " SDL_STRING " " OS_BIT "-bit) OS-FREE\n" \
+                       "Build date/time: " UPDATED_STR "\nCopyright 2011-" COPYRIGHT_END_YEAR \
+                       " The DOSBox-X Team\nProject maintainer: joncampbell123\nDOSBox-X homepage: https://dosbox-x.com";
+#endif
 
 void RebootConfig(std::string filename, bool confirm=false) {
     std::string exepath=GetDOSBoxXPath(true), para="-conf \""+filename+"\"";
@@ -2663,6 +2674,7 @@ public:
                         readonly=true;
                     else {
                         readonly=Drives[statusdrive]->readonly;
+#if !defined(OSFREE)
                         if (!path.size()) {
                             fatDrive *fdp = dynamic_cast<fatDrive*>(Drives[statusdrive]);
                             if (fdp!=NULL&&fdp->opts.mounttype==1)
@@ -2670,9 +2682,11 @@ public:
                             else if (fdp!=NULL&&fdp->opts.mounttype==2)
                                 path="RAM drive";
                         }
+#endif
                     }
                     swappos=DriveManager::GetDrivePosition(statusdrive);
                 } else if (!strncmp(info, "PhysFS directory ", 17)) {
+#if !defined(OSFREE)
                     type="PhysFS directory";
                     path=info+17;
                     readonly=true;
@@ -2684,10 +2698,17 @@ public:
                             overlay=std::string(wdir)+(wdir[strlen(wdir)-1]!=CROSS_FILESPLIT?std::string(1, CROSS_FILESPLIT):"")+std::string(1, 'A'+statusdrive)+"_DRIVE";
                         }
                     }
+#else
+                    E_Exit("Physfs directory not supported");
+#endif
                 } else if (!strncmp(info, "PhysFS CDRom ", 13)) {
+#if !defined(OSFREE)
                     type="PhysFS CDRom";
                     path=info+13;
                     readonly=true;
+#else
+                    E_Exit("Physfs CDROM not supported");
+#endif
                 } else if (!strncmp(info, "local directory ", 16)) {
                     type="local directory";
                     path=info+16;
@@ -3140,7 +3161,7 @@ protected:
     GUI::Input *name;
 public:
     ShowHelpAbout(GUI::Screen *parent, int x, int y, const char *title) :
-        ToplevelWindow(parent, x, y, 420, 230, title) {
+        ToplevelWindow(parent, x, y, 480, 230, title) {
             std::istringstream in(aboutmsg);
             int r=0;
             if (in)	for (std::string line; std::getline(in, line); ) {
@@ -3950,7 +3971,16 @@ void RunCfgTool(Bitu val) {
 #if C_OPENGL
         voodoo_ogl_update_dimensions();
 #endif
-    }
+    }    
+#if defined(MACOSX) && defined(C_SDL2) && C_METAL
+    if(sdl.desktop.want_type == SCREEN_METAL){
+        OUTPUT_Metal_Shutdown();
+#if defined(C_OPENGL)
+        change_output(3);
+#endif
+        change_output(14);
+    }  
+#endif
 }
 
 void GUI_Shortcut(int select) {

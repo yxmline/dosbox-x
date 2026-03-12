@@ -46,6 +46,7 @@
 #define ftello64 ftello
 #endif
 
+#if !defined(OSFREE)
 #define IMGTYPE_FLOPPY          0
 #define IMGTYPE_ISO             1
 #define IMGTYPE_HDD             2
@@ -53,7 +54,9 @@
 #define FAT12                   0
 #define FAT16                   1
 #define FAT32                   2
+#endif
 
+#if !defined(OSFREE)
 static uint16_t dpos[256];
 static uint32_t dnum[256];
 extern bool wpcolon, force_sfn;
@@ -66,7 +69,89 @@ extern bool CodePageHostToGuestUTF16(char *d/*CROSS_LEN*/,const uint16_t *s/*CRO
 bool systemmessagebox(char const * aTitle, char const * aMessage, char const * aDialogType, char const * aIconType, int aDefaultButton);
 extern bool dos_kernel_disabled;
 std::string formatString(const char* format, ...);
+#endif
 
+char* removeTrailingSpaces(char* str) {
+	char* end = str + strlen(str) - 1;
+	while (end >= str && *end == ' ') end--;
+    /* NTS: The loop will exit with 'end' one char behind the last ' ' space character.
+     *      So to ASCIIZ snip off the space, step forward one and overwrite with NUL.
+     *      The loop may end with 'end' one char behind 'ptr' if the string was empty ""
+     *      or nothing but spaces. This is OK because after the step forward, end >= str
+     *      in all cases. */
+	*(++end) = '\0';
+	return str;
+}
+
+char* removeLeadingSpaces(char* str) {
+	size_t len = strlen(str);
+	size_t pos = strspn(str," ");
+	memmove(str,str + pos,len - pos + 1);
+	return str;
+}
+
+char* trimString(char* str) {
+	return removeTrailingSpaces(removeLeadingSpaces(str));
+}
+
+#if !defined(OSFREE)
+bool filename_not_8x3(const char *n) {
+        bool lead;
+        unsigned int i;
+
+        i = 0;
+        lead = false;
+        while (*n != 0) {
+                if (*n == '.') break;
+                if ((*n&0xFF)<=32||*n==127||*n=='"'||*n=='+'||*n=='='||*n==','||*n==';'||*n==':'||*n=='<'||*n=='>'||((*n=='['||*n==']'||*n=='|'||*n=='\\')&&(!lead||((dos.loaded_codepage==936||IS_PDOSV)&&!gbk)))||*n=='?'||*n=='*') return true;
+                if (lead) lead = false;
+                else if ((IS_PC98_ARCH && shiftjis_lead_byte(*n&0xFF)) || (isDBCSCP() && isKanji1_gbk(*n&0xFF))) lead = true;
+                i++;
+                n++;
+        }
+        if (!i || i > 8) return true;
+        if (*n == 0) return false; /* made it past 8 or less normal chars and end of string: normal */
+
+        /* skip dot */
+        assert(*n == '.');
+        n++;
+
+        i = 0;
+        lead = false;
+        while (*n != 0) {
+                if (*n == '.') return true; /* another '.' means LFN */
+                if ((*n&0xFF)<=32||*n==127||*n=='"'||*n=='+'||*n=='='||*n==','||*n==';'||*n==':'||*n=='<'||*n=='>'||((*n=='['||*n==']'||*n=='|'||*n=='\\')&&(!lead||((dos.loaded_codepage==936||IS_PDOSV)&&!gbk)))||*n=='?'||*n=='*') return true;
+                if (lead) lead = false;
+                else if ((IS_PC98_ARCH && shiftjis_lead_byte(*n&0xFF)) || (isDBCSCP() && isKanji1_gbk(*n&0xFF))) lead = true;
+                i++;
+                n++;
+        }
+        if (i > 3) return true;
+
+        return false; /* it is 8.3 case */
+}
+#else
+bool filename_not_8x3(const char *n) {
+	return false;
+}
+#endif
+
+/* Assuming an LFN call, if the name is not strict 8.3 uppercase, return true.
+ * If the name is strict 8.3 uppercase like "FILENAME.TXT" there is no point making an LFN because it is a waste of space */
+bool filename_not_strict_8x3(const char *n) {
+#if !defined(OSFREE)
+        if (filename_not_8x3(n)) return true;
+        bool lead = false;
+        for (unsigned int i=0; i<strlen(n); i++) {
+                if (lead) lead = false;
+                else if ((IS_PC98_ARCH && shiftjis_lead_byte(n[i]&0xFF)) || (isDBCSCP() && isKanji1_gbk(n[i]&0xFF))) lead = true;
+                else if (n[i]>='a' && n[i]<='z') return true;
+        }
+#endif
+        return false; /* it is strict 8.3 upper case */
+}
+
+#if !defined(OSFREE)
 int PC98AutoChoose_FAT(const std::vector<_PC98RawPartition> &parts,imageDisk *loadedDisk) {
         for (size_t i=0;i < parts.size();i++) {
                 const _PC98RawPartition &pe = parts[i];
@@ -90,7 +175,9 @@ int PC98AutoChoose_FAT(const std::vector<_PC98RawPartition> &parts,imageDisk *lo
 
         return -1;
 }
+#endif
 
+#if !defined(OSFREE)
 int MBRAutoChoose_FAT(const std::vector<partTable::partentry_t> &parts,imageDisk *loadedDisk,uint8_t use_ver_maj=0,uint8_t use_ver_min=0) {
         uint16_t n=1;
         const char *msg;
@@ -160,56 +247,9 @@ int MBRAutoChoose_FAT(const std::vector<partTable::partentry_t> &parts,imageDisk
 
         return -1;
 }
+#endif
 
-bool filename_not_8x3(const char *n) {
-        bool lead;
-        unsigned int i;
-
-        i = 0;
-        lead = false;
-        while (*n != 0) {
-                if (*n == '.') break;
-                if ((*n&0xFF)<=32||*n==127||*n=='"'||*n=='+'||*n=='='||*n==','||*n==';'||*n==':'||*n=='<'||*n=='>'||((*n=='['||*n==']'||*n=='|'||*n=='\\')&&(!lead||((dos.loaded_codepage==936||IS_PDOSV)&&!gbk)))||*n=='?'||*n=='*') return true;
-                if (lead) lead = false;
-                else if ((IS_PC98_ARCH && shiftjis_lead_byte(*n&0xFF)) || (isDBCSCP() && isKanji1_gbk(*n&0xFF))) lead = true;
-                i++;
-                n++;
-        }
-        if (!i || i > 8) return true;
-        if (*n == 0) return false; /* made it past 8 or less normal chars and end of string: normal */
-
-        /* skip dot */
-        assert(*n == '.');
-        n++;
-
-        i = 0;
-        lead = false;
-        while (*n != 0) {
-                if (*n == '.') return true; /* another '.' means LFN */
-                if ((*n&0xFF)<=32||*n==127||*n=='"'||*n=='+'||*n=='='||*n==','||*n==';'||*n==':'||*n=='<'||*n=='>'||((*n=='['||*n==']'||*n=='|'||*n=='\\')&&(!lead||((dos.loaded_codepage==936||IS_PDOSV)&&!gbk)))||*n=='?'||*n=='*') return true;
-                if (lead) lead = false;
-                else if ((IS_PC98_ARCH && shiftjis_lead_byte(*n&0xFF)) || (isDBCSCP() && isKanji1_gbk(*n&0xFF))) lead = true;
-                i++;
-                n++;
-        }
-        if (i > 3) return true;
-
-        return false; /* it is 8.3 case */
-}
-
-/* Assuming an LFN call, if the name is not strict 8.3 uppercase, return true.
- * If the name is strict 8.3 uppercase like "FILENAME.TXT" there is no point making an LFN because it is a waste of space */
-bool filename_not_strict_8x3(const char *n) {
-        if (filename_not_8x3(n)) return true;
-        bool lead = false;
-        for (unsigned int i=0; i<strlen(n); i++) {
-                if (lead) lead = false;
-                else if ((IS_PC98_ARCH && shiftjis_lead_byte(n[i]&0xFF)) || (isDBCSCP() && isKanji1_gbk(n[i]&0xFF))) lead = true;
-                else if (n[i]>='a' && n[i]<='z') return true;
-        }
-        return false; /* it is strict 8.3 upper case */
-}
-
+#if !defined(OSFREE)
 void GenerateSFN(char *lfn, unsigned int k, unsigned int &i, unsigned int &t);
 /* Generate 8.3 names from LFNs, with tilde usage (from ~1 to ~999999). */
 char* fatDrive::Generate_SFN(const char *path, const char *name) {
@@ -238,7 +278,9 @@ char* fatDrive::Generate_SFN(const char *path, const char *name) {
         }
         return NULL;
 }
+#endif
 
+#if !defined(OSFREE)
 class fatFile : public DOS_File {
         public:
                 fatFile(const char* name, uint32_t startCluster, uint32_t fileLen, fatDrive *useDrive);
@@ -264,7 +306,9 @@ class fatFile : public DOS_File {
                 bool loadedSector = false;
                 fatDrive *myDrive;
 };
+#endif
 
+#if !defined(OSFREE)
 void time_t_to_DOS_DateTime(uint16_t &t,uint16_t &d,time_t unix_time) {
         struct tm time;
         time.tm_isdst = -1;
@@ -299,7 +343,9 @@ void time_t_to_DOS_DateTime(uint16_t &t,uint16_t &d,time_t unix_time) {
         t = ((unsigned int)tm->tm_hour << 11u) + ((unsigned int)tm->tm_min << 5u) + ((unsigned int)tm->tm_sec >> 1u);
         d = (((unsigned int)tm->tm_year - 80u) << 9u) + (((unsigned int)tm->tm_mon + 1u) << 5u) + (unsigned int)tm->tm_mday;
 }
+#endif
 
+#if !defined(OSFREE)
 /* IN - char * filename: Name in regular filename format, e.g. bob.txt */
 /* OUT - char * filearray: Name in DOS directory format, eleven char, e.g. bob     txt */
 static void convToDirFile(const char *filename, char *filearray) {
@@ -322,7 +368,9 @@ static void convToDirFile(const char *filename, char *filearray) {
                 }
         }
 }
+#endif
 
+#if !defined(OSFREE)
 fatFile::fatFile(const char* /*name*/, uint32_t startCluster, uint32_t fileLen, fatDrive *useDrive) : firstCluster(startCluster), filelength(fileLen), myDrive(useDrive) {
 	uint32_t seekto = 0;
 	open = true;
@@ -332,7 +380,9 @@ fatFile::fatFile(const char* /*name*/, uint32_t startCluster, uint32_t fileLen, 
 		Seek(&seekto, DOS_SEEK_SET);
 	}
 }
+#endif
 
+#if !defined(OSFREE)
 void fatFile::Flush(void) {
 	if (loadedSector) {
 		myDrive->writeSector(currentSector, sectorBuffer);
@@ -362,7 +412,9 @@ void fatFile::Flush(void) {
 		newtime = false;
 	}
 }
+#endif
 
+#if !defined(OSFREE)
 bool fatFile::Read(uint8_t * data, uint16_t *size) {
 	if ((this->flags & 0xf) == OPEN_WRITE) {	// check if file opened in write-only mode
 		DOS_SetError(DOSERR_ACCESS_DENIED);
@@ -415,7 +467,9 @@ bool fatFile::Read(uint8_t * data, uint16_t *size) {
 	*size =sizecount;
 	return true;
 }
+#endif
 
+#if !defined(OSFREE)
 bool fatFile::Write(const uint8_t * data, uint16_t *size) {
 	if ((this->flags & 0xf) == OPEN_READ) {	// check if file opened in read-only mode
 		DOS_SetError(DOSERR_ACCESS_DENIED);
@@ -540,7 +594,9 @@ finalizeWrite:
 	*size =sizecount;
 	return true;
 }
+#endif
 
+#if !defined(OSFREE)
 bool fatFile::Seek(uint32_t *pos, uint32_t type) {
 	int32_t seekto=0;
 	
@@ -572,7 +628,9 @@ bool fatFile::Seek(uint32_t *pos, uint32_t type) {
 	*pos = seekpos;
 	return true;
 }
+#endif
 
+#if !defined(OSFREE)
 bool fatFile::Close() {
 	/* Flush buffer */
 	if (loadedSector) myDrive->writeSector(currentSector, sectorBuffer);
@@ -600,7 +658,9 @@ bool fatFile::Close() {
 
 	return false;
 }
+#endif
 
+#if !defined(OSFREE)
 uint16_t fatFile::GetInformation(void) {
 	return 0;
 }
@@ -862,11 +922,13 @@ nextfile:
 	readSector(tmpsector,sectbuf);
 	dirPos++;
 
+#if !defined(OSFREE)
 	if (dos.version.major >= 7 || uselfn) {
 		/* skip LFN entries */
 		if ((sectbuf[entryoffset].attrib & 0x3F) == 0x0F)
 			goto nextfile;
 	}
+#endif
 
 	if (*label != 0) {
 		/* adding a volume label */
@@ -2570,6 +2632,7 @@ bool fatDrive::FileCreate(DOS_File **file, const char *name, uint16_t attributes
 		/* Can we find the base directory? */
 		if(!getDirClustNum(name, &dirClust, true)) return false;
 
+#if !defined(OSFREE)
 		/* NTS: "name" is the full relative path. For LFN creation to work we need only the final element of the path */
 		if (uselfn && !force_sfn) {
 			lfn = strrchr_dbcs((char *)name,'\\');
@@ -2589,6 +2652,7 @@ bool fatDrive::FileCreate(DOS_File **file, const char *name, uint16_t attributes
 			} else
 				lfn = NULL;
 		}
+#endif
 
 		memset(&fileEntry, 0, sizeof(direntry));
 		memcpy(&fileEntry.entryname, &pathName[0], 11);
@@ -2687,6 +2751,7 @@ bool fatDrive::FileUnlink(const char * name) {
 	if(!getFileDirEntry(name, &fileEntry, &dirClust, &subEntry)) return false; /* Do not use dirOk, DOS should never call this unless a file */
 	lfnRange_t dir_lfn_range = lfnRange; /* copy down LFN results before they are obliterated by the next call to FindNextInternal. */
 
+#if !defined(OSFREE)
 	/* delete LFNs */
 	if (!dir_lfn_range.empty() && (dos.version.major >= 7 || uselfn)) {
 		/* last LFN entry should be fileidx */
@@ -2699,6 +2764,7 @@ bool fatDrive::FileUnlink(const char * name) {
 			}
 		}
 	}
+#endif
 
 	/* remove primary 8.3 SFN */
 	fileEntry.entryname[0] = 0xe5;
@@ -2759,29 +2825,6 @@ bool fatDrive::FindFirst(const char *_dir, DOS_DTA &dta,bool fcb_findfirst) {
 	}
 
 	return FindNextInternal(cwdDirCluster, dta, &dummyClust);
-}
-
-char* removeTrailingSpaces(char* str) {
-	char* end = str + strlen(str) - 1;
-	while (end >= str && *end == ' ') end--;
-    /* NTS: The loop will exit with 'end' one char behind the last ' ' space character.
-     *      So to ASCIIZ snip off the space, step forward one and overwrite with NUL.
-     *      The loop may end with 'end' one char behind 'ptr' if the string was empty ""
-     *      or nothing but spaces. This is OK because after the step forward, end >= str
-     *      in all cases. */
-	*(++end) = '\0';
-	return str;
-}
-
-char* removeLeadingSpaces(char* str) {
-	size_t len = strlen(str);
-	size_t pos = strspn(str," ");
-	memmove(str,str + pos,len - pos + 1);
-	return str;
-}
-
-char* trimString(char* str) {
-	return removeTrailingSpaces(removeLeadingSpaces(str));
 }
 
 uint32_t fatDrive::GetSectorCount(void) {
@@ -2993,14 +3036,17 @@ nextfile:
 
 	//TODO What about attrs = DOS_ATTR_VOLUME|DOS_ATTR_DIRECTORY ?
 	if (attrs == DOS_ATTR_VOLUME) {
+#if !defined(OSFREE)
 		if (dos.version.major >= 7 || uselfn) {
 			/* skip LFN entries */
 			if ((sectbuf[entryoffset].attrib & 0x3F) == 0x0F)
 				goto nextfile;
 		}
+#endif
 
 		if (!(sectbuf[entryoffset].attrib & DOS_ATTR_VOLUME) || !VolumeLabelCmp((const char*)sectbuf[entryoffset].entryname, srch_pattern)) goto nextfile;
 		labelCache.SetLabel(find_name, false, true);
+#if !defined(OSFREE)
 	} else if ((dos.version.major >= 7 || uselfn) && (sectbuf[entryoffset].attrib & 0x3F) == 0x0F) { /* long filename piece */
 		struct direntry_lfn *dlfn = (struct direntry_lfn*)(&sectbuf[entryoffset]);
 
@@ -3086,6 +3132,7 @@ nextfile:
 		}
 
 		goto nextfile;
+#endif
 	} else {
 		if (~attrs & sectbuf[entryoffset].attrib & (DOS_ATTR_DIRECTORY | DOS_ATTR_VOLUME) ) {
 			lfind_name[0] = 0; /* LFN code will memset() it in full upon next dirent */
@@ -3420,6 +3467,7 @@ bool fatDrive::addDirectoryEntry(uint32_t dirClustNumber, const direntry& useEnt
 						}
 						readSector(tmpsector,sectbuf);
 
+#if !defined(OSFREE)
 						direntry_lfn *dlfn = (direntry_lfn*)(&sectbuf[entryoffset]);
 
 						memset(dlfn,0,sizeof(*dlfn));
@@ -3431,6 +3479,7 @@ bool fatDrive::addDirectoryEntry(uint32_t dirClustNumber, const direntry& useEnt
 						for (unsigned int i=0;i < 5;i++) dlfn->LDIR_Name1[i] = lfnbuf[lfnsrc++];
 						for (unsigned int i=0;i < 6;i++) dlfn->LDIR_Name2[i] = lfnbuf[lfnsrc++];
 						for (unsigned int i=0;i < 2;i++) dlfn->LDIR_Name3[i] = lfnbuf[lfnsrc++];
+#endif
 
 						writeSector(tmpsector,sectbuf);
 						dirPos++;
@@ -3500,6 +3549,7 @@ bool fatDrive::MakeDir(const char *dir) {
 
 	if(!allocateCluster(dummyClust, 0)) return false;
 
+#if !defined(OSFREE)
 	/* NTS: "dir" is the full relative path. For LFN creation to work we need only the final element of the path */
 	if (uselfn && !force_sfn) {
 		lfn = strrchr_dbcs((char *)dir,'\\');
@@ -3519,6 +3569,7 @@ bool fatDrive::MakeDir(const char *dir) {
 		} else
 			lfn = NULL;
 	}
+#endif
 
 	zeroOutCluster(dummyClust);
 
@@ -3618,6 +3669,7 @@ bool fatDrive::RemoveDir(const char *dir) {
 	/* Return if directory is not empty */
 	if(filecount > 0) return false;
 
+#if !defined(OSFREE)
 	/* delete LFNs */
 	if (!dir_lfn_range.empty() && (dos.version.major >= 7 || uselfn)) {
 		/* last LFN entry should be fileidx */
@@ -3630,6 +3682,7 @@ bool fatDrive::RemoveDir(const char *dir) {
 			}
 		}
 	}
+#endif
 
 	/* remove primary 8.3 entry */
 	if (!directoryBrowse(dirClust, &tmpentry, subEntry)) return false;
@@ -3680,6 +3733,7 @@ bool fatDrive::Rename(const char * oldname, const char * newname) {
 	/* Can we find the base directory of the new name? (we know the parent dir of oldname in dirClust1) */
 	if(!getDirClustNum(newname, &dirClust2, true)) return false;
 
+#if !defined(OSFREE)
 	/* NTS: "newname" is the full relative path. For LFN creation to work we need only the final element of the path */
 	if (uselfn && !force_sfn) {
 		lfn = strrchr_dbcs((char *)newname,'\\');
@@ -3704,6 +3758,7 @@ bool fatDrive::Rename(const char * oldname, const char * newname) {
 		} else
 			lfn = NULL;
 	}
+#endif
 
 	/* add new dirent */
 	memcpy(&fileEntry2, &fileEntry1, sizeof(direntry));
@@ -3714,6 +3769,7 @@ bool fatDrive::Rename(const char * oldname, const char * newname) {
 	fileEntry1.entryname[0] = 0xe5;
 	directoryChange(dirClust1, &fileEntry1, (int32_t)subEntry1);
 
+#if !defined(OSFREE)
 	/* remove LFNs of old entry only if emulating LFNs or DOS version 7.0.
 	 * Earlier DOS versions ignore LFNs. */
 	if (!dir_lfn_range.empty() && (dos.version.major >= 7 || uselfn)) {
@@ -3727,6 +3783,7 @@ bool fatDrive::Rename(const char * oldname, const char * newname) {
 			}
 		}
 	}
+#endif
 
 	return true;
 }
@@ -3840,4 +3897,5 @@ void fatDrive::checkDiskChange(void) {
 			(unsigned long)RootDirSectors,(unsigned long)DataSectors);
 	}
 }
+#endif
 

@@ -33,6 +33,12 @@
 #include "clockdomain.h"
 #include "config.h"
 
+/* allow for OS-free builds where the MS-DOS emulation is disabled and
+ * you have to provide your own boot disks to run MS-DOS or whatever you like. */
+#ifdef C_OSFREE
+# define OSFREE 1
+#endif
+
 #if defined(OS2) && defined(C_SDL2)
 #undef VERSION
 #endif
