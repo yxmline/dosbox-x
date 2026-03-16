@@ -1,4 +1,29 @@
 NEXT VERSION
+  - DOS kernel: When executing an EXE file, the loader can now detect
+    EXE files that were compressed using EXEPACK. Based on the new
+    exepack dosbox.conf setting, it can decompress the EXE by itself,
+    switch off the A20 gate, or do nothing. The purpose of this
+    setting is to avoid EXEPACK "Packed File is Corrupt" errors that
+    happen if the A20 gate is enabled and the EXE was loaded too low
+    in memory. (joncampbell123).
+  - Linux SDL1: Use XDG_SESSION_TYPE environment variable to detect
+    whether or not the user is running DOSBox-X under X11 or Wayland,
+    and if so, prevent the fbcon and svga drivers from initializing.
+    There seems to be a problem where, if run under Wayland and the
+    XWayland compatibility layer if not present, SDL1 uses the fbcon
+    driver to take over the screen using vtcon switching and the classic
+    fbdev driver interface. Don't do that! (joncampbell123).
+  - INT 21h AH=4Ah resize memory: If memory resize fails because there
+    is not enough room for the requested amount of memory, do not
+    set ownership of the block to the program. This fixes memory
+    allocation error in California Games II. The game at one point
+    seems to miscalculate and ask for an excessively large amount
+    of memory on resize, and then fail, which doesn't seem to affect
+    the game. HOWEVER, prior to the bugfix, the memory block that
+    was available was assigned ownership to the game anyway. Later
+    on after helicopter takeoff, the game would attempt to allocate
+    more memory, which would fail because of the erroneous assignment
+    of ownership to free memory. (joncampbell123).
   - Add debug logging to not only indicate DOS kernel memory alloc,
     free, and resize, but also log when the memory operation fails.
     Perhaps someday I'll figure out what the memory management in
