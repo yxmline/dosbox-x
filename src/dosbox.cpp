@@ -256,9 +256,9 @@ bool                want_fm_towns = false;
 bool                dos_con_use_int16_to_detect_input = true;
 
 #if !defined(OSFREE)
-bool                dbg_zero_on_dos_allocmem = true;
-bool                dbg_zero_on_xms_allocmem = true;
-bool                dbg_zero_on_ems_allocmem = true;
+bool                dbg_zero_on_dos_allocmem = false;
+bool                dbg_zero_on_xms_allocmem = false;
+bool                dbg_zero_on_ems_allocmem = false;
 #endif
 
 /* the exact frequency of the NTSC color subcarrier ~3.579545454...MHz or 315/88 */
@@ -1105,6 +1105,25 @@ void SetIME() {
 #endif
 }
 
+unsigned int BeepDuration() {
+	Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+	unsigned int d = section->Get_int("beep duration");
+
+	if (d == 0) {//default
+		if (IS_EGAVGA_ARCH || machine == MCH_TANDY || machine == MCH_AMSTRAD || machine == MCH_MCGA) {
+			d = 333; /* DOSBox SVN default */
+		}
+		else if (IS_PC98_ARCH) {
+			d = 300; /* FIXME: Guess */
+		}
+		else { // MDA, CGA, Hercules, PCjr, anything IBM
+			d = 500; /* IBM standard in the 1980s, see BIOS listings to see what I mean */
+		}
+	}
+
+	return d;
+}
+
 void DOSBOX_RealInit() {
     DOSBoxMenu::item *item;
 
@@ -1609,6 +1628,11 @@ void DOSBOX_SetupConfigSections(void) {
     Pstring->Set_help("Select a language file for DOSBox-X to use. Encoded with either UTF-8 or a DOS code page.\n"
                       "You can set code page either in the language file or with \"country\" setting in [config] section.");
     Pstring->SetBasic(true);
+
+    Pint = secprop->Add_int("beep duration", Property::Changeable::WhenIdle,0);
+    Pint->SetMinMax(0,5000);
+    Pint->Set_help("If nonzero, set the duration of a beep when DOS or INT 10h is given a BEL character");
+    Pint->SetBasic(true);
 
     Pstring = secprop->Add_string("title",Property::Changeable::Always,"");
     Pstring->Set_help("Additional text to place in the title bar of the window.");
