@@ -243,6 +243,7 @@ extern unsigned int page;
 
 uint32_t              guest_msdos_LoL = 0;
 uint16_t              guest_msdos_mcb_chain = 0;
+uint32_t              guest_msdos_dev_chain = 0;
 int                 boothax = BOOTHAX_NONE;
 bool                gbk = false;
 bool                chinasea = false;
@@ -5041,6 +5042,9 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool = secprop->Add_bool("int 13 extensions",Property::Changeable::WhenIdle,true);
     Pbool->Set_help("Enable INT 13h extensions (functions 0x40-0x48). You will need this enabled if the virtual hard drive image is 8.4GB or larger.");
 
+    Pbool = secprop->Add_bool("int 13 enable 48-bit LBA", Property::Changeable::WhenIdle, true);
+    Pbool->Set_help("Enable 48-bit LBA support for INT 13h extensions. Needed for drives larger than 28-bit LBA limit (128GiB).");
+
     Pbool = secprop->Add_bool("biosps2",Property::Changeable::OnlyAtStart,true);
     Pbool->Set_help("Emulate BIOS INT 15h PS/2 mouse services\n"
         "Note that some OS's like Microsoft Windows neither use INT 33h nor\n"
@@ -5421,9 +5425,14 @@ void DOSBOX_SetupConfigSections(void) {
 	Pstring->Set_help("The maximum drive letter (A-Z) that can be accessed by programs.");
     Pstring->Set_values(driveletters);
     Pstring->SetBasic(true);
+    Pbool = secprop->Add_bool("device driver mcb",Property::Changeable::OnlyAtStart,false);
+    Pbool->Set_help("If set, allocate a memory block per device driver. If not set, then where possible, the device driver chain is packed together within the DOS kernel without any MCB blocks to cover them, which is normal MS-DOS behavior");
+    Pbool->SetBasic(false);
 
-    //TODO ?
     control->AddSection_line("autoexec",&Null_Init);
+
+    control->AddSection_line("devices",&Null_Init);
+
     AddMessages();
 }
 

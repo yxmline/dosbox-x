@@ -142,8 +142,8 @@ static Bitu DOS_26Handler_Actual(bool fat32);
 
 unsigned char cpm_compat_mode = CPM_COMPAT_MSDOS5;
 
-bool dos_in_hma = true;
-bool dos_umb = true;
+bool dos_in_hma = false;
+bool dos_umb = false;
 bool DOS_BreakFlag = false;
 bool DOS_BreakConioFlag = false;
 bool enable_dbcs_tables = false;
@@ -151,7 +151,7 @@ bool enable_share_exe = false;
 bool enable_filenamechar = false;
 bool shell_keyboard_flush = true;
 bool freed_mcb_allocate_on_resize = true;
-bool enable_network_redirector = true;
+bool enable_network_redirector = false;
 bool force_conversion = false;
 bool hidenonrep = true;
 bool rsize = false;
@@ -2072,8 +2072,9 @@ static Bitu DOS_21Handler(void) {
                 if(handle >= DOS_FILES || !Files[handle] || !Files[handle]->IsOpen()) {
                     DOS_SetError(DOSERR_INVALID_HANDLE);
                 }
-                else if(Files[handle]->GetInformation() & EXT_DEVICE_BIT) {
-                    fRead = !(((DOS_ExtDevice*)Files[handle])->CallDeviceFunction(4, 26, SegValue(ds), reg_dx, toread) & 0x8000);
+                else if(Files[handle]->GetInformation() & DeviceInfoFlags::ExternalDevice) {
+                    fRead = !(((DOS_ExtDevice*)Files[handle])->CallRWIODeviceFunction(DEVFUNC_READ, 26, SegValue(ds), reg_dx, toread) & 0x8000);
+                    toread = real_readw(dos.dcp, 18);
 #if defined(USE_TTF)
                     if(fRead && ttf.inUse && reg_bx == WPvga512CHMhandle)
                         MEM_BlockRead(SegPhys(ds) + reg_dx, dos_copybuf, toread);
@@ -2159,8 +2160,9 @@ static Bitu DOS_21Handler(void) {
                     if(handle >= DOS_FILES || !Files[handle] || !Files[handle]->IsOpen()) {
                         DOS_SetError(DOSERR_INVALID_HANDLE);
                     }
-                    else if(Files[handle]->GetInformation() & EXT_DEVICE_BIT) {
-                        fWritten = !(((DOS_ExtDevice*)Files[handle])->CallDeviceFunction(8, 26, SegValue(ds), reg_dx, towrite) & 0x8000);
+                    else if(Files[handle]->GetInformation() & DeviceInfoFlags::ExternalDevice) {
+                        fWritten = !(((DOS_ExtDevice*)Files[handle])->CallRWIODeviceFunction(DEVFUNC_WRITE, 26, SegValue(ds), reg_dx, towrite) & 0x8000);
+                        towrite = real_readw(dos.dcp, 18);
                     }
                     else {
                         if((fWritten = DOS_WriteFile(reg_bx, dos_copybuf, &towrite))) {
@@ -4123,6 +4125,47 @@ static Bitu DOS_29Handler(void)
 
 void AddBPINT3(void);
 void IPX_Setup(Section*);
+void DOS_SetupIHSEG(void);
+void DOS_CreateDummyDeviceMCB(void);
+void DOS_MemStartChange(uint16_t adjto);
+void DOS_AllocMinFreePadding(uint16_t upto);
+
+void DOS_OpenDefaultHandles(void) {
+	/* open handles in SFT for CON, AUX, PRN */
+	uint8_t devnum_con,devnum_aux,devnum_prn;
+
+	/* SFT: 0 = AUX
+	 *      1 = CON
+	 *      2 = PRN
+	 *
+	 * JFT: 0 = CON (1)
+	 *      1 = CON (1)
+	 *      2 = CON (1)
+	 *      3 = AUX (0)
+	 *      4 = PRN (2) */
+
+	devnum_aux = DOS_FindDevice("AUX");
+	devnum_con = DOS_FindDevice("CON");
+	devnum_prn = DOS_FindDevice("PRN");
+
+	/* CON is REQUIRED */
+	if (devnum_con >= DOS_DEVICES) E_Exit("Unable to locate CON device");
+
+	/* AUX and PRN can be CON if they do not exist */
+	if (devnum_aux >= DOS_DEVICES) devnum_aux = devnum_con;
+	if (devnum_prn >= DOS_DEVICES) devnum_prn = devnum_con;
+
+	/* make them happen */
+	assert(Files[0] == NULL); Files[0] = new DOS_Device(*Devices[devnum_aux]); Files[0]->neverclose = true;
+	assert(Files[1] == NULL); Files[1] = new DOS_Device(*Devices[devnum_con]); Files[1]->neverclose = true;
+	assert(Files[2] == NULL); Files[2] = new DOS_Device(*Devices[devnum_prn]); Files[2]->neverclose = true;
+}
+
+void DOS_ApplyMinMCBAndDummyDCB(void) {
+	if (minimum_mcb_segment != 0 && DOS_MEM_START < minimum_mcb_segment) DOS_MemStartChange(minimum_mcb_segment);
+	if (enable_dummy_device_mcb) DOS_CreateDummyDeviceMCB();
+	DOS_AllocMinFreePadding(minimum_mcb_free);
+}
 
 class DOS:public Module_base{
 private:
@@ -4635,6 +4678,7 @@ public:
 		}
 #endif
 
+		DOS_SetupIHSEG();
 		DOS_SetupFiles();								/* Setup system File tables */
 		DOS_SetupDevices();							/* Setup dos devices */
 		DOS_SetupTables();
@@ -4669,16 +4713,12 @@ public:
 			}
 		}
 
-		if (minimum_mcb_segment != 0) {
-			if (DOS_MEM_START < minimum_mcb_segment)
-				DOS_MEM_START = minimum_mcb_segment;
-		}
-
-		LOG(LOG_DOSMISC,LOG_DEBUG)("   mem start:    seg 0x%04x",DOS_MEM_START);
+		LOG(LOG_DOSMISC,LOG_DEBUG)("   mem start:    seg 0x%04x (initial)",DOS_MEM_START);
 
 		/* carry on setup */
-		DOS_SetupMemory();								/* Setup first MCB */
+		DOS_SetupMemory(); /* Setup first MCB */
 
+#if !defined(OSFREE)
 		/* NTS: The reason PC-98 has a higher minimum free is that the MS-DOS kernel
 		 *      has a larger footprint in memory, including fixed locations that
 		 *      some PC-98 games will read directly, and an ANSI driver.
@@ -4715,35 +4755,9 @@ public:
 		else if (minimum_mcb_free < minimum_mcb_segment) {
 			minimum_mcb_free = minimum_mcb_segment;
 		}
+#endif
 
 		LOG(LOG_DOSMISC,LOG_DEBUG)("   min free:     seg 0x%04x",minimum_mcb_free);
-
-		if (DOS_MEM_START < minimum_mcb_free) {
-			uint16_t sg=0,tmp;
-
-			dos.psp(8); // DOS ownership
-
-			tmp = 1; // start small
-			if (DOS_AllocateMemory(&sg,&tmp)) {
-				if (sg < minimum_mcb_free) {
-					LOG(LOG_DOSMISC,LOG_DEBUG)("   min free pad: seg 0x%04x",sg);
-				}
-				else {
-					DOS_FreeMemory(sg);
-					sg = 0;
-				}
-			}
-			else {
-				sg=0;
-			}
-
-			if (sg != 0 && sg < minimum_mcb_free) {
-				tmp = minimum_mcb_free - sg;
-				if (!DOS_ResizeMemory(sg,&tmp)) {
-					LOG(LOG_DOSMISC,LOG_DEBUG)("    WARNING: cannot resize min free pad");
-				}
-			}
-		}
 
 #if C_IPX
 		IPX_Setup(NULL);
@@ -4754,6 +4768,8 @@ public:
 		ZDRIVE_NUM = 25;
 		DOS_SDA(DOS_SDA_SEG,DOS_SDA_OFS).SetDrive(25); /* Else the next call gives a warning. */
 		DOS_SetDefaultDrive(25);
+
+		DOS_OpenDefaultHandles();
 
 		if (IS_JEGA_ARCH) {
 			INT10_AX_SetCRTBIOSMode(0x51);

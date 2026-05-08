@@ -48,6 +48,7 @@ extern const uint8_t freedos_mbr[];
 extern int bootdrive, tryconvertcp;
 extern bool int13_disk_change_detect_enable, skipintprog, rsize;
 extern bool int13_extensions_enable, bootguest, bootvm, use_quick_reboot;
+extern bool int13_enable_48bitLBA;
 bool isDBCSCP(), isKanji1_gbk(uint8_t chr), shiftjis_lead_byte(int c), CheckDBCSCP(int32_t codepage);
 extern bool CodePageGuestToHostUTF16(uint16_t *d/*CROSS_LEN*/,const char *s/*CROSS_LEN*/);
 
@@ -1429,10 +1430,13 @@ imageDisk::imageDisk(FILE* diskimg, const char* diskName, uint32_t cylinders, ui
     this->heads = heads;
     this->sectors = sectors;
     image_base = 0;
-    this->image_length = (uint64_t)cylinders * heads * sectors * sector_size;
+    if (image_length == 0) image_length = (uint64_t)cylinders * heads * sectors * sector_size;
     refcount = 0;
     this->sector_size = sector_size;
     this->diskSizeK = this->image_length / 1024;
+    LBA = image_length / sector_size;
+    if(!int13_enable_48bitLBA && (LBA > 0x0FFFFFFF))
+        LOG_MSG("Warning: Disk size (%lf GiB) exceeds 128GiB limit for 28-bit LBA. You may need to enable 48-bit LBA support.", (double)image_length / (1024.0 * 1024 * 1024));
     reserved_cylinders = 0;
     this->diskimg = diskimg;
     class_id = ID_BASE;
@@ -1455,10 +1459,10 @@ void imageDisk::UpdateFloppyType(void) {
 	}
 }
 
-imageDisk::imageDisk(FILE* imgFile, const char* imgName, uint32_t imgSizeK, bool isHardDisk) : diskSizeK(imgSizeK), diskimg(imgFile), image_length((uint64_t)imgSizeK * 1024) {
+imageDisk::imageDisk(FILE* imgFile, const char* imgName, uint64_t imgSize, bool isHardDisk) : diskSizeK(imgSize/1024), diskimg(imgFile), image_length(imgSize) {
     if (imgName != NULL)
         diskname = imgName;
-
+    uint64_t imgSizeK = diskSizeK;
     active = false;
     hardDrive = isHardDisk;
     if(!isHardDisk) {
@@ -1653,6 +1657,9 @@ imageDisk::imageDisk(FILE* imgFile, const char* imgName, uint32_t imgSizeK, bool
             }
         }
 
+        LBA = imgSize / sector_size;
+        if(!int13_enable_48bitLBA && (LBA > 0x0FFFFFFF))
+            LOG_MSG("Warning: Disk size (%lf GiB) exceeds 128GiB limit for 28-bit LBA. You may need to enable 48-bit LBA support.", (double)image_length / (1024.0 * 1024 * 1024));
         if (sectors == 0 || heads == 0 || cylinders == 0)
             active = false;
     }
@@ -1715,22 +1722,48 @@ void imageDisk::Set_GeometryForHardDisk()
 }
 
 void imageDisk::Set_Geometry(uint32_t setHeads, uint32_t setCyl, uint32_t setSect, uint32_t setSectSize) {
-    Bitu bigdisk_shift = 0;
+
+    uint64_t total_sectors = (uint64_t)setHeads * (uint64_t)setCyl * (uint64_t)setSect;
+    sectors = 63; // Default to 63 sectors per track.
+    heads = 16;   // Default to 16 heads.
+
+    if(setHeads == 0 || setCyl == 0 || setSect == 0 || total_sectors > 0x0FFFFFFF) {
+        LOG_MSG("bios_disk: Invalid disk geometry C, H, S = %u, %u, %u", setCyl, setHeads, setSect);
+        active = false;
+        return;
+    }
+    else if (total_sectors > 1024ULL * 255ULL * 63ULL) {
+        LOG_MSG("bios_disk: Disk geometry C, H, S = %u, %u, %u is too large, setting to max limits", setCyl, setHeads, setSect);
+        cylinders = 1024;
+        heads = 255;
+        sectors = 63;
+        active = true;
+        return;
+    }
 
     if (IS_PC98_ARCH) {
-        /* TODO: PC-98 has its own 4096 cylinder limit */
-    }
-    else {
-        if(setCyl > 16384) LOG_MSG("Warning: This disk image is too big.");
-        else if(setCyl > 8192) bigdisk_shift = 4;
-        else if(setCyl > 4096) bigdisk_shift = 3;
-        else if(setCyl > 2048) bigdisk_shift = 2;
-        else if(setCyl > 1024) bigdisk_shift = 1;
+        /* TODO: Some early PC-98 SCSI BIOS has its own 4096 cylinder (12-bit) limit */
     }
 
-    heads = setHeads << bigdisk_shift;
-    cylinders = setCyl >> bigdisk_shift;
-    sectors = setSect;
+    if(total_sectors < 17ULL * 1024 * 16)
+        sectors = 17;
+    else if(total_sectors < 32ULL * 1024 * 16)
+        sectors = 32;
+    else
+        sectors = 63;
+
+    while(heads < 255) {
+        uint64_t test_cyl =
+            total_sectors / ((uint64_t)heads * sectors);
+        if(test_cyl <= 1024)
+            break;
+        heads <<= 1;
+        if(heads > 255) {
+            heads = 255;
+            break;
+        }
+    }
+    cylinders = (uint32_t)(total_sectors / ((uint32_t)heads * sectors));
     sector_size = setSectSize;
     active = true;
 }
@@ -1821,7 +1854,7 @@ static void readDAP(uint16_t seg, uint16_t off) {
 
 void IDE_ResetDiskByBIOS(unsigned char disk);
 void IDE_EmuINT13DiskReadByBIOS(unsigned char disk,unsigned int cyl,unsigned int head,unsigned sect);
-bool IDE_GetPhysGeometry(unsigned char disk,uint32_t &heads,uint32_t &cyl,uint32_t &sect,uint32_t &size);
+bool IDE_GetPhysGeometry(unsigned char disk,uint32_t &heads,uint32_t &cyl,uint32_t &sect,uint32_t &size, uint64_t &LBA);
 void IDE_EmuINT13DiskReadByBIOS_LBA(unsigned char disk,uint64_t lba);
 
 void diskio_delay(Bits value/*bytes*/, int type = -1);
@@ -1839,6 +1872,7 @@ static Bitu INT13_DiskHandler(void) {
     uint8_t sectbuf[2048/*CD-ROM support*/];
     uint8_t  drivenum;
     Bitu  i,t;
+    uint64_t LBA = 0;
     last_drive = reg_dl;
     drivenum = GetDosDriveNumber(reg_dl);
     bool any_images = false;
@@ -2390,15 +2424,17 @@ static Bitu INT13_DiskHandler(void) {
         else bufsz = 0x1A;
 
         tmpheads = tmpcyl = tmpsect = tmpsize = 0;
-        if (!IDE_GetPhysGeometry(drivenum,tmpheads,tmpcyl,tmpsect,tmpsize))
-                imageDiskList[drivenum]->Get_Geometry(&tmpheads, &tmpcyl, &tmpsect, &tmpsize);
-
+        if(!IDE_GetPhysGeometry(drivenum, tmpheads, tmpcyl, tmpsect, tmpsize, LBA)) {
+            imageDiskList[drivenum]->Get_Geometry(&tmpheads, &tmpcyl, &tmpsect, &tmpsize);
+            LBA = imageDiskList[drivenum]->getLBA();
+        }
         real_writew(segat,bufptr+0x00,bufsz);
         real_writew(segat,bufptr+0x02,0x0003);  /* C/H/S valid, DMA boundary errors handled */
         real_writed(segat,bufptr+0x04,tmpcyl);
         real_writed(segat,bufptr+0x08,tmpheads);
         real_writed(segat,bufptr+0x0C,tmpsect);
-        real_writed(segat,bufptr+0x10,tmpcyl*tmpheads*tmpsect);
+        real_writed(segat,bufptr+0x10, int13_enable_48bitLBA?(uint32_t)(LBA & 0xFFFFFFFF): (uint32_t)(LBA > 0x0FFFFFFF?0x0FFFFFFF:LBA)); /* LBA lower 32bit */
+        real_writed(segat,bufptr+0x14, int13_enable_48bitLBA?(uint32_t)(LBA >> 32):0); /* LBA upper 32bit */
         real_writed(segat,bufptr+0x14,0);
         real_writew(segat,bufptr+0x18,512);
         if (bufsz >= 0x1E)

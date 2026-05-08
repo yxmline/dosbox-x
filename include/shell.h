@@ -368,7 +368,20 @@ public:
 	bool lfnfor;
     /* Status */
     bool input_eof;                     //! STDIN has hit EOF
+    bool config_shell = false;
 };
+
+#if !defined(OSFREE)
+class DOS_ConfigShell : public DOS_Shell {
+public:
+	DOS_ConfigShell();
+	virtual ~DOS_ConfigShell();
+
+    /*! \brief      Program entry point, when the command is run
+     */
+	void Run(void) override;
+};
+#endif
 
 struct SHELL_Cmd {
 	const char * name;								/* Command name*/

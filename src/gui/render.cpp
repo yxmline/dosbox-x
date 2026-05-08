@@ -935,8 +935,24 @@ forcenormal:
 	 * they use the write cache as a way to render to memory and then rapid copy to device memory.
 	 * the only safe way to proceed here is to use the random versions which do not use the render cache.
 	 * this is how it's going to stay until I figure out how to dynamically allocate the write cache. --J.C. */
-	unsigned int wcpitch = width/*already multiplied by xscale*/ * ((render.src.bpp+7u)>>3u);
 	bool use_wcache = false;
+	unsigned int wcpitch;
+
+	/* "width" was already multiplied by xscale */
+	switch (render.scale.outMode) {
+		case scalerMode8:
+			wcpitch = width * 1;
+			break;
+		case scalerMode15:
+		case scalerMode16:
+			wcpitch = width * 2;
+			break;
+		case scalerMode32:
+			wcpitch = width * 4;
+			break;
+		default:
+			abort();
+	};
 
 	/* Allow command line option to force scaler choice as if GFX_HARDWARE were set, in order to properly test scaler code */
 	if ((gfx_flags & GFX_HARDWARE) || control->opt_force_gfx_hardware) {
@@ -1006,7 +1022,24 @@ forcenormal:
 	 * the way the advanced scalers are coded, the pitch MUST be sizeof(PTYPE)*SCALER_COMPLEXWIDTH or else the code will misrender!
 	 * Also allocate the change cache. */
 	if (render.scale.complexHandler) {
-		scalerFrameCacheAlloc(render.scale.cachePitch,render.src.width,render.src.height);
+		/* outPitch == 0 at this point. we don't get the value until GFX_StartUpdate().
+		 * use outMode to compute what the advanced scalers render to, not what the video buffer is doing. */
+		switch (render.scale.outMode) {
+			case scalerMode8:
+				render.scale.frameCachePitch = render.src.width * 1;
+				break;
+			case scalerMode15:
+			case scalerMode16:
+				render.scale.frameCachePitch = render.src.width * 2;
+				break;
+			case scalerMode32:
+				render.scale.frameCachePitch = render.src.width * 4;
+				break;
+			default:
+				abort();
+		};
+
+		scalerFrameCacheAlloc(render.scale.frameCachePitch,render.src.width,render.src.height);
 		scalerChangeCacheAlloc(render.src.width,render.src.height);
 	}
 

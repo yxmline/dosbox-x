@@ -293,7 +293,7 @@ static void SetupCMDLine(uint16_t pspseg, const DOS_ParamBlock& block) {
  *        shell without any error message. The least we could do is return
  *        an error code so that the INT 21h EXEC call can print an informative
  *        error message! --J.C. */
-bool DOS_Execute(const char* name, PhysPt block_pt, uint8_t flags) {
+bool DOS_Execute(const char* name, PhysPt block_pt, uint16_t flags) {
 	EXE_Header head;Bitu i;
 	uint16_t fhandle;uint16_t len;uint32_t pos;
 	uint16_t pspseg,envseg,loadseg,memsize=0xffff,readsize;
@@ -304,7 +304,37 @@ bool DOS_Execute(const char* name, PhysPt block_pt, uint8_t flags) {
 	uint32_t checksum = 0;
 	uint32_t checksum_bytes = 0;
 
-	block.LoadData();
+	/* OVERLAY: if the resident image extends past this point, fail. */
+	/*          This is only meaningful for the internal DOSEXEC_DEVICEDRIVER flag.
+	 *          Normal OVERLAY load doesn't range check at all, which is why the default is 0xFFFF! */
+	uint16_t segment_max=0xFFFF;
+
+	// FIXME: This code works but there is no file I/O error checking!
+	//        If it reads a truncated EXE or file I/O somehow fails while loading,
+	//        this code will carry on and possibly execute erroneous code!
+
+	// NTS: Confirmed from MS-DOS 4.0 source code: OVERLAY load will blindly load the EXE image to whatever
+	//      segment it is told to. It does not check that there is enough memory there. It does not check whether
+	//      it overruns one MCB into another. That would explain why some games that rely on overlay loading
+	//      tend to crash if there is insufficient memory.
+	//
+	//      You'd think that if the OVERLAY mode passed along a structure that Microsoft would have added
+	//      fields in a backwards compatible way to give OVERLAY loading a segment limit value it could use
+	//      to determine if there is enough memory!
+
+	if (flags == DOSEXEC_DEVICEDRIVER) {/*Internal value. DOS programs cannot pass this through INT 21h*/
+		/* block_pt is two 16-bit values:
+		 * low WORD is relocation segment value.
+		 * hi WORD is the highest segment of valid memory + 1 (boundary) so this function can identify if the image is too big
+		 * Take the values and then process loading as if OVERLAY */
+		block.overlay.loadseg = block_pt & 0xFFFFu;
+		block.overlay.relocation = block_pt & 0xFFFFu;
+		segment_max = block_pt >> 16u;
+		flags = OVERLAY;
+	}
+	else {
+		block.LoadData();
+	}
 	//Remove the loadhigh flag for the moment!
 	if(flags&0x80) LOG(LOG_EXEC,LOG_ERROR)("using loadhigh flag!!!!!. dropping it");
 	flags &= 0x7f;
@@ -430,7 +460,19 @@ bool DOS_Execute(const char* name, PhysPt block_pt, uint8_t flags) {
 					E_Exit("EXE loading error, unable to load to top of block, nor able to fit into block");
 			}
 		}
-	} else loadseg=block.overlay.loadseg;
+	} else {
+		/* validate that there is enough room to fit the image (OVERLAY from DOSEXEC_DEVICEDRIVER case) */
+		loadseg=block.overlay.loadseg;
+		if ((((uint32_t)loadseg << 4u)+(uint32_t)imagesize) > ((uint32_t)segment_max << 4u)) {
+			LOG(LOG_MISC,LOG_WARN)("EXEC OVERLAY: Insufficient memory to load executable image into memory. load=%x-%x max %x",
+				loadseg << 4u,(loadseg << 4u)+imagesize-1u,segment_max << 4u);
+			delete[] loadbuf;
+			DOS_SetError(DOSERR_INSUFFICIENT_MEMORY);
+			DOS_FreeMemory(envseg);
+			DOS_CloseFile(fhandle);
+			return false;
+		}
+	}
 	/* Load the executable */
 	loadaddress=PhysMake(loadseg,0);
 	RunningProgramLoadAddress = loadaddress;
@@ -868,6 +910,16 @@ bool DOS_Execute(const char* name, PhysPt block_pt, uint8_t flags) {
 		RunningProgramHash[1] = checksum_bytes;
 		RunningProgramHash[2] = checksum;
 		RunningProgramHash[3] = 0;
+
+		/* ownership of the environment block also belongs to the program, not the parent program! (bugfix) */
+		{
+			uint16_t s = newpsp.GetEnvironment();
+			if (s != 0) {
+				DOS_MCB envmcb(s-1);
+				envmcb.SetPSPSeg(dos.psp());
+				envmcb.SetFileName(stripname);
+			}
+		}
 	}
 
 #if defined(OSFREE)
