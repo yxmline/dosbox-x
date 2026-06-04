@@ -261,7 +261,7 @@ enum {
 
 class IDEATAPICDROMDevice:public IDEDevice {
 public:
-    IDEATAPICDROMDevice(IDEController *c,unsigned char drive_index,bool _slave);
+    IDEATAPICDROMDevice(IDEController *c,unsigned char drive_index,bool _slave,CDROM_Interface *cdrom);
     ~IDEATAPICDROMDevice();
     void writecommand(uint8_t cmd) override;
 public:
@@ -270,6 +270,7 @@ public:
     std::string id_model;
     unsigned char drive_index;
     Bitu sector_transfer_limit = 16;
+    CDROM_Interface *cdrom = NULL;
     CDROM_Interface *getMSCDEXDrive();
     void update_from_cdrom();
     Bitu data_read(Bitu iolen) override; /* read from 1F0h data port from IDE device */
@@ -889,6 +890,8 @@ static unsigned char dec2bcd(unsigned char c) {
 }
 #endif
 
+void IDE_Eject_unmount(char drive);
+
 void IDEATAPICDROMDevice::read_toc() {
     /* NTS: The SCSI MMC standards say we're allowed to indicate the return data
      *      is longer than it's allocation length. But here's the thing: some MS-DOS
@@ -1047,6 +1050,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
         switch (atapi_cmd[0]) {
             case 0x00: /* TEST UNIT READY */
             case 0x03: /* REQUEST SENSE */
+            case 0x12: /* INQUIRY */
                 allow_writing = true;
                 break; /* do not delay */
             default:
@@ -1059,6 +1063,7 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
         switch (atapi_cmd[0]) {
             case 0x00: /* TEST UNIT READY */
             case 0x03: /* REQUEST SENSE */
+            case 0x12: /* INQUIRY */
                 allow_writing = true;
                 break; /* do not delay */
             default:
@@ -1091,6 +1096,41 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             raise_irq();
             allow_writing = true;
             break;
+        case 0x1B: /* START/STOP UNIT */
+            count = 0x03;
+            feature = 0x00;
+            sector_total = 0x00;
+            state = IDE_DEV_DATA_READ;
+            status = IDE_STATUS_DRIVE_READY|IDE_STATUS_DRIVE_SEEK_COMPLETE;
+
+            {
+                    bool START = !!(atapi_cmd[4] & 0x01);
+                    bool LOEJ = !!(atapi_cmd[4] & 0x02);
+                    // TODO: IMMED, POWER_CONDITION, etc.
+
+                    if (LOEJ) {
+                            LOG(LOG_MISC,LOG_DEBUG)("ATAPI CD-ROM drive is being asked to %s the media",
+                                START ? "LOAD" : "EJECT");
+                    }
+                    else {
+                            LOG(LOG_MISC,LOG_DEBUG)("ATAPI CD-ROM drive is being asked to %s the media",
+                                START ? "START" : "STOP");
+                    }
+
+                    // Treat the EJECT command as a command to swap to an "empty" CD-ROM image
+                    if (LOEJ && !START) {
+                            LOG(LOG_MISC,LOG_DEBUG)("Interpreting EJECT as a command to unmount the drive (replace with empty image)");
+                            IDE_Eject_unmount(drive_index+'A');
+                    }
+            }
+
+            /* ATAPI protocol also says we write back into LBA 23:8 what we're going to transfer in the block */
+            lba[2] = sector_total >> 8;
+            lba[1] = sector_total;
+
+            raise_irq();
+            allow_writing = true;
+            break;
         case 0x1E: /* PREVENT ALLOW MEDIUM REMOVAL */
             count = 0x03;
             feature = 0x00;
@@ -1098,7 +1138,12 @@ void IDEATAPICDROMDevice::on_atapi_busy_time() {
             state = IDE_DEV_DATA_READ;
             status = IDE_STATUS_DRIVE_READY|IDE_STATUS_DRIVE_SEEK_COMPLETE;
 
-            /* Don't care. Do nothing. */
+            {
+                uint8_t PREVENT = atapi_cmd[4] & 3;
+                bool lock = (PREVENT == 1 || PREVENT == 3);
+
+                LOG(LOG_MISC,LOG_DEBUG)("ATAPI CD-ROM PREVENT/ALLOW MEDIA REMOVAL: prevent=%u locked=%u",PREVENT,lock);
+            }
 
             /* ATAPI protocol also says we write back into LBA 23:8 what we're going to transfer in the block */
             lba[2] = sector_total >> 8;
@@ -1473,7 +1518,7 @@ void IDEATAPICDROMDevice::set_sense(unsigned char SK,unsigned char ASC,unsigned 
     sense[13] = ASCQ;
 }
 
-IDEATAPICDROMDevice::IDEATAPICDROMDevice(IDEController *c,unsigned char drive_index,bool _slave) : IDEDevice(c,_slave) {
+IDEATAPICDROMDevice::IDEATAPICDROMDevice(IDEController *c,unsigned char drive_index,bool _slave,CDROM_Interface *n_cdrom) : IDEDevice(c,_slave) {
     this->drive_index = drive_index;
     sector_i = sector_total = 0;
     atapi_to_host = false;
@@ -1486,6 +1531,8 @@ IDEATAPICDROMDevice::IDEATAPICDROMDevice(IDEController *c,unsigned char drive_in
     atapi_cmd_i = 0;
     atapi_cmd_total = 0;
     memset(sector, 0, sizeof(sector));
+
+    if (n_cdrom) (cdrom = n_cdrom)->Addref();
 
     memset(sense,0,sizeof(sense));
     IDEATAPICDROMDevice::set_sense(/*SK=*/0);
@@ -1534,6 +1581,10 @@ IDEATAPICDROMDevice::IDEATAPICDROMDevice(IDEController *c,unsigned char drive_in
 }
 
 IDEATAPICDROMDevice::~IDEATAPICDROMDevice() {
+    if (cdrom) {
+        cdrom->Release();
+        cdrom = NULL;
+    }
 }
 
 void IDEATAPICDROMDevice::on_mode_select_io_complete() {
@@ -1964,6 +2015,13 @@ void IDEATAPICDROMDevice::atapi_cmd_completion() {
             allow_writing = true;
             break;
         case 0x03: /* REQUEST SENSE */
+            count = 0x02;
+            state = IDE_DEV_ATAPI_BUSY;
+            status = IDE_STATUS_BUSY;
+            PIC_RemoveSpecificEvents(IDE_DelayedCommand,pk);
+            PIC_AddEvent(IDE_DelayedCommand,(faked_command ? 0.000001 : 1)/*ms*/,pk);
+            break;
+        case 0x1B: /* START/STOP UNIT */
             count = 0x02;
             state = IDE_DEV_ATAPI_BUSY;
             status = IDE_STATUS_BUSY;
@@ -2650,11 +2708,6 @@ imageDisk *IDEATADevice::getBIOSdisk() {
 }
 
 CDROM_Interface *IDEATAPICDROMDevice::getMSCDEXDrive() {
-    CDROM_Interface *cdrom=NULL;
-
-    if (!GetMSCDEXDrive(drive_index,&cdrom))
-        return NULL;
-
     return cdrom;
 }
 
@@ -2763,28 +2816,52 @@ bool IDE_controller_occupied(signed char index, bool slave) { // Return true if 
 }
 
 /* drive_index = drive letter 0...A to 25...Z */
-void IDE_ATAPI_MediaChangeNotify(unsigned char drive_index) {
-    for (unsigned int ide=0;ide < MAX_IDE_CONTROLLERS;ide++) {
-        IDEController *c = idecontroller[ide];
-        if (c == NULL) continue;
-        for (unsigned int ms=0;ms < 2;ms++) {
-            const unsigned int pk = IDEEventPack(c->interface_index,ms).get();
-            IDEDevice *dev = c->device[ms];
-            if (dev == NULL) continue;
-            if (dev->type == IDE_TYPE_CDROM) {
-                IDEATAPICDROMDevice *atapi = (IDEATAPICDROMDevice*)dev;
-                if (drive_index == atapi->drive_index) {
-                    LOG_MSG("IDE ATAPI acknowledge media change for drive %c\n",drive_index+'A');
-                    atapi->has_changed = true;
-                    atapi->loading_mode = LOAD_INSERT_CD;
-                    PIC_RemoveSpecificEvents(IDE_ATAPI_SpinDown,pk);
-                    PIC_RemoveSpecificEvents(IDE_ATAPI_SpinUpComplete,pk);
-                    PIC_RemoveSpecificEvents(IDE_ATAPI_CDInsertion,pk);
-                    PIC_AddEvent(IDE_ATAPI_CDInsertion,atapi->cd_insertion_time/*ms*/,pk);
-                }
-            }
-        }
-    }
+void IDE_ATAPI_MediaChangeNotify(unsigned char drive_index,bool immediate) {
+	for (unsigned int ide=0;ide < MAX_IDE_CONTROLLERS;ide++) {
+		IDEController *c = idecontroller[ide];
+		if (c == NULL) continue;
+		for (unsigned int ms=0;ms < 2;ms++) {
+			const unsigned int pk = IDEEventPack(c->interface_index,ms).get();
+			IDEDevice *dev = c->device[ms];
+			if (dev == NULL) continue;
+			if (dev->type == IDE_TYPE_CDROM) {
+				IDEATAPICDROMDevice *atapi = (IDEATAPICDROMDevice*)dev;
+				if (drive_index == atapi->drive_index) {
+					LOG_MSG("IDE ATAPI acknowledge media change for drive %c\n",drive_index+'A');
+					if (immediate) LOG_MSG("--media change is immediate");
+
+					CDROM_Interface *cdrom = NULL;
+					if (GetMSCDEXDrive(drive_index,&cdrom)) {
+						if (atapi->cdrom) atapi->cdrom->Release();
+						(atapi->cdrom = cdrom)->Addref();
+					}
+
+					bool empty = false;
+
+					if (atapi->cdrom->class_id == CDROM_Interface::ID_FAKE) {
+						CDROM_Interface_Fake *fake = (CDROM_Interface_Fake*)(atapi->cdrom);
+						if (fake->isEmpty) empty = true;
+					}
+
+					/* if asked to change immediately, or the new image is the fake "empty" drive, change right away */
+					if (immediate || empty) {
+						atapi->loading_mode = LOAD_READY;
+						PIC_RemoveSpecificEvents(IDE_ATAPI_SpinDown,pk);
+						PIC_RemoveSpecificEvents(IDE_ATAPI_SpinUpComplete,pk);
+						PIC_RemoveSpecificEvents(IDE_ATAPI_CDInsertion,pk);
+					}
+					else {
+						atapi->has_changed = true;
+						atapi->loading_mode = LOAD_INSERT_CD;
+						PIC_RemoveSpecificEvents(IDE_ATAPI_SpinDown,pk);
+						PIC_RemoveSpecificEvents(IDE_ATAPI_SpinUpComplete,pk);
+						PIC_RemoveSpecificEvents(IDE_ATAPI_CDInsertion,pk);
+						PIC_AddEvent(IDE_ATAPI_CDInsertion,atapi->cd_insertion_time/*ms*/,pk);
+					}
+				}
+			}
+		}
+	}
 }
 
 /* drive_index = drive letter 0...A to 25...Z */
@@ -2805,16 +2882,19 @@ void IDE_CDROM_Attach(signed char index,bool slave,unsigned char drive_index) {
         return;
     }
 
-    if (!GetMSCDEXDrive(drive_index,NULL)) {
+    CDROM_Interface *cdrom = NULL;
+
+    if (!GetMSCDEXDrive(drive_index,&cdrom)) {
         LOG_MSG("IDE: Asked to attach CD-ROM that does not exist\n");
         return;
     }
 
-    dev = new IDEATAPICDROMDevice(c,drive_index,slave);
+    dev = new IDEATAPICDROMDevice(c,drive_index,slave,cdrom);
     if(dev == NULL) {
         LOG_MSG("IMGMOUNT: Failed to allocate CD-ROM drive %c to IDE %s %s", drive_index + 'A', ideslot[index], master_slave[slave ? 1 : 0]);
         return;
     }
+    cdrom->Release();
     dev->update_from_cdrom();
     c->device[slave?1:0] = (IDEDevice*)dev;
     LOG_MSG("IMGMOUNT: CD-ROM image mounted to drive %c (IDE %s %s)", drive_index + 'A', ideslot[index], master_slave[slave ? 1 : 0]);

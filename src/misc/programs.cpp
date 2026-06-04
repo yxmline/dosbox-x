@@ -37,6 +37,7 @@
 #include "shell.h"
 #include "menudef.h"
 #include "hardware.h"
+#include "../dos/drives.h"
 #include "mapper.h"
 #include "menu.h"
 #include "bios.h"
@@ -44,6 +45,7 @@
 #include "jfont.h"
 #include "render.h"
 #include "../ints/int10.h"
+#include "bios_disk.h"
 #include "sdlmain.h"
 #include "cpu.h"
 #if defined(WIN32)
@@ -176,20 +178,30 @@ static Bitu PROGRAMS_Handler(void) {
 
 /* Main functions used in all program */
 
-Program::Program() {
-	/* Find the command line and setup the PSP */
-	psp = new DOS_PSP(dos.psp());
-	/* Scan environment for filename */
-	PhysPt envscan=PhysMake(psp->GetEnvironment(),0);
-	while (mem_readb(envscan)) envscan+=(PhysPt)(mem_strlen(envscan)+1);	
-	envscan+=3;
-	CommandTail tail;
-    MEM_BlockRead(PhysMake(dos.psp(),CTBUF+1),&tail,CTBUF+1);
-    if (tail.count<CTBUF) tail.buffer[tail.count]=0;
-    else tail.buffer[CTBUF-1]=0;
-	char filename[256+1];
-	MEM_StrCopy(envscan,filename,256);
-	cmd = new CommandLine(filename,tail.buffer);
+Program::Program(const unsigned int fl) {
+	if (dos_kernel_disabled && !(fl & prg_nopsp))
+		LOG(LOG_MISC,LOG_DEBUG)("Program constructor: DOS kernel disabled and prg_nopsp was not specified");
+
+	if (!dos_kernel_disabled && !(fl & prg_nopsp)) {
+		/* Find the command line and setup the PSP */
+		psp = new DOS_PSP(dos.psp());
+		/* Scan environment for filename */
+		PhysPt envscan=PhysMake(psp->GetEnvironment(),0);
+		while (mem_readb(envscan)) envscan+=(PhysPt)(mem_strlen(envscan)+1);	
+		envscan+=3;
+		CommandTail tail;
+		MEM_BlockRead(PhysMake(dos.psp(),CTBUF+1),&tail,CTBUF+1);
+		if (tail.count<CTBUF) tail.buffer[tail.count]=0;
+		else tail.buffer[CTBUF-1]=0;
+		char filename[256+1];
+		MEM_StrCopy(envscan,filename,256);
+		cmd = new CommandLine(filename,tail.buffer);
+	}
+	else {
+		psp = NULL;
+		cmd = NULL;
+	}
+
 	exit_status = 0;
 }
 
@@ -1291,11 +1303,161 @@ void ApplySetting(std::string pvar, std::string inputline, bool quiet) {
     }
 }
 
+#if !defined(OSFREE)
+uint8_t device_nextdrive = 0;
+#endif
+
+#if !defined(OSFREE)
+uint8_t imageDiskMSDOSBlockDevice::Read_AbsoluteSector(uint32_t sectnum, void * data) {
+	const unsigned int max_sects = (bdevbuf_sz - 16) / sector_size;
+	if (max_sects == 0) return 0x05;
+
+	const uint16_t count = 1;
+	const uint32_t sector = sectnum;
+	const uint16_t strategy = mem_readw(devhdr+6);
+	const uint16_t intrupt = mem_readw(devhdr+8);
+	unsigned char *p_data = (unsigned char*)data;
+
+	uint16_t oldbx = reg_bx;
+	uint16_t oldds = SegValue(ds);
+	uint16_t oldes = SegValue(es);
+
+	DOS_DEVHDR::req_rwio req = {0};
+	req.hdr.record_length = sizeof(req);
+	req.hdr.unit_code = unit_code;
+	req.hdr.cmd_code = DEVFUNC_READ;
+	req.xfer_addr = RealMake(bdevbuf_seg+1,0);
+	req.count = count;
+	req.ptr_volid = RealMake(bdevbuf_seg,0);
+	if (attr & DEVATTRBLK_EXTENDED) {
+		req.start_sector = 0xFFFF;
+		req.start_sector32 = sector;
+	}
+	else {
+		if (sector > 0xFFFFu) return 0x05;
+		req.start_sector = sector;
+		req.start_sector32 = 0;
+	}
+	req.media_dpb = media_dpb;
+	MEM_BlockWrite(PhysMake(dos.dcp,0),&req,sizeof(req));
+
+	LOG(LOG_MISC,LOG_DEBUG)("Block device read devseg=%x sectnum %x devseg %x strat %x intr %x xfer=%x:%x",
+		devseg,sectnum,devseg,strategy,intrupt,
+		req.xfer_addr>>16,req.xfer_addr&0xFFFFu);
+
+	reg_bx = 0;
+	SegSet16(ds, devseg);
+	SegSet16(es, dos.dcp);
+	CALLBACK_RunRealFar(devseg, strategy);
+	CALLBACK_RunRealFar(devseg, intrupt);
+	reg_bx = oldbx;
+	SegSet16(es, oldes);
+	SegSet16(ds, oldds);
+
+	MEM_BlockRead(PhysMake(dos.dcp,0),&req,sizeof(req));
+
+	LOG(LOG_MISC,LOG_DEBUG)("--result status=%x count=%u",
+		req.hdr.status,req.count);
+
+	if (req.hdr.status & 0x8000) return 0x05;/*error*/
+	if (req.count == 0) return 0x05;/*error*/
+
+	MEM_BlockRead(PhysMake(bdevbuf_seg+1,0),p_data,sector_size);
+        return 0;
+}
+#endif
+
+#if !defined(OSFREE)
+uint8_t imageDiskMSDOSBlockDevice::Write_AbsoluteSector(uint32_t sectnum, const void * data) {
+	const unsigned int max_sects = (bdevbuf_sz - 16) / sector_size;
+	if (max_sects == 0) return 0x05;
+
+	const uint16_t count = 1;
+	const uint32_t sector = sectnum;
+	const uint16_t strategy = mem_readw(devhdr+6);
+	const uint16_t intrupt = mem_readw(devhdr+8);
+	const unsigned char *p_data = (const unsigned char*)data;
+
+	uint16_t oldbx = reg_bx;
+	uint16_t oldds = SegValue(ds);
+	uint16_t oldes = SegValue(es);
+
+	DOS_DEVHDR::req_rwio req = {0};
+	req.hdr.record_length = sizeof(req);
+	req.hdr.unit_code = unit_code;
+	req.hdr.cmd_code = DEVFUNC_WRITE;
+	req.xfer_addr = RealMake(bdevbuf_seg+1,0);
+	req.count = count;
+	req.ptr_volid = RealMake(bdevbuf_seg,0);
+	if (attr & DEVATTRBLK_EXTENDED) {
+		req.start_sector = 0xFFFF;
+		req.start_sector32 = sector;
+	}
+	else {
+		if (sector > 0xFFFFu) return 0x05;
+		req.start_sector = sector;
+		req.start_sector32 = 0;
+	}
+	req.media_dpb = media_dpb;
+	MEM_BlockWrite(PhysMake(dos.dcp,0),&req,sizeof(req));
+	MEM_BlockWrite(PhysMake(bdevbuf_seg+1,0),p_data,sector_size);
+
+	LOG(LOG_MISC,LOG_DEBUG)("Block device write devseg=%x sectnum %x devseg %x strat %x intr %x xfer=%x:%x",
+		devseg,sectnum,devseg,strategy,intrupt,
+		req.xfer_addr>>16,req.xfer_addr&0xFFFFu);
+
+	reg_bx = 0;
+	SegSet16(ds, devseg);
+	SegSet16(es, dos.dcp);
+	CALLBACK_RunRealFar(devseg, strategy);
+	CALLBACK_RunRealFar(devseg, intrupt);
+	reg_bx = oldbx;
+	SegSet16(es, oldes);
+	SegSet16(ds, oldds);
+
+	MEM_BlockRead(PhysMake(dos.dcp,0),&req,sizeof(req));
+
+	LOG(LOG_MISC,LOG_DEBUG)("--result status=%x count=%u",
+		req.hdr.status,req.count);
+
+	if (req.hdr.status & 0x8000) return 0x05;/*error*/
+	if (req.count == 0) return 0x05;/*error*/
+
+        return 0;
+}
+#endif
+
+#if !defined(OSFREE)
+bool imageDiskMSDOSBlockDevice::detectDiskChange(void) {
+	return false;//TODO
+}
+#endif
+
+#if !defined(OSFREE)
+imageDiskMSDOSBlockDevice::imageDiskMSDOSBlockDevice() : imageDisk(ID_MSDOSBLOCKDEV) {
+}
+#endif
+
+#if !defined(OSFREE)
+imageDiskMSDOSBlockDevice::~imageDiskMSDOSBlockDevice() {
+}
+#endif
+
+#if !defined(OSFREE)
 bool DeviceLoad(const std::string &device,const std::string &devparm) {
 	bool user_wants_mcb_per_driver = false;
 	uint16_t devseg = 0,ofs,attr;
 	bool adj_mcb_base = false;
 	uint16_t stacksz = 256u;
+
+	std::string devname = device;
+	{
+		const char *s = strrchr(device.c_str(),'\\');
+		if (s && *s) {
+			s++;
+			if (*s) devname = s;
+		}
+	}
 
 	Section_prop * section=static_cast<Section_prop *>(control->GetSection("config"));
 
@@ -1303,7 +1465,8 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 		user_wants_mcb_per_driver = true;
 
 	/* reduce our executable image down to only the PSP segment to maximize memory for the device driver load */
-	uint16_t psp_blocks = (0x80 + devparm.length() + 3u + stacksz + 15u) / 16u; /* just enough for a PSP segment so DOS exit is possible -- we don't care about the command tail either */
+	unsigned int psp_sz = 0x80 + devname.length() + 1 + devparm.length() + 3u + stacksz;
+	uint16_t psp_blocks = (psp_sz + 15u) / 16u; /* just enough for a PSP segment so DOS exit is possible -- we don't care about the command tail either */
 	uint16_t blocks = psp_blocks;
 	if (!DOS_ResizeMemory(dos.psp(),&blocks))
 		return false;
@@ -1351,7 +1514,7 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 
 	/* redirect the stack pointer */
 	CPU_SetSegGeneral(ss,dos.psp());
-	reg_esp = 0x80 + devparm.length() + 3u + stacksz - 2u;
+	reg_esp = psp_sz - 2u;
 
 	/* allocate a new memory block to hold the device driver image. */
 	/* ownership remains with CONFIG unless successful driver init and initialization, so that on error it is freed automatically */
@@ -1393,6 +1556,20 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 	if (!DOS_Execute(device.c_str(),devseg | ((devseg+blocks)<<16u),DOSEXEC_DEVICEDRIVER)) {
 		if (adj_mcb_base) MEM_BlockWrite(PhysMake(devseg,0),devseg_mcb,16); /* put the MCB back */
 		return false;
+	}
+
+	/* FIXME: Apparently you are allowed to put multiple device drivers in one file.
+	 *        That would suggest that the header could have some valid next pointer
+	 *        instead of FFFF:FFFF.
+	 *
+	 *        I do not have any such driver to test with, therefore, that is not supported.
+	 *
+	 *        Guess: If it's a flat SYS file, maybe you can't do that. Maybe.
+	 *               If it's an EXE file, you could do that, because the relocation
+	 *               table could automatically set the segment value properly to
+	 *               point to the next driver. */
+	if (real_readd(devseg,0) != 0xFFFFFFFF) {
+		LOG(LOG_MISC,LOG_DEBUG)("FIXME: Device driver files with multiple drivers inside it not yet supported");
 	}
 
 	attr = real_readw(devseg,4);
@@ -1442,12 +1619,31 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 			s.hdr.record_length = 22;
 
 		/* init arguments */
+		/* NTS: This is also not documented by Microsoft apparently, but the init string apparently includes
+		 *      the name of the device driver. It's not just the text following the device.
+		 *
+		 *      Apparently 'DEVICE=C:\DOS\BLAH.SYS /X /Y /Z'
+		 *      will produce an init string of 'BLAH.SYS /X /Y /Z' not '/X /Y /Z'
+		 *
+		 *      RAMDRIVE.SYS is hardcoded to assume this. If we don't prepend the driver name into the init
+		 *      str the first command line switch will be silently ignored.
+		 *
+		 *      Sometimes I wonder if the MS-DOS environment was chaotic and buggy purely because so many
+		 *      programmers had to guess and hack around to figure things out like that from lack of good
+		 *      or any documentation. */
 		{
-			const char *s = devparm.c_str();
 			unsigned int i=0;
+			const char *s;
 
+			s = devname.c_str();
+			LOG(LOG_MISC,LOG_DEBUG)("Init device name '%s'",s);
+			while (*s) real_writeb(dos.psp(),0x80+(i++),*s++);
+
+			real_writeb(dos.psp(),0x80+(i++),' ');
+
+			s = devparm.c_str();
 			LOG(LOG_MISC,LOG_DEBUG)("Init str '%s'",s);
-			while (i < devparm.length() && *s) real_writeb(dos.psp(),0x80+(i++),*s++);
+			while (*s) real_writeb(dos.psp(),0x80+(i++),*s++);
 
 			/* \r\n terminated */
 			/* OAKCDROM.SYS requires \r\n, or else scans memory for eternity */
@@ -1455,11 +1651,29 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 			real_writeb(dos.psp(),0x80+(i++),0x0A);
 
 			/* NULL terminator */
-			real_writeb(dos.psp(),0x80+i,0);
+			real_writeb(dos.psp(),0x80+(i++),0);
+
+			assert((0x80+i) <= (psp_sz - stacksz));
+		}
+
+		/* block device: fill in drive number so RAMDRIVE.SYS can properly claim anything but drive A: */
+		/* NTS: If a block device reports multiple units, that means it occupies consecutive drive letters.
+		 *      If we can't guarantee that, that might be a problem. Maybe. */
+		if (!(attr & DEVATTR_ISCHAR)) {
+			s.drive_num = device_nextdrive;
+
+			while (s.drive_num<DOS_DRIVES && Drives[s.drive_num]) s.drive_num++;
+
+			if (s.drive_num >= DOS_DRIVES) {
+				if (adj_mcb_base) MEM_BlockWrite(PhysMake(devseg,0),devseg_mcb,16); /* put the MCB back */
+				LOG(LOG_MISC,LOG_DEBUG)("No available drive letters for block device");
+				return false;
+			}
 		}
 
 		s.bpb_ptr = RealMake(dos.psp(),0x80);
 		s.end_ptr = RealMake(devseg+blocks,0);/*tell the driver where the current end is, perhaps as a memory size detect?*/
+		const uint32_t bpb_ptr_initial = s.bpb_ptr;
 		LOG(LOG_MISC,LOG_DEBUG)("Giving device driver in DEVINIT request initial endptr %x:%x initstr %x:%x",devseg+blocks,0,dos.psp(),0x80);
 		s.hdr.cmd_code = DEVFUNC_INIT;
 		MEM_BlockWrite(PhysMake(dos.dcp,0),&s,sizeof(s));
@@ -1505,8 +1719,8 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 			return false;
 		}
 		else if (
-				PhysMake(newend_seg,newend_ofs) < PhysMake(devseg,32)/*oh come on, keep at least 32 bytes of yourself around!*/ ||
-				PhysMake(newend_seg,newend_ofs) > PhysMake(devseg+blocks,0)/*you cannot make your driver bigger than the original size!*/) {
+			PhysMake(newend_seg,newend_ofs) < PhysMake(devseg,32)/*oh come on, keep at least 32 bytes of yourself around!*/ ||
+			PhysMake(newend_seg,newend_ofs) > PhysMake(devseg+blocks,0)/*you cannot make your driver bigger than the original size!*/) {
 			LOG(LOG_MISC,LOG_DEBUG)("Device driver indicates error with invalid end_ptr");
 			if (adj_mcb_base) MEM_BlockWrite(PhysMake(devseg,0),devseg_mcb,16); /* put the MCB back */
 			return false;
@@ -1534,6 +1748,130 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 			blocks = drvszseg;
 			if (!DOS_ResizeMemory(devseg,&blocks))
 				return false;
+		}
+
+		if (s.bpb_ptr && s.bpb_ptr != bpb_ptr_initial && !(attr & DEVATTR_ISCHAR)/*block device*/) {
+			/* the init str ptr is changed in block devices to a pointer to BPB structures. */
+			/* The MS-DOS source code provides documentation on the device driver interface,
+			 * but the unclear way it is written implies that this is a pointer to an array of BPB structures.
+			 * In reality, it's an array of BPB structure pointers (the offset field only) that point to BPB
+			 * structures. Old Microsoft shit documentation, as usual.
+			 *
+			 * But at least in the MS-DOS 4.0 source code, this is much clearer from the ASM files that make up RAMDRIVE.SYS.
+			 *
+			 * The BPB structures provided by the driver follow the exact same structure as the BPB on disk. */
+			LOG(LOG_MISC,LOG_DEBUG)("Device driver set BPB array pointer to %04x:%04x and returned %u units",
+				s.bpb_ptr >> 16,s.bpb_ptr & 0xFFFFu,s.num_of_units);
+
+			/* adjust nextdrive by the number of units reported */
+			device_nextdrive = s.drive_num + s.num_of_units;
+
+			/* FIXME: I need a block device driver to test that provides multiple units from one driver */
+			if (s.num_of_units > 1) LOG(LOG_MISC,LOG_DEBUG)("FIXME: Multiple units from one device driver not yet supported");
+
+			/* Make a drive letter for each unit */
+			for (unsigned int i=0;i < s.num_of_units && i < 1/*<--remove this when multiple units supported*/;i++) {
+				uint16_t offset = real_readw(s.bpb_ptr>>16,(s.bpb_ptr&0xFFFFu)+(i*2));
+				if (offset == 0xFFFF) break; /* RAMDRIVE.SYS seems to fill entries past num_of_units with 0xFFFF */
+
+				uint8_t newdrv = s.drive_num + i;
+				if (newdrv < DOS_DRIVES && Drives[newdrv]) {
+					LOG(LOG_MISC,LOG_DEBUG)("Drive %c is already taken",newdrv+'A');
+					while (newdrv < DOS_DRIVES && Drives[newdrv]) newdrv++;
+
+					if (newdrv < DOS_DRIVES) {
+						LOG(LOG_MISC,LOG_DEBUG)("Attaching block device to drive %c instead",newdrv+'A');
+					}
+					else {
+						LOG(LOG_MISC,LOG_DEBUG)("There is no available drive letter for the block device");
+						continue;
+					}
+				}
+
+				/* assume the largest possible structure.
+				 * I don't have yet a device driver that uses the full structure or
+				 * that provides a disk larger than 32MB (RAMDRIVE.SYS limits itself to 32MB or less).
+				 * doing this also allows possible FAT32 support if a block device can actually support that.
+				 *
+				 * Maybe when Microsoft first defined this interface they should have designed it so the
+				 * device driver can indicate how many bytes the BPB structure occupies. */
+				FAT_BootSector::bpb_union_t bpb;
+				unsigned int bpb_sz = 13;/*assume structure according to MS-DOS 2.0 documentation that ends afer "FAT sector count"*/
+
+				LOG(LOG_MISC,LOG_DEBUG)("Reading BPB from driver at %04x:%04x (assuming up to %u bytes)",devseg,offset,(unsigned int)sizeof(bpb));
+				MEM_BlockRead(PhysMake(devseg,offset),&bpb,sizeof(bpb));
+
+				/* FIXME: MS-DOS 2.0 driver specification only mentions fields up to "number of sectors occupied by FAT".
+				 *
+				 *        RAMDRIVE.SYS fills out the BPB only up to the first 16 bits of the 32-bit "hidden sectors" field.
+				 *        In any case, anything beyond the media descriptor byte is not necessarily valid data. The BPB
+				 *        pointer it returns points directly into the in-memory image of the boot sector of the RAM disk.
+				 *
+				 *        If Microsoft had only thought while writing MS-DOS 2.0 to put a 16-bit or even 8-bit "size of struct"
+				 *        field at the beginning of the BPB struct in memory, it would be much easier to know whether structure members
+				 *        are actually there.
+				 *
+				 *        What exactly does MS-DOS expect for a BPB struct if the device driver allows >= 32MB drives?
+				 *        How does Windows 95/98/ME extend this crappy interface so block devices can handle FAT32? */
+
+				if (bpb.is_fat32() && (attr & DEVATTRBLK_EXTENDED)/*supports >=32MB*/)
+					bpb_sz = 29;/*FIXME: Assume that a FAT32 BPB in memory probably ends after the "32-bit FAT sector count" field*/
+				else if (bpb.v.BPB_TotSec16 == 0 && bpb.v.BPB_TotSec32 != 0 && (attr & DEVATTRBLK_EXTENDED)/*supports >=32MB*/)
+					bpb_sz = 25;/*FIXME: Assume that TotSec32 is valid and therefore the BPB struct ends after that field*/
+
+				/* zero out anything in the BPB past the assumed size, because it's probably structures or data specific to the device driver anyway */
+				if (bpb_sz < sizeof(bpb)) {
+					const unsigned int rem = sizeof(bpb) - bpb_sz;
+					assert((rem+bpb_sz) == sizeof(bpb));
+					memset(((char*)(&bpb))+bpb_sz,0,rem);
+				}
+
+				LOG(LOG_MISC,LOG_DEBUG)("BPB: assumed-size=%u bytes/sec=%u sec/clus=%u rsvdsec=%u numfat=%u rootent=%u totsec16=%u mtb=%02xh fatsz16=%u",
+					bpb_sz,
+					bpb.v.BPB_BytsPerSec,
+					bpb.v.BPB_SecPerClus,
+					bpb.v.BPB_RsvdSecCnt,
+					bpb.v.BPB_NumFATs,
+					bpb.v.BPB_RootEntCnt,
+					bpb.v.BPB_TotSec16,
+					bpb.v.BPB_Media,
+					bpb.v.BPB_FATSz16);
+
+				if (bpb.v.BPB_BytsPerSec >= 128 && bpb.v.BPB_BytsPerSec <= SECTOR_SIZE_MAX) {
+					imageDiskMSDOSBlockDevice *bd = new imageDiskMSDOSBlockDevice();
+					bd->attr = attr;
+					bd->unit_code = i;
+					bd->devseg = devseg;
+					bd->devhdr = PhysMake(devseg,0);
+					bd->bpbptr = PhysMake(devseg,offset);
+					bd->media_dpb = bpb.v.BPB_Media;
+					bd->sector_size = bpb.v.BPB_BytsPerSec;
+					if (bpb.v.BPB_TotSec16 == 0)
+						bd->image_length = (uint64_t)bd->sector_size * (uint64_t)bpb.v.BPB_TotSec32;
+					else
+						bd->image_length = (uint64_t)bd->sector_size * (uint64_t)bpb.v.BPB_TotSec16;
+
+					bd->diskSizeK = (bd->image_length + 1023) / 1024;
+
+					InitBdevBuf();
+					if (bd->image_length != 0) {
+						std::vector<std::string> opt;
+						DOS_Drive* nd = new fatDrive(bd,opt);
+						if ((dynamic_cast<fatDrive*>(nd))->created_successfully) {
+							DriveManager::AppendDisk(newdrv, nd);
+							DriveManager::InitializeDrive(newdrv);
+						}
+						else {
+							LOG(LOG_MISC,LOG_DEBUG)("Drive creation failed");
+							delete nd; /* releases and deletes bd */
+						}
+					}
+					else {
+						LOG(LOG_MISC,LOG_DEBUG)("Block device image length == 0, removed");
+						delete bd;
+					}
+				}
+			}
 		}
 	}
 
@@ -1568,10 +1906,14 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 
 	return true;
 }
+#endif
 
+#if !defined(OSFREE)
 std::string config_run_var_device;
 std::string config_run_var_devparm;
+#endif
 
+#if !defined(OSFREE)
 void CONFIG::Run(void) {
 	static const char* const params[] = {
 		"-r", "-wcp", "-wcd", "-wc", "-writeconf", "-wcpboot", "-wcdboot", "-wcboot", "-writeconfboot", "-bootconf", "-bc",
@@ -2142,7 +2484,7 @@ void CONFIG::Run(void) {
 							first_shell->SetEnv("CONFIG",date);
 						} else if (!strcasecmp(pvars[0].c_str(), "errorlevel")) {
 							WriteOut("%d\n",dos.return_code);
-							first_shell->SetEnv("CONFIG",std::to_string(dos.return_code).c_str());
+							first_shell->SetEnv("CONFIG",std::to_string((unsigned int)dos.return_code).c_str());
 						} else if (!strcasecmp(pvars[0].c_str(), "random")) {
 							initRand();
 							int random = rand()%32768;
@@ -2453,10 +2795,13 @@ next:
 
 	return;
 }
+#endif
 
+#if !defined(OSFREE)
 void CONFIG_ProgramStart(Program * * make) {
 	*make=new CONFIG;
 }
+#endif
 
 void PROGRAMS_DOS_Boot(Section *) {
 }

@@ -81,7 +81,8 @@ class imageDisk {
 			ID_D88,
 			ID_NFD,
 			ID_EMPTY_DRIVE,
-			ID_INT13
+			ID_INT13,
+			ID_MSDOSBLOCKDEV
 		};
 
 		virtual uint8_t Read_Sector(uint32_t head,uint32_t cylinder,uint32_t sector,void * data,unsigned int req_sector_size=0);
@@ -125,6 +126,7 @@ class imageDisk {
 		imageDisk(IMAGE_TYPE class_id);
 		uint8_t floppytype = 0;
 
+	public:
 		uint32_t reserved_cylinders = 0;
 		uint64_t image_base = 0;
 		uint64_t image_length = 0;
@@ -464,14 +466,12 @@ public:
     uint8_t Read_AbsoluteSector(uint32_t sectnum, void * data) override {
         unsigned char buffer[2048];
 
-        bool GetMSCDEXDrive(unsigned char drive_letter,CDROM_Interface **_cdrom);
-
-        CDROM_Interface *src_drive=NULL;
-        if (!GetMSCDEXDrive(CDROM_drive-'A',&src_drive)) return 0x05;
-
+	if (!src_drive)
+            return 0x05;
         if (!src_drive->ReadSectorsHost(buffer,false,cdrom_sector_offset+(sectnum>>2)/*512 byte/sector to 2048 byte/sector conversion*/,1))
             return 0x05;
 
+        if ((sectnum & 3) * 512 + 512 > sizeof(buffer)) return 0x05;
         memcpy(data,buffer+((sectnum&3)*512),512);
         return 0x00;
     }
@@ -484,6 +484,9 @@ public:
         diskimg = NULL;
         sector_size = 512;
         class_id = ID_EL_TORITO_FLOPPY;
+
+        bool GetMSCDEXDrive(unsigned char drive_letter,CDROM_Interface **_cdrom);
+        GetMSCDEXDrive(CDROM_drive-'A',&src_drive);/*addref src_drive*/
 
         if (floppy_emu_type == 1) { /* 1.2MB */
             heads = 2;
@@ -511,8 +514,13 @@ public:
         active = true;
     }
     virtual ~imageDiskElToritoFloppy() {
+        if (src_drive) {
+            src_drive->Release();
+            src_drive = NULL;
+        }
     }
 
+    CDROM_Interface *src_drive=NULL;
     unsigned char CDROM_drive;
     unsigned long cdrom_sector_offset;
     unsigned char floppy_type;
@@ -575,6 +583,7 @@ struct partTable {
 
 void updateDPT(void);
 void incrementFDD(void);
+void updateFloppyDPT(void);
 
 //in order to attach to the virtual IDE controllers, the disk must be mounted
 //  in the BIOS first (the imageDiskList array), so the IDE controller can obtain
@@ -604,8 +613,10 @@ void LogPrintPartitionTable(const std::vector<partTable::partentry_t> &parts);
 
 extern unsigned char INT13_ElTorito_NoEmuDriveNumber;
 extern signed char INT13_ElTorito_IDEInterface;
+extern CDROM_Interface * INT13_ElTorito_cdrom;
 extern char INT13_ElTorito_NoEmuCDROMDrive;
 
+#if !defined(OSFREE)
 class imageDiskINT13Drive : public imageDisk {
 public:
 	uint8_t Read_Sector(uint32_t head,uint32_t cylinder,uint32_t sector,void * data,unsigned int req_sector_size=0) override;
@@ -630,5 +641,26 @@ public:
 	imageDisk* subdisk = NULL;
 	bool busy = false;
 };
+#endif
+
+#if !defined(OSFREE)
+class imageDiskMSDOSBlockDevice : public imageDisk {
+public:
+	uint8_t Read_AbsoluteSector(uint32_t sectnum, void * data) override;
+	uint8_t Write_AbsoluteSector(uint32_t sectnum, const void * data) override;
+
+	bool detectDiskChange(void) override;
+
+	imageDiskMSDOSBlockDevice();
+	virtual ~imageDiskMSDOSBlockDevice();
+
+	uint8_t media_dpb = 0;
+	uint8_t unit_code = 0;
+	uint16_t devseg = 0;
+	uint16_t attr = 0;
+	PhysPt devhdr = 0;
+	PhysPt bpbptr = 0;
+};
+#endif
 
 #endif

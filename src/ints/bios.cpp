@@ -9716,7 +9716,9 @@ static void BIOSLOGO_PNG_READ(png_structp context,png_bytep buf,size_t count) {
 
 #endif
 
+#if !defined(OSFREE)
 extern unsigned int INT13Xfer;
+#endif
 
 class BIOS:public Module_base{
 private:
@@ -9736,7 +9738,9 @@ private:
 	INT13_ElTorito_NoEmuDriveNumber = 0;
 	INT13_ElTorito_NoEmuCDROMDrive = 0;
 	INT13_ElTorito_IDEInterface = -1;
+#if !defined(OSFREE)
 	INT13Xfer = 0;
+#endif
 
 	ACPI_mem_enable(false);
 	ACPI_REGION_SIZE = 0;
@@ -12755,6 +12759,11 @@ void BIOS_Destroy(Section* /*sec*/){
         delete test;
         test = NULL;
     }
+
+    if (INT13_ElTorito_cdrom) {
+        INT13_ElTorito_cdrom->Release();
+        INT13_ElTorito_cdrom = NULL;
+    }
 }
 
 void BIOS_OnPowerOn(Section* sec) {
@@ -12784,6 +12793,11 @@ void BIOS_OnResetComplete(Section *x) {
     if (biosConfigSeg != 0u) {
         ROMBIOS_FreeMemory((Bitu)(biosConfigSeg << 4u)); /* remember it was alloc'd paragraph aligned, then saved >> 4 */
         biosConfigSeg = 0u;
+    }
+
+    if (INT13_ElTorito_cdrom) {
+        INT13_ElTorito_cdrom->Release();
+        INT13_ElTorito_cdrom = NULL;
     }
 
     call_pnp_rp = 0;
