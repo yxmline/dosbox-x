@@ -5693,6 +5693,9 @@ std::string GetIDEPosition(unsigned char bios_disk_index);
 int CDROM_AllocateInterface(const char* physicalPath,int forceCD,uint16_t numDrive,CDROM_Interface **cdrom);
 extern int forceCD;
 
+bool IDE_CDROM_Attach(const std::string &opts,const std::vector<CDROM_Interface*> &cds);
+bool IDE_CDROM_Detach(const std::string &opts);
+
 class IMGMOUNT : public Program {
 	public:
 		bool opt_replace = false;
@@ -5785,16 +5788,14 @@ class IMGMOUNT : public Program {
 				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_EXAMPLE"));
 				return;
 			}
-			/* Check for unmounting */
-			std::string umount;
-			if (cmd->FindString("-u",umount,false)) {
-				Unmount(umount[0]);
-				return;
-			}
 
 			bool roflag = false;
 			if (cmd->FindExist("-ro",true))
 				roflag = true;
+
+			bool unmount = false;
+			if (cmd->FindExist("-u",true))
+				unmount = true;
 
 			//initialize more variables
 			unsigned long el_torito_floppy_base=~0UL;
@@ -5841,9 +5842,15 @@ class IMGMOUNT : public Program {
 				}
 			}
 
-			if (cmd->FindExist("-u",true)) {
+			if (unmount) {
 				if (tdr != 0) {
 					Unmount(tdr);
+				}
+				else if (device_spec == "ide") {
+					if (!IDE_CDROM_Detach(device_spec_opts)) {
+						LOG_MSG("Unable to detach IDE device");
+						WriteOut("Unable to detach IDE device\n");
+					}
 				}
 
 				if (!cmd->ExistsCommand(2)) return;
@@ -7380,10 +7387,12 @@ class IMGMOUNT : public Program {
 				cds.push_back(cdrom);
 			}
 
-			// TODO
-			LOG(LOG_MISC,LOG_DEBUG)("CD-ROM image ok=%u to %s:%s experimental",ok,device_spec.c_str(),device_spec_opts.c_str());
+			if (ok) {
+				if (device_spec == "ide") {
+					ok = IDE_CDROM_Attach(device_spec_opts,cds);
+				}
+			}
 
-			/* Failure path -- cleanup */
 			for (unsigned int i=0; i < cds.size(); i++) {
 				if (cds[i]) {
 					cds[i]->Release();
@@ -7391,6 +7400,8 @@ class IMGMOUNT : public Program {
 				}
 			}
 			cds.clear();
+
+			if (ok) return true;
 
 			WriteOut("Unable to attach to %s:%s\n",device_spec.c_str(),device_spec_opts.c_str());
 			return false;
