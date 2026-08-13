@@ -1308,9 +1308,9 @@ uint8_t device_nextdrive = 0;
 #endif
 
 #if !defined(OSFREE)
-uint8_t imageDiskMSDOSBlockDevice::Read_AbsoluteSector(uint32_t sectnum, void * data) {
+Int13Status imageDiskMSDOSBlockDevice::Read_AbsoluteSector(uint32_t sectnum, void * data) {
 	const unsigned int max_sects = (bdevbuf_sz - 16) / sector_size;
-	if (max_sects == 0) return 0x05;
+	if (max_sects == 0) return Int13Status::SectorNotFound;
 
 	const uint16_t count = 1;
 	const uint32_t sector = sectnum;
@@ -1334,7 +1334,7 @@ uint8_t imageDiskMSDOSBlockDevice::Read_AbsoluteSector(uint32_t sectnum, void * 
 		req.start_sector32 = sector;
 	}
 	else {
-		if (sector > 0xFFFFu) return 0x05;
+		if (sector > 0xFFFFu) return Int13Status::SectorNotFound;
 		req.start_sector = sector;
 		req.start_sector32 = 0;
 	}
@@ -1359,18 +1359,18 @@ uint8_t imageDiskMSDOSBlockDevice::Read_AbsoluteSector(uint32_t sectnum, void * 
 	LOG(LOG_MISC,LOG_DEBUG)("--result status=%x count=%u",
 		req.hdr.status,req.count);
 
-	if (req.hdr.status & 0x8000) return 0x05;/*error*/
-	if (req.count == 0) return 0x05;/*error*/
+	if (req.hdr.status & 0x8000) return Int13Status::ControllerFailure;/*error*/
+	if (req.count == 0) return Int13Status::ControllerFailure;/*error*/
 
 	MEM_BlockRead(PhysMake(bdevbuf_seg+1,0),p_data,sector_size);
-        return 0;
+        return Int13Status::NoError;
 }
 #endif
 
 #if !defined(OSFREE)
-uint8_t imageDiskMSDOSBlockDevice::Write_AbsoluteSector(uint32_t sectnum, const void * data) {
+Int13Status imageDiskMSDOSBlockDevice::Write_AbsoluteSector(uint32_t sectnum, const void * data) {
 	const unsigned int max_sects = (bdevbuf_sz - 16) / sector_size;
-	if (max_sects == 0) return 0x05;
+	if (max_sects == 0) return Int13Status::SectorNotFound;
 
 	const uint16_t count = 1;
 	const uint32_t sector = sectnum;
@@ -1394,7 +1394,7 @@ uint8_t imageDiskMSDOSBlockDevice::Write_AbsoluteSector(uint32_t sectnum, const 
 		req.start_sector32 = sector;
 	}
 	else {
-		if (sector > 0xFFFFu) return 0x05;
+		if (sector > 0xFFFFu) return Int13Status::SectorNotFound;
 		req.start_sector = sector;
 		req.start_sector32 = 0;
 	}
@@ -1420,10 +1420,10 @@ uint8_t imageDiskMSDOSBlockDevice::Write_AbsoluteSector(uint32_t sectnum, const 
 	LOG(LOG_MISC,LOG_DEBUG)("--result status=%x count=%u",
 		req.hdr.status,req.count);
 
-	if (req.hdr.status & 0x8000) return 0x05;/*error*/
-	if (req.count == 0) return 0x05;/*error*/
+	if (req.hdr.status & 0x8000) return Int13Status::ControllerFailure;/*error*/
+	if (req.count == 0) return Int13Status::ControllerFailure;/*error*/
 
-        return 0;
+        return Int13Status::NoError;
 }
 #endif
 
@@ -1514,7 +1514,11 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 
 	/* redirect the stack pointer */
 	CPU_SetSegGeneral(ss,dos.psp());
-	reg_esp = psp_sz - 2u;
+
+	// WARNING: We're going to call DOS_Execute() which calls CALLBACK_SCF() which modifies reg_sp+4 to set/clear CF.
+	//          Therefore instead of using psp_sz - 2 this code must use psp_sz - 6 or else CALLBACK_SCF() will corrupt
+	//          one bit in the next MCB block following ours.
+	reg_esp = psp_sz - 6u;
 
 	/* allocate a new memory block to hold the device driver image. */
 	/* ownership remains with CONFIG unless successful driver init and initialization, so that on error it is freed automatically */
@@ -1525,6 +1529,7 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 	if (!DOS_AllocateMemory(&devseg,&blocks))
 		return false;
 
+	uint16_t initfmcb = dos_infoblock.GetFirstMCB();
 	uint8_t devseg_mcb[16];
 	MEM_BlockRead(PhysMake(devseg-1,0),devseg_mcb,16);
 
@@ -1540,6 +1545,10 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 			LOG(LOG_MISC,LOG_DEBUG)("Allocated memory for driver is the first in MCB chain, may adjust it forward");
 			adj_mcb_base = true;
 			devseg--; /* load overtop the MCB */
+
+			/* temporarily place the first MCB segment at ourself to avoid "corrupt MCB chain" faults if anything happens during this process */
+			LOG(LOG_MISC,LOG_DEBUG)("Temporarily setting MCB chain start to %x",(uint16_t)(dos.psp()-1));
+			dos_infoblock.SetFirstMCB(dos.firstMCB=(uint16_t)(dos.psp()-1));
 		}
 	}
 
@@ -1554,7 +1563,10 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 	 * If you've ever wondered how MS-DOS allows EMM386.EXE to work as both an executable program
 	 * AND a device driver, and how DEVICE=C:\DOS\EMM386.EXE is even allowed, that is how. */
 	if (!DOS_Execute(device.c_str(),devseg | ((devseg+blocks)<<16u),DOSEXEC_DEVICEDRIVER)) {
-		if (adj_mcb_base) MEM_BlockWrite(PhysMake(devseg,0),devseg_mcb,16); /* put the MCB back */
+		if (adj_mcb_base) {
+			MEM_BlockWrite(PhysMake(devseg,0),devseg_mcb,16); /* put the MCB back */
+			dos_infoblock.SetFirstMCB(dos.firstMCB=initfmcb);
+		}
 		return false;
 	}
 
@@ -1665,7 +1677,10 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 			while (s.drive_num<DOS_DRIVES && Drives[s.drive_num]) s.drive_num++;
 
 			if (s.drive_num >= DOS_DRIVES) {
-				if (adj_mcb_base) MEM_BlockWrite(PhysMake(devseg,0),devseg_mcb,16); /* put the MCB back */
+				if (adj_mcb_base) {
+					MEM_BlockWrite(PhysMake(devseg,0),devseg_mcb,16); /* put the MCB back */
+					dos_infoblock.SetFirstMCB(dos.firstMCB=initfmcb);
+				}
 				LOG(LOG_MISC,LOG_DEBUG)("No available drive letters for block device");
 				return false;
 			}
@@ -1715,14 +1730,20 @@ bool DeviceLoad(const std::string &device,const std::string &devparm) {
 		if (newend_seg == 0 || PhysMake(newend_seg,newend_ofs) == PhysMake(devseg,0)) { /* normal error out */
 			/* don't need to say anything, the driver will normally say it failed and probably why */
 			LOG(LOG_MISC,LOG_DEBUG)("Device driver indicates normal error out by setting the end_ptr to effectively remove itself from memory");
-			if (adj_mcb_base) MEM_BlockWrite(PhysMake(devseg,0),devseg_mcb,16); /* put the MCB back */
+			if (adj_mcb_base) {
+				MEM_BlockWrite(PhysMake(devseg,0),devseg_mcb,16); /* put the MCB back */
+				dos_infoblock.SetFirstMCB(dos.firstMCB=initfmcb);
+			}
 			return false;
 		}
 		else if (
 			PhysMake(newend_seg,newend_ofs) < PhysMake(devseg,32)/*oh come on, keep at least 32 bytes of yourself around!*/ ||
 			PhysMake(newend_seg,newend_ofs) > PhysMake(devseg+blocks,0)/*you cannot make your driver bigger than the original size!*/) {
 			LOG(LOG_MISC,LOG_DEBUG)("Device driver indicates error with invalid end_ptr");
-			if (adj_mcb_base) MEM_BlockWrite(PhysMake(devseg,0),devseg_mcb,16); /* put the MCB back */
+			if (adj_mcb_base) {
+				MEM_BlockWrite(PhysMake(devseg,0),devseg_mcb,16); /* put the MCB back */
+				dos_infoblock.SetFirstMCB(dos.firstMCB=initfmcb);
+			}
 			return false;
 		}
 

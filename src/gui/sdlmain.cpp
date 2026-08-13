@@ -7836,7 +7836,9 @@ void DOS_KeyboardLayout_Init();
 void CDROM_Image_Init();
 void MSCDEX_Init();
 void DRIVES_Init();
+#if !defined(OSFREE)
 void IPX_Init();
+#endif
 void IDE_Init();
 void NE2K_Init();
 void FDC_Primary_Init();
@@ -8564,42 +8566,77 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 
     configfile = "";
     exepath = GetDOSBoxXPath();
+    std::string config_path = Cross::GetPlatformConfigDir();
     std::string workdiropt = "default";
     std::string workdirdef = "";
+    std::string res_path = Cross::GetPlatformResDir();
+    std::string tmp = Cross::GetPlatformConfigName();
+    std::string config_combined = config_path + tmp;
+
     struct stat st;
-    if (!control->opt_defaultconf && control->config_file_list.empty() && stat("dosbox-x.conf", &st) && stat("dosbox.conf", &st)) {
-        /* load the global config file first */
-        std::string tmp,config_path,config_combined;
 
-        /* -- Parse configuration files */
-        config_path = Cross::GetPlatformConfigDir();
-        tmp = Cross::GetPlatformConfigName();
-
-        if (exepath.size()) {
-            control->ParseConfigFile((exepath + "dosbox-x.conf").c_str());
-            if (!control->configfiles.size()) control->ParseConfigFile((exepath + "dosbox.conf").c_str());
-        }
-
-        config_combined = config_path + "dosbox-x.conf";
-        if (!control->configfiles.size() && stat(config_combined.c_str(),&st) == 0 && S_ISREG(st.st_mode))
-            control->ParseConfigFile(config_combined.c_str());
-
-        config_combined = config_path + tmp;
-        if (!control->configfiles.size() && stat(config_combined.c_str(),&st) == 0 && S_ISREG(st.st_mode))
-            control->ParseConfigFile(config_combined.c_str());
-
-        if (control->configfiles.size()) configfile = control->configfiles.front();
-
-        Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));
-        workdiropt = section->Get_string("working directory option");
-        workdirdef = section->Get_path("working directory default")->realpath;
-        std::string resolvestr = section->Get_string("resolve config path");
-        resolveopt = resolvestr=="true"||resolvestr=="1"?1:(resolvestr=="dosvar"?2:(resolvestr=="tilde"?3:0));
-        void ResolvePath(std::string& in);
-        ResolvePath(workdirdef);
-
+    control->ParseConfigFile(config_combined.c_str());
+    if(!control->configfiles.size() && config_combined.size()) {
+        control->PrintConfig(config_combined.c_str()); // create a default userconfig file if it doesn't exist
+    }
+    else {
         control->ClearExtraData();
         control->configfiles.clear();
+    }
+
+    if (!control->opt_defaultconf && control->config_file_list.empty()) {
+        /* load the global config file first */
+
+        /* -- Parse configuration files */
+        /* First search the current directory */
+        control->ParseConfigFile("dosbox-x.conf");
+        if(control->configfiles.size()) configfile = "dosbox-x.conf";
+        else {
+            control->ParseConfigFile("dosbox.conf");
+            if(control->configfiles.size()) configfile = "dosbox.conf";
+        }
+
+        /* If conf file not found, search the directory where the executable exists */
+        if (!control->configfiles.size() && exepath.size()) {
+            control->ParseConfigFile((exepath + "dosbox-x.conf").c_str());
+            if(control->configfiles.size()) configfile = exepath + "dosbox-x.conf";
+            else {
+                control->ParseConfigFile((exepath + "dosbox.conf").c_str());
+                if(control->configfiles.size()) configfile = exepath + "dosbox.conf";
+            }
+        }
+
+        /* If conf file still not found, search the userconfig */
+        config_combined = config_path + "dosbox-x.conf";
+        if(!control->configfiles.size() && stat(config_combined.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
+            control->ParseConfigFile(config_combined.c_str());
+            if(control->configfiles.size()) configfile = config_combined;
+        }
+        config_combined = config_path + "dosbox.conf";
+        if(!control->configfiles.size() && stat(config_combined.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
+            control->ParseConfigFile(config_combined.c_str());
+            if(control->configfiles.size()) configfile = config_combined;
+        }
+
+        config_combined = config_path + tmp;
+        if (!control->configfiles.size() && stat(config_combined.c_str(),&st) == 0 && S_ISREG(st.st_mode)) {
+            control->ParseConfigFile(config_combined.c_str());
+            if(control->configfiles.size()) configfile = config_combined;
+        }
+
+        if(configfile.size()) {
+            Section_prop* section = static_cast<Section_prop*>(control->GetSection("dosbox"));
+            workdiropt = section->Get_string("working directory option");
+            workdirdef = section->Get_path("working directory default")->realpath;
+            std::string resolvestr = section->Get_string("resolve config path");
+            resolveopt = resolvestr == "true" || resolvestr == "1" ? 1 : (resolvestr == "dosvar" ? 2 : (resolvestr == "tilde" ? 3 : 0));
+            void ResolvePath(std::string & in);
+            ResolvePath(workdirdef);
+
+            control->ClearExtraData();
+            control->configfiles.clear();
+            // LOG_MSG("working directory default=%s, working directory option=%s", workdiropt.c_str(), workdirdef.c_str());
+        }
     }
 
     if (workdiropt == "prompt" && control->opt_promptfolder < 0) control->opt_promptfolder = 1;
@@ -8610,13 +8647,12 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         control->opt_used_defaultdir = true;
         usecfgdir = false;
     } else if (workdiropt == "userconfig") {
-        std::string config_path;
-        config_path = Cross::GetPlatformConfigDir();
         if (config_path.size()) {
             if (chdir(config_path.c_str()) == -1) {
                 LOG(LOG_GUI, LOG_ERROR)("sdlmain.cpp main() failed to change directories for workdiropt 'userconfig'.");
             }
         }
+        control->opt_promptfolder = 0;
         control->opt_used_defaultdir = true;
         usecfgdir = false;
     } else if (workdiropt == "program") {
@@ -8626,9 +8662,11 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                 LOG(LOG_GUI, LOG_ERROR)("sdlmain.cpp main() failed to change directories for workdiropt 'program'.");
             }
         }
+        control->opt_promptfolder = 0;
         control->opt_used_defaultdir = true;
         usecfgdir = false;
     } else if (workdiropt == "config") {
+        control->opt_promptfolder = 0;
         control->opt_used_defaultdir = true;
         usecfgdir = true;
     }
@@ -8643,26 +8681,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 
 #if defined(MACOSX) || defined(LINUX) || (defined(WIN32) && !defined(HX_DOS))
     {
-        if(control->opt_promptfolder < 0) {
-#if !defined(MACOSX)
-            struct stat st;
-
-            /* if dosbox.conf or dosbox-x.conf already exists in the current working directory, then skip folder prompt */
-            if(stat("dosbox-x.conf", &st) == 0 || stat("dosbox.conf", &st) == 0) {
-                if(S_ISREG(st.st_mode)) {
-                    control->opt_promptfolder = 0;
-                }
-            }
-#endif
-            std::string res_path;
-            res_path = Cross::GetPlatformResDir();
-            if(stat((res_path + "dosbox-x.conf").c_str(), &st) == 0) {
-                if(S_ISREG(st.st_mode)) {
-                    control->opt_promptfolder = 0;
-                }
-            }
-        }
-
 #if defined(WIN32)
         /* A Windows application cannot detect with isatty() if run from the command prompt.
         *  isatty() returns true even though STDIN/STDOUT/STDERR do not exist even if run from the command prompt. */
@@ -8671,15 +8689,18 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
 #else
         std::unique_ptr<char[]> cwd(new char[PATH_MAX]);
         if (control->opt_promptfolder < 0 && getcwd(cwd.get(), PATH_MAX) != nullptr)
-            control->opt_promptfolder = (!isatty(0) || !strcmp(cwd.get(), "/")) ? 1 : 0;
+            control->opt_promptfolder = (!isatty(0) || !strcmp(cwd.get(), "/") || (workdiropt == "default" || workdiropt == "autoprompt")) ? 1 : 0;
 #endif
-        if (control->opt_promptfolder == 1 && workdiropt == "default" && workdirdef.size()) {
+        if (control->opt_promptfolder == 1 && (workdiropt == "default" || workdiropt == "autoprompt") && workdirdef.size()) {
             control->opt_promptfolder = 0;
             if(chdir(workdirdef.c_str()) == -1) {
                 LOG(LOG_GUI, LOG_ERROR)("sdlmain.cpp main() failed to change directories for workdiropt 'default'.");
+                control->opt_promptfolder = 1;
             }
-            control->opt_used_defaultdir = true;
-            usecfgdir = false;
+            else {
+                control->opt_used_defaultdir = true;
+                usecfgdir = false;
+            }
         }
 
         /* When we're run from the Finder, the current working directory is often / (the
@@ -8784,18 +8805,20 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                     return 1;
                 }
 #endif
-                LOG_MSG("User selected folder '%s', making that the current working directory.\n",path.c_str());
+#if defined(WIN32) && !defined(HX_DOS)
+                int len = WideCharToMultiByte(CP_UTF8, 0, path.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                std::string utf8(len - 1, '\0');
+                WideCharToMultiByte(CP_UTF8, 0, path.c_str(), -1, &utf8[0], len, nullptr, nullptr);
+                LOG_MSG("User selected folder '%s', making that the current working directory.", utf8.c_str());
+#else
+                LOG_MSG("User selected folder '%s', making that the current working directory.", path.c_str());
+#endif 
                 control->opt_used_defaultdir = true;
             }
         }
     }
 #endif
-    std::string tmp, config_path, res_path, config_combined;
     /* -- Parse configuration files */
-    config_path = Cross::GetPlatformConfigDir();
-    res_path = Cross::GetPlatformResDir();
-    tmp = Cross::GetPlatformConfigName();
-    config_combined = config_path + tmp;
     {
 
 #if defined(WIN32) && !defined(C_SDL2) && !defined(HX_DOS) && !defined(_WIN32_WINDOWS)
@@ -8833,9 +8856,10 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
             }
         }
 
+        tmp = Cross::GetPlatformConfigName();
+        config_combined = config_path + tmp;
         /* -- -- first the user config file */
         if (control->opt_userconf || workdirsave>0) {
-
             LOG(LOG_MISC,LOG_DEBUG)("Loading config file according to -userconf from %s",config_combined.c_str());
             control->ParseConfigFile(config_combined.c_str());
             if (!control->configfiles.size()) {
@@ -8848,7 +8872,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                         tsec->HandleInputline("working directory option=autoprompt");
                 }
                 //Try to create the userlevel configfile.
-                config_path = Cross::CreatePlatformConfigDir();
 
                 LOG(LOG_MISC,LOG_DEBUG)("Attempting to write config file according to -userconf, to %s",config_combined.c_str());
                 if (control->PrintConfig(config_combined.c_str())) {
@@ -9215,8 +9238,6 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
                 LOG(LOG_GUI, LOG_ERROR)("sdlmain.cpp main() failed to change directories for workdiropt 'custom' or 'force'.");
             }
         } else if (workdiropt == "userconfig") {
-            std::string config_path;
-            config_path = Cross::GetPlatformConfigDir();
             if(config_path.size()) {
                 if(chdir(config_path.c_str()) == -1) {
                     LOG(LOG_GUI, LOG_ERROR)("sdlmain.cpp main() failed to change directories for workdiropt 'userconfig'.");
@@ -9765,8 +9786,10 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         EMS_Init();
 #endif
         AUTOEXEC_Init();
-#if C_IPX
+#if !defined(OSFREE)
+# if C_IPX
         IPX_Init();
+# endif
 #endif
         MSCDEX_Init();
         CDROM_Image_Init();
