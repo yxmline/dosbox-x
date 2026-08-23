@@ -45,7 +45,13 @@
 #include "cdrom.h"
 #include "builtin.h"
 #include "bios_disk.h"
+#include "imagedisk_d88.h"
+#include "imagedisk_eltorito.h"
+#include "imagedisk_emptydrive.h"
+#include "imagedisk_int13.h"
+#include "imagedisk_nfd.h"
 #include "imagedisk_teledisk.h"
+#include "imagedisk_vfd.h"
 #include "dos_system.h"
 #include "dos_inc.h"
 #include "bios.h"
@@ -9911,6 +9917,7 @@ int flagged_backup(char *zip)
 					uint16_t handle = 0;
 					if (DOS_FindDevice(("\""+std::string(g_flagged_files[i])+"\"").c_str()) != DOS_DEVICES || !DOS_OpenFile(("\""+std::string(g_flagged_files[i])+"\"").c_str(),0,&handle)) {
 						LOG_MSG(MSG_Get("SHELL_CMD_FILE_NOT_FOUND"),g_flagged_files[i]);
+						i++;
 						continue;
 					}
 
