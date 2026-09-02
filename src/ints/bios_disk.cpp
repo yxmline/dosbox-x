@@ -16,8 +16,14 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <assert.h>
+#include <cassert>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "dosbox.h"
 #include "callback.h"
@@ -28,7 +34,6 @@
 #include "mem.h"
 #include "dos_inc.h" /* for Drives[] */
 #include "../dos/drives.h"
-#include "mapper.h"
 #include "ide.h"
 #include "cpu.h"
 
@@ -341,6 +346,13 @@ static const uint8_t hdddiskboot[] = {
     0x12,0x3c,0x04,0x35,0x04,0x24,0x01,0x25,0x00,0x00,
 };
 
+/* The packed on-disk structures (direntry, bootstrap) below are only accessed
+ * through var_read()/var_write(), which do byte-wise unaligned-safe host I/O,
+ * so -Waddress-of-packed-member is a false positive here. */
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+#endif
 struct fatFromDOSDrive
 {
 	DOS_Drive* drive;
@@ -761,7 +773,7 @@ struct fatFromDOSDrive
             STOREINTELDWORD(&pe.ipl_cyl, 1);
             STOREINTELDWORD(&pe.cyl, 1);
             STOREINTELDWORD(&pe.end_cyl, sasi.cylinders);
-            strncpy(pe.name, "MS-DOS          ", 16);
+            memcpy(pe.name, "MS-DOS          ", 16); // fixed-width, space-padded, not NUL-terminated
             memset(&pt, 0, sizeof(pt));
             memcpy(&pt,&pe,sizeof(pe));
         }
@@ -831,8 +843,8 @@ struct fatFromDOSDrive
 		var_write(&bootsec.fatcopies, 2);
 		var_write(&bootsec.totalsectorcount, 0); // 16 bit field is 0, actual value is in totalsecdword
 		var_write(&bootsec.mediadescriptor, 0xF8); //also in FAT[0]
-		var_write(&bootsec.sectorspertrack, IS_PC98_ARCH ? sasi.sectors : SECTORSPERTRACK);
-		var_write(&bootsec.headcount, IS_PC98_ARCH ? sasi.surfaces : HEADCOUNT);
+		var_write(&bootsec.sectorspertrack, IS_PC98_ARCH ? (uint16_t)sasi.sectors : (uint16_t)SECTORSPERTRACK);
+		var_write(&bootsec.headcount, IS_PC98_ARCH ? (uint16_t)sasi.surfaces : (uint16_t)HEADCOUNT);
 		var_write(&bootsec.hiddensectorcount, IS_PC98_ARCH ? sect_boot_pc98 : SECT_BOOT);
 		var_write(&bootsec.totalsecdword, partSize);
 		bootsec.magic1 = 0x55; bootsec.magic2 = 0xaa;
@@ -885,7 +897,7 @@ struct fatFromDOSDrive
 		if (head > 0xFF || sector > 0x3F || cylinder > 0x3FF)
             LOG_MSG("Warning: Invalid CHS data - %X, %X, %X\n", head, sector, cylinder);
 		chs[0] = (uint8_t)(head & 0xFF);
-		chs[1] = (uint8_t)((sector & 0x3F) | ((cylinder >> 8) & 0x3));
+		chs[1] = (uint8_t)((sector & 0x3F) | ((cylinder >> 2) & 0xC0));
 		chs[2] = (uint8_t)(cylinder & 0xFF);
 	}
 
@@ -1063,6 +1075,9 @@ struct fatFromDOSDrive
             return false;
     }
 };
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 bool saveDiskImage(imageDisk *image, const char *name) {
     return image && image->ffdd && image->ffdd->SaveImage(name);
@@ -1087,7 +1102,7 @@ diskGeo DiskGeometryList[] = {
     {1520, 19, 2, 80, 2, 512, 224, 1, 0xF9, 10},      // IBM PC high density 5.25" double-sided 1.52MB (XDF)
     {1840, 23, 2, 80, 4, 512, 224, 1, 0xF0, 12},      // IBM PC high density 3.5" double-sided 1.84MB (XDF)
 
-    {   0,  0, 0,  0, 0,    0,  0, 0,    0}
+    {   0,  0, 0,  0, 0,    0,  0, 0,    0, 0}
 };
 
 Bitu call_int13 = 0;
@@ -1202,7 +1217,7 @@ void updateFloppyDPT(void) {
             }
             else if (fi == 0) {
                 /* Present it as a 1.44MB drive */
-                uint32_t tmpheads = 2, tmpcyl = 80, tmpsect = 18, tmpsize = 512;
+                uint32_t tmpsect = 18, tmpsize = 512;
 
                 /* taken from a QEMU VM */
                 phys_writeb(tp+0,0xAF);
@@ -1757,6 +1772,12 @@ imageDisk::~imageDisk()
         delete ffdd;
 }
 
+/* var_read() on the packed bootstrap fields below is unaligned-safe by design,
+ * so -Waddress-of-packed-member is a false positive here. */
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+#endif
 void imageDisk::Set_GeometryForHardDisk()
 {
 	sector_size = 512;
@@ -1787,6 +1808,9 @@ void imageDisk::Set_GeometryForHardDisk()
     LBA = (uint64_t)diskimgsize / sector_size;
     Set_Geometry(16, diskimgsize / (512 * 63 * 16), 63, 512);
 }
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 void imageDisk::Set_Geometry(uint32_t setHeads, uint32_t setCyl, uint32_t setSect, uint32_t setSectSize) {
 
@@ -1951,12 +1975,24 @@ char INT13_ElTorito_NoEmuCDROMDrive = 0;
 
 bool GetMSCDEXDrive(unsigned char drive_letter, CDROM_Interface **_cdrom);
 
+/* Bytes/sector for a floppy transfer as a real BIOS would use it: taken from the disk
+ * base table pointed to by INT 1Eh (offset +3, sector-size code 0=128,1=256,2=512,3=1024,...)
+ * rather than assuming 512. A guest may reprogram INT 1Eh to access non-512 media. */
+static uint32_t floppyDPT_sector_size(void) {
+    RealPt dpt = RealGetVec(0x1E);
+    if (dpt) {
+        uint8_t code = real_readb(RealSeg(dpt), RealOff(dpt) + 3);
+        if (code <= 6) return 128u << code;
+    }
+    return 512;
+}
 
 static Bitu INT13_DiskHandler(void) {
     uint16_t segat, bufptr;
     uint8_t sectbuf[2048/*CD-ROM support*/];
     uint8_t  drivenum;
     Bitu  i,t;
+    uint32_t rd_cyl = 0, rd_sect = 0, secsz = 512;
     uint64_t LBA = 0;
     last_drive = reg_dl;
     drivenum = GetDosDriveNumber(reg_dl);
@@ -2070,10 +2106,21 @@ static Bitu INT13_DiskHandler(void) {
             return CBRET_NONE;
         }
 
+        /* Floppies (DL bit 7 clear) use an 8-bit cylinder in CH and an 8-bit sector in CL.
+         * Hard disks (DL bit 7 set) use a 10-bit cylinder (upper 2 bits in CL bits 6-7)
+         * and a 6-bit sector (CL bits 0-5). */
+        rd_cyl  = (reg_dl & 0x80) ? (uint32_t)(reg_ch | ((reg_cl & 0xc0) << 2)) : (uint32_t)reg_ch;
+        rd_sect = (reg_dl & 0x80) ? (uint32_t)(reg_cl & 63) : (uint32_t)reg_cl;
         segat = SegValue(es);
         bufptr = reg_bx;
+        /* Floppies transfer the bytes/sector given by the INT 1Eh disk base table; hard disks use 512. */
+        secsz = (reg_dl & 0x80) ? 512 : floppyDPT_sector_size();
+        if (secsz > sizeof(sectbuf)) {
+            LOG(LOG_BIOS,LOG_ERROR)("INT 13h: DPT bytes/sector %u exceeds buffer, clamping to %u",(unsigned int)secsz,(unsigned int)sizeof(sectbuf));
+            secsz = sizeof(sectbuf);
+        }
         for(i=0;i<reg_al;i++) {
-            last_status = imageDiskList[drivenum]->Read_Sector((uint32_t)reg_dh, (uint32_t)(reg_ch | ((reg_cl & 0xc0)<< 2)), (uint32_t)((reg_cl & 63)+i), sectbuf);
+            last_status = imageDiskList[drivenum]->Read_Sector((uint32_t)reg_dh, rd_cyl, rd_sect+i, sectbuf);
 
             if (imageDiskList[drivenum]->class_id == imageDisk::ID_EL_TORITO_FLOPPY)
                 diskio_delay(512);
@@ -2083,7 +2130,7 @@ static Bitu INT13_DiskHandler(void) {
                 diskio_delay(512);
 
             /* IDE emulation: simulate change of IDE state that would occur on a real machine after INT 13h */
-            IDE_EmuINT13DiskReadByBIOS(reg_dl, (uint32_t)(reg_ch | ((reg_cl & 0xc0)<< 2)), (uint32_t)reg_dh, (uint32_t)((reg_cl & 63)+i));
+            IDE_EmuINT13DiskReadByBIOS(reg_dl, rd_cyl, (uint32_t)reg_dh, rd_sect+i);
 
             if((last_status != Int13Status::NoError) || killRead) {
                 LOG_MSG("Error in disk read");
@@ -2092,7 +2139,7 @@ static Bitu INT13_DiskHandler(void) {
                 CALLBACK_SCF(true);
                 return CBRET_NONE;
             }
-            for(t=0;t<512;t++) {
+            for(t=0;t<secsz;t++) {
                 real_writeb(segat,bufptr,sectbuf[t]);
                 bufptr++;
             }
@@ -2122,9 +2169,18 @@ static Bitu INT13_DiskHandler(void) {
             return CBRET_NONE;
         }
 
+        /* See INT 13h AH=02h read: floppies use 8-bit cylinder/8-bit sector, hard disks 10-bit/6-bit. */
+        rd_cyl  = (reg_dl & 0x80) ? (uint32_t)(reg_ch | ((reg_cl & 0xc0) << 2)) : (uint32_t)reg_ch;
+        rd_sect = (reg_dl & 0x80) ? (uint32_t)(reg_cl & 63) : (uint32_t)reg_cl;
         bufptr = reg_bx;
+        /* Floppies transfer the bytes/sector given by the INT 1Eh disk base table; hard disks use the image sector size. */
+        secsz = (reg_dl & 0x80) ? imageDiskList[drivenum]->getSectSize() : floppyDPT_sector_size();
+        if (secsz > sizeof(sectbuf)) {
+            LOG(LOG_BIOS,LOG_ERROR)("INT 13h: DPT bytes/sector %u exceeds buffer, clamping to %u",(unsigned int)secsz,(unsigned int)sizeof(sectbuf));
+            secsz = sizeof(sectbuf);
+        }
         for(i=0;i<reg_al;i++) {
-            for(t=0;t<imageDiskList[drivenum]->getSectSize();t++) {
+            for(t=0;t<secsz;t++) {
                 sectbuf[t] = real_readb(SegValue(es),bufptr);
                 bufptr++;
             }
@@ -2134,7 +2190,7 @@ static Bitu INT13_DiskHandler(void) {
             else
                 diskio_delay(512);
 
-            last_status = imageDiskList[drivenum]->Write_Sector((uint32_t)reg_dh, (uint32_t)(reg_ch | ((reg_cl & 0xc0) << 2)), (uint32_t)((reg_cl & 63) + i), &sectbuf[0]);
+            last_status = imageDiskList[drivenum]->Write_Sector((uint32_t)reg_dh, rd_cyl, rd_sect + i, &sectbuf[0]);
             if(last_status != Int13Status::NoError) {
                 reg_ah = (uint8_t)last_status;
                 CALLBACK_SCF(true);
@@ -2160,7 +2216,7 @@ static Bitu INT13_DiskHandler(void) {
         segat = SegValue(es);
         bufptr = reg_bx;
         for(i=0;i<reg_al;i++) {
-            last_status = imageDiskList[drivenum]->Read_Sector((uint32_t)reg_dh, (uint32_t)(reg_ch | ((reg_cl & 0xc0)<< 2)), (uint32_t)((reg_cl & 63)+i), sectbuf);
+            last_status = imageDiskList[drivenum]->Read_Sector((uint32_t)reg_dh, rd_cyl, rd_sect+i, sectbuf);
             if(last_status != 0x00) {
                 LOG_MSG("Error in disk read");
                 CALLBACK_SCF(true);
@@ -2258,7 +2314,10 @@ static Bitu INT13_DiskHandler(void) {
         }
 
         reg_ch = (uint8_t)(tmpcyl & 0xff);
-        reg_cl = (uint8_t)(((tmpcyl >> 2) & 0xc0) | (tmpsect & 0x3f)); 
+        if (reg_dl & 0x80) /* hard disk: 10-bit cylinder, 6-bit sector */
+            reg_cl = (uint8_t)(((tmpcyl >> 2) & 0xc0) | (tmpsect & 0x3f));
+        else /* floppy: 8-bit cylinder in CH, 8-bit sector in CL */
+            reg_cl = (uint8_t)(tmpsect & 0xff);
         reg_dh = (uint8_t)tmpheads;
         last_status = Int13Status::NoError;
         if (reg_dl&0x80) {  // harddisks
