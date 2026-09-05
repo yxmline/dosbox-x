@@ -52,6 +52,7 @@
 #include <ctime>
 #include <unistd.h>
 #include "dosbox.h"
+#include "agent/agent_bridge.h"
 #include "debug.h"
 #include "cpu.h"
 #include "logging.h"
@@ -466,6 +467,7 @@ static Bitu Normal_Loop(void) {
 
     try {
         while (1) {
+            dosbox_agent::AGENT_BridgePump();
             if (PIC_RunQueue()) {
                 /* now is the time to check for the NMI (Non-maskable interrupt) */
                 CPU_Check_NMI();
@@ -737,6 +739,8 @@ volatile int runmachine_recursion = 0;
 
 void DOSBOX_RunMachine(void){
     Bitu ret;
+
+    dosbox_agent::AGENT_BridgeAttachToCurrentThread();
 
     extern unsigned int last_callback;
     unsigned int p_last_callback = last_callback;
@@ -4646,6 +4650,14 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool = secprop->Add_bool("xms",Property::Changeable::WhenIdle,true);
     Pbool->Set_help("Enable XMS support.");
     Pbool->SetBasic(true);
+
+    Pint = secprop->Add_int("ext dev read limit",Property::Changeable::WhenIdle,0);
+    Pint->Set_help("If nonzero, limit device reads to this many bytes. If the device driver cannot handle anything other than single-byte reads, set this to 1");
+    Pint->SetBasic(true);
+
+    Pint = secprop->Add_int("ext dev write limit",Property::Changeable::WhenIdle,0);
+    Pint->Set_help("If nonzero, limit device writes to this many bytes. If the device driver cannot handle anything other than single-byte writes, set this to 1");
+    Pint->SetBasic(true);
 
     /* maybe this will stop the endless "it's broken and it only works once you point out LOADFIX -a" bug reports */
     Pbool = secprop->Add_bool("turn off a20 gate on load if loadfix needed",Property::Changeable::WhenIdle,false);

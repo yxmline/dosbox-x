@@ -87,7 +87,7 @@
   </PropertyGroup>
   <!-- Visual Studio 2017 (15.0) -->
   <PropertyGroup Condition="'$(VisualStudioVersion)' == '15.0'">
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
   </PropertyGroup>
   <!--
     End of: Switch the PlatformToolset based on the Visual Studio Version
