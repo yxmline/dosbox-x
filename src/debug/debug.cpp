@@ -18,26 +18,23 @@
 
 
 #include "dosbox.h"
-#if defined(C_DOSBOX_AGENT)
-#include "agent/agent_bridge.h"
-#endif
 #if C_DEBUG
-
-#include "../../tests/tests.h"
-
-#include <string.h>
-#include <atomic>
+#include <cctype>
+#include <cstring>
 #include <list>
 #include <vector>
-#include <ctype.h>
 #include <fstream>
 #include <iomanip>
 #include <string>
 #include <sstream>
 using namespace std;
 
+#include "../../tests/tests.h"
+
 #include "debug.h"
+#if defined(C_DOSBOX_AGENT)
 #include "agent/agent_bridge.h"
+#endif
 #include "cross.h" //snprintf
 #include "fpu.h"
 #include "bios.h"
@@ -50,11 +47,11 @@ using namespace std;
 #include "callback.h"
 #include "inout.h"
 #include "paging.h"
-#include "shell.h"
 #include "debug_inc.h"
 #include "../cpu/lazyflags.h"
-#include "keyboard.h"
 #include "control.h"
+
+#include "debug_mcp.h"
 
 bool Clear_SYSENTER_Debug();
 bool Toggle_BreakSYSEnter();
@@ -62,7 +59,9 @@ bool Toggle_BreakSYSExit();
 
 #if !defined(OSFREE)
 extern bool debugger_break_on_exec;
+# if defined(C_DOSBOX_AGENT)
 extern unsigned int debugger_box_depth;
+# endif
 #endif
 
 /* [https://github.com/joncampbell123/dosbox-x/issues/1264] ncurses non-ASCII keys are outside ASCII range (start at octal 0400 == hex 0x100) */
@@ -165,8 +164,8 @@ void DEBUG_PrintRTC();
 static void DrawCode(void);
 static void DrawInput(void);
 static void DEBUG_RaiseTimerIrq(void);
-static void SaveMemory(uint16_t seg, uint32_t ofs1, uint32_t num);
-static void SaveMemoryBin(uint16_t seg, uint32_t ofs1, uint32_t num);
+static void SaveMemory(uint16_t seg, uint32_t ofs1, uint32_t num, const char *filename);
+static void SaveMemoryBin(uint16_t seg, uint32_t ofs1, uint32_t num, const char *filename);
 static void LogDEVS(void);
 static void LogMCBS(void);
 static void LogGDT(void);
@@ -346,7 +345,9 @@ extern Bitu cycle_count;
 static bool debugging = false;
 static bool debug_running = false;
 static bool check_rescroll = false;
+#if defined(C_DOSBOX_AGENT)
 static std::atomic<uint64_t> agent_entry_breakpoint_sequence(0);
+#endif
 
 static FPU_rec oldfpu;
 static bool warn_dynamic = false;
@@ -978,9 +979,19 @@ bool CBreakpoint::IsBreakpoint(uint16_t seg, uint32_t off)
 bool CBreakpoint::DeleteBreakpoint(uint16_t seg, uint32_t off)
 {
 	CBreakpoint* bp = FindPhysBreakpoint(seg, off, false);
-	return DeleteBreakpoint(bp);
+#if defined(C_DOSBOX_AGENT)
+    return DeleteBreakpoint(bp);
+#else
+    if(bp) {
+        BPoints.remove(bp);
+        delete bp;
+        return true;
+    }
+    return false;
+#endif
 }
 
+#if defined(C_DOSBOX_AGENT)
 bool CBreakpoint::DeleteBreakpoint(CBreakpoint* breakpoint)
 {
 	if (breakpoint == nullptr)
@@ -1004,7 +1015,7 @@ CBreakpoint* CBreakpoint::ConsumeLastTriggered(void)
 	lastTriggered = nullptr;
 	return result;
 }
-
+#endif // C_DOSBOX_AGENT
 
 void CBreakpoint::ShowList(void)
 {
@@ -1080,6 +1091,7 @@ static bool StepOver()
 	return false;
 }
 
+#if defined(C_DOSBOX_AGENT)
 void DrawRegistersUpdateOld(void);
 int32_t DEBUG_Run(int32_t amount,bool quickexit);
 bool ParseCommand(char* str);
@@ -1217,6 +1229,8 @@ bool DEBUG_AgentStopTrace(uint32_t* event_count);
 bool DEBUG_AgentTraceIsActive(void);
 void DEBUG_AgentCopyTraceEvents(std::vector<DEBUG_AgentTraceEvent>* events);
 #endif
+
+#endif // C_DEBUG && C_DOSBOX_AGENT
 
 bool DEBUG_ExitLoop(void)
 {
@@ -2231,7 +2245,8 @@ bool ParseCommand(char* str) {
 		uint16_t seg = (uint16_t)GetHexValue(found,found); found++;
 		uint32_t ofs = GetHexValue(found,found); found++;
 		uint32_t num = GetHexValue(found,found); found++;
-		SaveMemory(seg,ofs,num);
+		SkipSpace(found);
+		SaveMemory(seg,ofs,num,*found ? found : "MEMDUMP.TXT");
 		return true;
 	}
 
@@ -2239,7 +2254,8 @@ bool ParseCommand(char* str) {
 		uint16_t seg = (uint16_t)GetHexValue(found,found); found++;
 		uint32_t ofs = GetHexValue(found,found); found++;
 		uint32_t num = GetHexValue(found,found); found++;
-		SaveMemoryBin(seg,ofs,num);
+		SkipSpace(found);
+		SaveMemoryBin(seg,ofs,num,*found ? found : "MEMDUMP.BIN");
 		return true;
 	}
 
@@ -4264,8 +4280,8 @@ bool ParseCommand(char* str) {
 		DEBUG_ShowMsg("VGA cmd                   - VGA related debugging commands.\n");
 		DEBUG_ShowMsg("PC98 cmd                  - PC98 related debugging commands.\n");
 		DEBUG_ShowMsg("EMU MEM/MACHINE           - Show emulator memory or machine info.\n");
-		DEBUG_ShowMsg("MEMDUMP [seg]:[off] [len] - Write memory to file memdump.txt.\n");
-		DEBUG_ShowMsg("MEMDUMPBIN [s]:[o] [len]  - Write memory to file memdump.bin.\n");
+		DEBUG_ShowMsg("MEMDUMP [seg]:[off] [len] [filename] - Write memory to a text file (default: MEMDUMP.TXT).\n");
+		DEBUG_ShowMsg("MEMDUMPBIN [s]:[o] [len] [filename]  - Write memory to a binary file (default: MEMDUMP.BIN).\n");
         DEBUG_ShowMsg("MEMFIND [seg]:[off] [.].. - Start memory find search instance.\n");
 		DEBUG_ShowMsg("MEMS [operator] [value]   - Search value within instance.\n");
 		DEBUG_ShowMsg("SELINFO [segName]         - Show selector info.\n");
@@ -4311,6 +4327,23 @@ bool ParseCommand(char* str) {
 		return true;
 	}
 
+	return false;
+}
+
+bool DEBUG_ExecuteCommand(const char* command)
+{
+	if (command == NULL || *command == 0) {
+		DEBUG_ShowMsg("*** Debugger command not recognized");
+		return false;
+	}
+
+	std::vector<char> buffer(command, command + strlen(command));
+	buffer.push_back(0);
+
+	if (ParseCommand(buffer.data()))
+		return true;
+
+	DEBUG_ShowMsg("*** Debugger command not recognized");
 	return false;
 }
 
@@ -5127,7 +5160,15 @@ void dyn_core_dh_debug_flush (void);
 #endif
 
 Bitu DEBUG_Loop(void) {
+#if defined(C_DOSBOX_AGENT)
     dosbox_agent::AGENT_BridgePump();
+#endif
+    ControlServer_Poll();
+
+    // MCP commands such as RUN or VRT can switch back to the normal loop.
+    if (DOSBOX_GetLoop() != DEBUG_Loop)
+        return 0;
+
     if (debug_running) {
         Bitu now = SDL_GetTicks();
 
@@ -5985,13 +6026,18 @@ void DEBUG_CheckExecuteBreakpoint(uint16_t seg, uint32_t off)
 #if !defined(OSFREE)
 # if C_DEBUG
     if (debugger_break_on_exec) {
-		// The new entry breakpoint is created at the current CS:IP. The
+#  if defined(C_DOSBOX_AGENT)
+        // The new entry breakpoint is created at the current CS:IP. The
 		// existing bulk activation intentionally skips that address, so arm
 		// this one explicitly before preserving the other breakpoint state.
 		CBreakpoint* const entry_breakpoint = CBreakpoint::AddBreakpoint(seg,off,true);
 		entry_breakpoint->Activate(true);
         CBreakpoint::ActivateBreakpointsExceptAt(SegPhys(cs)+reg_eip);
 		agent_entry_breakpoint_sequence.fetch_add(1, std::memory_order_relaxed);
+#  else
+        CBreakpoint::AddBreakpoint(seg, off, true);
+        CBreakpoint::ActivateBreakpointsExceptAt(SegPhys(cs) + reg_eip);
+#  endif
         debugger_break_on_exec = false;
     }
 # endif
@@ -6061,6 +6107,9 @@ void DEBUG_SetupConsole(void) {
 }
 
 void DEBUG_ShutDown(Section * /*sec*/) {
+	TIMER_DelTickHandler(ControlServer_Poll);
+	ControlServer_Stop();
+
 	CBreakpoint::DeleteAll();
 	CDebugVar::DeleteAll();
 	if (dbg.win_main != NULL) {
@@ -6091,6 +6140,13 @@ void DEBUG_ReinitCallback(void) {
 
 void DEBUG_Init() {
     LOG(LOG_MISC, LOG_DEBUG)("Initializing debug system");
+
+	Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+	const int mcp_server_port = section != NULL ? section->Get_int("mcp_server") : 0;
+	if (mcp_server_port > 0) {
+		ControlServer_Start(static_cast<uint16_t>(mcp_server_port));
+		TIMER_AddTickHandler(ControlServer_Poll);
+	}
 
 	/* Reset code overview and input line */
 	memset((void*)&codeViewData,0,sizeof(codeViewData));
@@ -6189,8 +6245,8 @@ bool CDebugVar::LoadVars(char* name)
 	return true;
 }
 
-static void SaveMemory(uint16_t seg, uint32_t ofs1, uint32_t num) {
-	FILE* f = fopen("MEMDUMP.TXT","wt");
+static void SaveMemory(uint16_t seg, uint32_t ofs1, uint32_t num, const char *filename) {
+	FILE* f = fopen(filename,"wt");
 	if (!f) {
 		DEBUG_ShowMsg("DEBUG: Memory dump failed.\n");
 		return;
@@ -6226,8 +6282,8 @@ static void SaveMemory(uint16_t seg, uint32_t ofs1, uint32_t num) {
 	DEBUG_ShowMsg("DEBUG: Memory dump success.\n");
 }
 
-static void SaveMemoryBin(uint16_t seg, uint32_t ofs1, uint32_t num) {
-	FILE* f = fopen("MEMDUMP.BIN","wb");
+static void SaveMemoryBin(uint16_t seg, uint32_t ofs1, uint32_t num, const char *filename) {
+	FILE* f = fopen(filename,"wb");
 	if (!f) {
 		DEBUG_ShowMsg("DEBUG: Memory binary dump failed.\n");
 		return;
@@ -6352,8 +6408,10 @@ struct TLogInst {
 };
 
 TLogInst logInst[LOGCPUMAX];
+#if defined(C_DOSBOX_AGENT)
 static bool agent_trace_active = false;
 static uint32_t agent_trace_remaining = 0;
+#endif
 static vector<DEBUG_AgentTraceEvent> agent_trace_events;
 
 void DEBUG_HeavyLogInstruction(void) {
@@ -6408,6 +6466,7 @@ void DEBUG_HeavyLogInstruction(void) {
 	if (++logCount >= LOGCPUMAX) logCount = 0;
 }
 
+#if defined(C_DEBUG) && defined(C_DOSBOX_AGENT)
 bool DEBUG_AgentStartTrace(const uint32_t instruction_count)
 {
 	if (instruction_count == 0 || agent_trace_active)
@@ -6466,6 +6525,7 @@ static void DEBUG_AgentCaptureTraceEvent(void)
 	event.analysis = inst.res;
 	agent_trace_events.push_back(event);
 }
+#endif
 
 void DEBUG_HeavyWriteLogInstruction(void) {
 	if (!logHeavy) return;
@@ -6507,8 +6567,9 @@ void DEBUG_HeavyWriteLogInstruction(void) {
 }
 
 bool DEBUG_HeavyIsBreakpoint(void) {
+#if defined(C_DOSBOX_AGENT)
 	const bool agent_trace_was_active = agent_trace_active;
-	if (agent_trace_active) {
+    if (agent_trace_active) {
 		DEBUG_AgentCaptureTraceEvent();
 		if (--agent_trace_remaining == 0) {
 			agent_trace_active = false;
@@ -6516,6 +6577,7 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 			return true;
 		}
 	}
+#endif
 	if (cpuLog) {
 		if (cpuLogCounter>0) {
 			LogInstruction(SegValue(cs),reg_eip,cpuLogFile);
@@ -6531,7 +6593,11 @@ bool DEBUG_HeavyIsBreakpoint(void) {
 		}
 	}
 	// LogInstruction
-	if (logHeavy && !agent_trace_was_active) DEBUG_HeavyLogInstruction();
+	if (logHeavy
+#if defined (C_DOSBOX_AGENT)
+        && !agent_trace_was_active
+#endif
+       ) DEBUG_HeavyLogInstruction();
 	if (zeroProtect) {
 		static Bitu zero_count = 0;
 		uint32_t value = 0;
