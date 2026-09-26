@@ -387,10 +387,19 @@
     <ClCompile Include="..\src\hardware\cmos.cpp">
       <Filter>Sources\hardware</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\hardware\cs4231.cpp">
+      <Filter>Sources\hardware</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\hardware\emu8k.cpp">
+      <Filter>Sources\hardware</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\hardware\dbopl.cpp">
       <Filter>Sources\hardware</Filter>
     </ClCompile>
     <ClCompile Include="..\src\hardware\disney.cpp">
+      <Filter>Sources\hardware</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\hardware\pas.cpp">
       <Filter>Sources\hardware</Filter>
     </ClCompile>
     <ClCompile Include="..\src\hardware\dma.cpp">
@@ -528,6 +537,9 @@
     <ClCompile Include="..\src\hardware\vga_s3.cpp">
       <Filter>Sources\hardware</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\hardware\vga_s3d.cpp">
+      <Filter>Sources\hardware</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\hardware\vga_seq.cpp">
       <Filter>Sources\hardware</Filter>
     </ClCompile>
@@ -535,6 +547,9 @@
       <Filter>Sources\hardware</Filter>
     </ClCompile>
     <ClCompile Include="..\src\hardware\vga_xga.cpp">
+      <Filter>Sources\hardware</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\hardware\wss.cpp">
       <Filter>Sources\hardware</Filter>
     </ClCompile>
     <ClCompile Include="..\src\hardware\voodoo.cpp">
@@ -2171,6 +2186,12 @@
     <ClInclude Include="..\include\crypt.h">
       <Filter>Includes</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\cs4231.h">
+      <Filter>Includes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\emu8k.h">
+      <Filter>Includes</Filter>
+    </ClInclude>
     <ClInclude Include="..\include\debug.h">
       <Filter>Includes</Filter>
     </ClInclude>
@@ -2190,6 +2211,9 @@
       <Filter>Includes</Filter>
     </ClInclude>
     <ClInclude Include="..\include\fpu.h">
+      <Filter>Includes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\gusmax.h">
       <Filter>Includes</Filter>
     </ClInclude>
     <ClInclude Include="..\include\hardware.h">

@@ -28,23 +28,25 @@
 #include "mem.h"
 #include "cpu.h"
 #include "fpu.h"
+#include "logging.h"
 #include "../cpu/lazyflags.h"
 
-FPU_rec fpu;
+FPU fpu;
+
+void FPU_LOG_WARN(Bitu tree, bool ea, Bitu group, Bitu sub)
+{
+	LOG(LOG_FPU, LOG_WARN)("ESC %lu%s:Unhandled group %lu subfunction %lu",
+	                        (long unsigned int)tree,
+	                        ea ? " EA" : "",
+	                        (long unsigned int)group,
+	                        (long unsigned int)sub);
+}
 
 void FPU_FLDCW(PhysPt addr)
 {
 	fpu.cw = mem_readw(addr);
 }
 
-uint16_t FPU_GetTag(void){
-	uint16_t tag=0;
-
-	for (Bitu i=0;i<8;i++)
-		tag |= (fpu.tags[i]&3) << (2*i);
-
-	return tag;
-}
 
 #if C_FPU_X86
 #include "fpu_instructions_x86.h"
@@ -53,6 +55,37 @@ uint16_t FPU_GetTag(void){
 #else
 #include "fpu_instructions.h"
 #endif
+
+/* A load which pushes the x87 stack must be restartable after a page fault.
+ * FPU_PREP_PUSH changes both TOP and the pushed slot's metadata before the
+ * memory read takes place, so restoring TOP alone leaves a phantom value in
+ * the tag word. */
+class FPUStackPushState final {
+public:
+	FPUStackPushState()
+		: old_top(TOP), pushed_slot((old_top - 1) & 7), old_regvalid(fpu.regvalid[pushed_slot])
+#if !defined(HAS_LONG_DOUBLE)
+		, old_use80(fpu.use80[pushed_slot])
+#endif
+	{}
+
+	void restore() const
+	{
+		TOP = old_top;
+		fpu.regvalid[pushed_slot] = old_regvalid;
+#if !defined(HAS_LONG_DOUBLE)
+		fpu.use80[pushed_slot] = old_use80;
+#endif
+	}
+
+private:
+	const Bitu old_top;
+	const Bitu pushed_slot;
+	const bool old_regvalid;
+#if !defined(HAS_LONG_DOUBLE)
+	const bool old_use80;
+#endif
+};
 
 /* MMX instructions set the top of stack to zero---Intel explicitly documents this.
  * There is code out there, including in Windows ME and Windows Media Player, that
@@ -153,7 +186,7 @@ void FPU_ESC1_EA(Bitu rm,PhysPt addr, bool op16) {
 	switch(group){
 	case 0x00: /* FLD float*/
 		{
-			unsigned char old_TOP = TOP;
+			FPUStackPushState push_state;
 
 			try {
 				FPU_PREP_PUSH();
@@ -161,7 +194,7 @@ void FPU_ESC1_EA(Bitu rm,PhysPt addr, bool op16) {
 			}
             catch (const GuestPageFaultException& pf) {
 				(void)pf;
-				TOP = old_TOP;
+				push_state.restore();
 				throw;
 			}
 		}
@@ -346,16 +379,16 @@ void FPU_ESC2_Normal(Bitu rm) {
 	Bitu sub=(rm & 7);
 	switch(group){
 	case 0x00: /* FCMOVB STi */
-		if (TFLG_B) FPU_FCMOV(TOP,STV(sub));
+		FPU_FCMOV_B(TOP,STV(sub));
 		break;
 	case 0x01: /* FCMOVE STi */
-		if (TFLG_Z) FPU_FCMOV(TOP,STV(sub));
+		FPU_FCMOV_E(TOP,STV(sub));
 		break;
 	case 0x02: /* FCMOVBE STi */
-		if (TFLG_BE) FPU_FCMOV(TOP,STV(sub));
+		FPU_FCMOV_BE(TOP,STV(sub));
 		break;
 	case 0x03: /* FCMOVU STi */
-		if (TFLG_P) FPU_FCMOV(TOP,STV(sub));
+		FPU_FCMOV_U(TOP,STV(sub));
 		break;
 	case 0x05:
 		switch(sub){
@@ -383,7 +416,7 @@ void FPU_ESC3_EA(Bitu rm,PhysPt addr) {
 	switch(group){
 	case 0x00:	/* FILD */
 		{
-			unsigned char old_TOP = TOP;
+			FPUStackPushState push_state;
 
 			try {
 				FPU_PREP_PUSH();
@@ -391,7 +424,7 @@ void FPU_ESC3_EA(Bitu rm,PhysPt addr) {
 			}
             catch (const GuestPageFaultException& pf) {
 				(void)pf;
-				TOP = old_TOP;
+				push_state.restore();
 				throw;
 			}
 		}
@@ -414,7 +447,7 @@ void FPU_ESC3_EA(Bitu rm,PhysPt addr) {
 		break;
 	case 0x05:	/* FLD 80 Bits Real */
 		{
-			unsigned char old_TOP = TOP;
+			FPUStackPushState push_state;
 
 			try {
 				FPU_PREP_PUSH();
@@ -422,7 +455,7 @@ void FPU_ESC3_EA(Bitu rm,PhysPt addr) {
 			}
             catch (const GuestPageFaultException& pf) {
 				(void)pf;
-				TOP = old_TOP;
+				push_state.restore();
 				throw;
 			}
 		}
@@ -441,16 +474,16 @@ void FPU_ESC3_Normal(Bitu rm) {
 	Bitu sub=(rm & 7);
 	switch (group) {
 	case 0x00: /* FCMOVNB STi */
-		if (TFLG_NB) FPU_FCMOV(TOP,STV(sub));
+		FPU_FCMOV_NB(TOP,STV(sub));
 		break;
 	case 0x01: /* FCMOVNE STi */
-		if (TFLG_NZ) FPU_FCMOV(TOP,STV(sub));
+		FPU_FCMOV_NE(TOP,STV(sub));
 		break;
 	case 0x02: /* FCMOVNBE STi */
-		if (TFLG_NBE) FPU_FCMOV(TOP,STV(sub));
+		FPU_FCMOV_NBE(TOP,STV(sub));
 		break;
 	case 0x03: /* FCMOVNU STi */
-		if (TFLG_NP) FPU_FCMOV(TOP,STV(sub));
+		FPU_FCMOV_NU(TOP,STV(sub));
 		break;
 	case 0x04:
 		switch (sub) {
@@ -542,7 +575,7 @@ void FPU_ESC5_EA(Bitu rm,PhysPt addr, bool op16) {
 	switch(group){
 	case 0x00:  /* FLD double real*/
 		{
-			unsigned char old_TOP = TOP;
+			FPUStackPushState push_state;
 
 			try {
 				FPU_PREP_PUSH();
@@ -550,7 +583,7 @@ void FPU_ESC5_EA(Bitu rm,PhysPt addr, bool op16) {
 			}
             catch (const GuestPageFaultException& pf) {
 				(void)pf;
-				TOP = old_TOP;
+				push_state.restore();
 				throw;
 			}
 		}
@@ -591,7 +624,7 @@ void FPU_ESC5_Normal(Bitu rm) {
 	Bitu sub=(rm & 7);
 	switch(group){
 	case 0x00: /* FFREE STi */
-		fpu.tags[STV(sub)]=TAG_Empty;
+		fpu.regvalid[STV(sub)] = false;
 		break;
 	case 0x01: /* FXCH STi*/
 		FPU_FXCH(TOP,STV(sub));
@@ -670,7 +703,7 @@ void FPU_ESC7_EA(Bitu rm,PhysPt addr) {
 	switch(group){
 	case 0x00:  /* FILD int16_t */
 		{
-			unsigned char old_TOP = TOP;
+			FPUStackPushState push_state;
 
 			try {
 				FPU_PREP_PUSH();
@@ -678,7 +711,7 @@ void FPU_ESC7_EA(Bitu rm,PhysPt addr) {
 			}
             catch (const GuestPageFaultException& pf) {
 				(void)pf;
-				TOP = old_TOP;
+				push_state.restore();
 				throw;
 			}
 		}
@@ -701,7 +734,7 @@ void FPU_ESC7_EA(Bitu rm,PhysPt addr) {
 		break;
 	case 0x04:   /* FBLD packed BCD */
 		{
-			unsigned char old_TOP = TOP;
+			FPUStackPushState push_state;
 
 			try {
 				FPU_PREP_PUSH();
@@ -709,14 +742,14 @@ void FPU_ESC7_EA(Bitu rm,PhysPt addr) {
 			}
             catch (const GuestPageFaultException& pf) {
 				(void)pf;
-				TOP = old_TOP;
+				push_state.restore();
 				throw;
 			}
 		}
 		break;
 	case 0x05:  /* FILD int64_t */
 		{
-			unsigned char old_TOP = TOP;
+			FPUStackPushState push_state;
 
 			try {
 				FPU_PREP_PUSH();
@@ -724,7 +757,7 @@ void FPU_ESC7_EA(Bitu rm,PhysPt addr) {
 			}
             catch (const GuestPageFaultException& pf) {
 				(void)pf;
-				TOP = old_TOP;
+				push_state.restore();
 				throw;
 			}
 		}
@@ -748,7 +781,7 @@ void FPU_ESC7_Normal(Bitu rm) {
 	Bitu sub=(rm & 7);
 	switch (group){
 	case 0x00: /* FFREEP STi*/
-		fpu.tags[STV(sub)]=TAG_Empty;
+		fpu.regvalid[STV(sub)] = false;
 		FPU_FPOP();
 		break;
 	case 0x01: /* FXCH STi*/
@@ -1077,35 +1110,22 @@ void FPU_Init() {
 	FPU_FINIT();
 }
 
-static INLINE uint16_t fpu_tag_word_from_abridged(const uint8_t b) {
-	unsigned int i;
-	uint16_t r = 0;
-
-	/* yech... someone at Intel was trying to be too "clever" */
-	/* In the 8 bits they packed the valid/empty bitfield (with 8 bits reserved!) they could have just stored the 16-bit tag word instead! */
-	for (i=0;i < 8;i++) {
-		if (b & (1u << i)) {
-			/* TODO: Guessing the tag based on the FPU 80-bit value */
-			r |= TAG_Valid << (2u * i);
-		}
-		else {
-			r |= TAG_Empty << (2u * i);
-		}
-	}
-
-	return r;
+static void FPU_SetAbridgedTag(uint8_t b)
+{
+    for (auto& regvalid: fpu.regvalid) {
+        regvalid = !!(b & 1);
+        b >>= 1;
+    }
 }
 
-static INLINE uint8_t fpu_tag_word_abridged(void) {
-	unsigned int i;
-	uint8_t r = 0;
-
-	for (i=0;i < 8;i++) {
-		if (fpu.tags[i] != TAG_Empty)
-			r |= 1u << i;
-	}
-
-	return r;
+static uint8_t FPU_GetAbridgedTag()
+{
+    uint8_t b = 0;
+    auto i = 0;
+    for (auto regvalid: fpu.regvalid) {
+        if (regvalid) b |= 1u << i++;
+    }
+    return b;
 }
 
 void CPU_FXSAVE(PhysPt eaa) {
@@ -1114,7 +1134,7 @@ void CPU_FXSAVE(PhysPt eaa) {
 	/* Ref: [https://www.felixcloutier.com/x86/fxsave] */
 	mem_writew(eaa+0x000,fpu.cw);					/* +0x000 FPU control word */
 	mem_writew(eaa+0x002,fpu.sw);					/* +0x002 FPU status word */
-	mem_writeb(eaa+0x004,fpu_tag_word_abridged());			/* +0x004 FPU tag words, abridged to a bitfield of 1=not empty 0=empty, register order NOT from TOP */
+	mem_writeb(eaa+0x004,FPU_GetAbridgedTag());			/* +0x004 FPU tag words, abridged to a bitfield of 1=not empty 0=empty, register order NOT from TOP */
 	mem_writeb(eaa+0x005,0x00);					/* +0x005 reserved */
 	mem_writew(eaa+0x006,0x0000);					/* +0x006 x87 FPU opcode (??) */
 	mem_writed(eaa+0x008,reg_eip);					/* +0x008 x87 FPU instruction pointer (???) */
@@ -1176,10 +1196,7 @@ void CPU_FXRSTOR(PhysPt eaa) {
 #endif
 	}
 
-	{
-		uint16_t tw = fpu_tag_word_from_abridged(mem_readb(eaa+0x004));	/* +0x004 FPU tag words, abridged to a bitfield of 1=not empty 0=empty, register order NOT from TOP */
-		FPU_SetTag(tw);
-	}
+    FPU_SetAbridgedTag(mem_readb(eaa+0x004));	/* +0x004 FPU tag words, abridged to a bitfield of 1=not empty 0=empty, register order NOT from TOP */
 
 	if (CPU_SSE()) {
 		for (i=0;i < 8;i++) {
