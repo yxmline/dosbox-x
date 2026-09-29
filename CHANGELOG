@@ -66,6 +66,17 @@ Next version:
   - CoreMIDI: Fixed device name matching for names starting with digits.
     (maron2000)
   - Added Sound Blaster AWE32 support for games that use EMU8K (cyberfox1)
+  - FPU: Unified the non-long-double, long-double, and x86 host FPU engines
+    around shared 80-bit conversion and stack-loading paths. Improved accuracy
+    against real x87 hardware on both x86 and non-x86 hosts. (cimarronm)
+  - FPU: Unified real, integer, packed-BCD, and register store operations
+    across FPU engines. Fixed x87 stack handling and incorrect integer-store
+    results. (cimarronm)
+  - Dynamic core: By default, pass all FPU/MMX opcodes to normal core so that
+    the FPU exception handling necessary for Windows 95 to task switch the
+    CPU and FPU state can work properly. In the event that this makes your
+    DOS games slower, there is a dosbox.conf option to re-enable FPU/MMX
+    handling by dynamic core for DOS games that do not multitask. (joncampbell123)
 
 2026.08.31:
   - Added support for mounting TeleDisk (.td0) floppy image files. (cimarronm)

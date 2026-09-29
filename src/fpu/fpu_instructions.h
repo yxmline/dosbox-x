@@ -23,6 +23,9 @@
 #include "cross.h"
 #include "fpu.h"
 
+#define BIAS80 16383
+#define BIAS64 1023
+
 static inline uint16_t FPU_GetTag()
 {
 	uint16_t tags = 0;
@@ -30,9 +33,9 @@ static inline uint16_t FPU_GetTag()
         FPUTag tag;
         if (!fpu.regvalid[i]) {
             tag = FPUTag::Empty;
-        } else if ((fpu.use80[i] && IsZero(fpu.regs_80[i])) || IsZero(fpu.regs[i])) {
+        } else if (fpu.use80[i] ? IsZero(fpu.regs_80[i]) : IsZero(fpu.regs[i])) {
             tag = FPUTag::Zero;
-        } else if ((fpu.use80[i] && IsSpecial(fpu.regs_80[i])) || IsSpecial(fpu.regs[i])) {
+        } else if (fpu.use80[i] ? IsSpecial(fpu.regs_80[i]) : IsSpecial(fpu.regs[i])) {
             tag = FPUTag::Special;
         } else {
             tag = FPUTag::Valid;
@@ -41,23 +44,6 @@ static inline uint16_t FPU_GetTag()
     }
 	return tags;
 }
-
-// Helper functions for 64-bit memory access
-static inline uint64_t mem_readq(PhysPt addr) {
-	uint64_t tmp;
-	tmp  = (uint64_t)mem_readd(addr);
-	tmp |= (uint64_t)mem_readd(addr+4ul) << (uint64_t)32ul;
-	return tmp;
-}
-
-static inline void mem_writeq(PhysPt addr,uint64_t v) {
-	mem_writed(addr,    (uint32_t)v);
-	mem_writed(addr+4ul,(uint32_t)(v >> (uint64_t)32ul));
-}
-
-// Local "shadow" register file to store bit-perfect 64-bit integers.
-// Declared static to keep the change local to this file.
-static FPU_Reg fpu_regs_memcpy[9];
 
 static void FPU_PREP_PUSH(void){
 	TOP = (TOP - 1) &7;
@@ -96,11 +82,6 @@ static void FPU_F2XM1(void){
 	return;
 }
 
-static void FPU_FABS(void){
-	fpu.use80[TOP] = false; // we used the less precise version, drop the 80-bit precision
-	fpu.regs[TOP].d = fabs(fpu.regs[TOP].d);
-}
-
 #if defined(WIN32) && defined(_MSC_VER) && (_MSC_VER < 1910)
 /* std::isinf is C99 standard how could you NOT have this VS2008??? */
 # include <math.h>
@@ -126,65 +107,6 @@ static void FPU_FADD(Bitu op1, Bitu op2){
 
 static INLINE void FPU_FADD_EA(Bitu op1){
 	FPU_FADD(op1,8);
-}
-
-static void FPU_FBLD(PhysPt addr,Bitu store_to) {
-	uint64_t val = 0;
-	uint8_t in = 0;
-	uint64_t base = 1;
-	for(uint8_t i = 0;i < 9;i++){
-		in = mem_readb(addr + i);
-		val += ( (in&0xf) * base); //in&0xf shouldn't be higher than 9
-		base *= 10;
-		val += ((( in>>4)&0xf) * base);
-		base *= 10;
-	}
-
-	//last number, only now convert to float in order to get
-	//the best signification
-	double temp = static_cast<double>(val);
-	in = mem_readb(addr + 9);
-	temp += ( (in&0xf) * base );
-	if(in&0x80) temp *= -1.0;
-	fpu.regs[store_to].d = temp;
-	fpu.use80[store_to] = false;
-}
-
-static void FPU_FBST(PhysPt addr) {
-	FPU_Reg val = fpu.regs[TOP];
-	if(val.ll & LONGTYPE(0x8000000000000000)) { // MSB = sign
-		mem_writeb(addr+9,0x80);
-		val.d = -val.d;
-	} else mem_writeb(addr+9,0);
-
-	uint64_t rndint = static_cast<uint64_t>(FROUND(val.d));
-	// BCD (18 decimal digits) overflow? (0x0DE0B6B3A763FFFF max)
-	if (rndint > LONGTYPE(999999999999999999)) {
-		// write BCD integer indefinite value
-		mem_writed(addr+0,0);
-		mem_writed(addr+4,0xC0000000);
-		mem_writew(addr+8,0xFFFF);
-		return;
-	}
-
-	//numbers from back to front
-	for(uint8_t i=0;i<9;i++){
-		uint64_t temp = rndint / 10;
-		uint8_t p = static_cast<uint8_t>(rndint % 10);
-		rndint = temp / 10;
-		p |= (static_cast<uint8_t>(temp % 10)) << 4;
-		mem_writeb(addr++,p);
-	}
-	// flags? C1 should indicate if value was rounded up
-}
-
-static void FPU_FCHS(void){
-	fpu.use80[TOP] = false; // we used the less precise version, drop the 80-bit precision
-	fpu.regs[TOP].d = -1.0*(fpu.regs[TOP].d);
-}
-
-static void FPU_FCLEX(void){
-	fpu.sw.clearExceptions();
 }
 
 static void FPU_FCOS(void){
@@ -358,168 +280,6 @@ static INLINE void FPU_FDIVR_EA(Bitu op1){
 	FPU_FDIVR(op1,8);
 }
 
-static void FPU_FINIT(void) {
-	unsigned int i;
-
-	fpu.cw.init();
-	fpu.sw.init();
-    fpu.regvalid = {};
-    fpu.regvalid[8] = true; // the 9th register is always valid, it's used for temporary storage
-	for (i=0;i < 9;i++) fpu.use80[i] = false;
-
-	for (i = 0; i < 9; i++) {
-		fpu_regs_memcpy[i].ll = 0;
-	}
-}
-
-static void FPU_FLD_F32(PhysPt addr,Bitu store_to) {
-	union {
-		float f;
-		uint32_t l;
-	}	blah;
-	blah.l = mem_readd(addr);
-	fpu.regs[store_to].d = static_cast<double>(blah.f);
-	fpu.use80[store_to] = false;
-}
-
-static INLINE void FPU_FLD_F32_EA(PhysPt addr) {
-	FPU_FLD_F32(addr,8);
-}
-
-static void FPU_FLD_F64(PhysPt addr,Bitu store_to) {
-	fpu.regs[store_to].l.lower = mem_readd(addr);
-	fpu.regs[store_to].l.upper = (int32_t)mem_readd(addr+4);
-	fpu.use80[store_to] = false;
-}
-
-static INLINE void FPU_FLD_F64_EA(PhysPt addr) {
-	FPU_FLD_F64(addr,8);
-}
-
-#define BIAS80 16383
-#define BIAS64 1023
-
-static double FPU_FLD80(PhysPt addr,FPU_Reg_80 &raw) {
-	struct {
-		int16_t begin;
-		FPU_Reg eind;
-	} test;
-	test.eind.l.lower = mem_readd(addr);
-	test.eind.l.upper = (int32_t)mem_readd(addr+4);
-	test.begin = (int16_t)mem_readw(addr+8);
-   
-	int64_t exp64 = (((test.begin&0x7fff) - (int64_t)BIAS80));
-	int64_t blah = ((exp64 >0)?exp64:-exp64)&0x3ff;
-	int64_t exp64final = ((exp64 >0)?blah:-blah) +BIAS64;
-
-	int64_t mant64 = (test.eind.ll >> 11) & LONGTYPE(0xfffffffffffff);
-	int64_t sign = (test.begin&0x8000)?1:0;
-	FPU_Reg result;
-	result.ll = (sign <<63)|(exp64final << 52)| mant64;
-
-	if(test.eind.l.lower == 0 && (uint32_t)test.eind.l.upper == (uint32_t)0x80000000UL && (test.begin&0x7fff) == 0x7fff) {
-		//Detect INF and -INF (score 3.11 when drawing a slur.)
-		result.d = sign?-HUGE_VAL:HUGE_VAL;
-	}
-
-	/* store the raw value. */
-	raw.raw.l = (uint64_t)test.eind.ll;
-	raw.raw.h = (uint16_t)test.begin;
-
-	return result.d;
-
-	//mant64= test.mant80/2***64    * 2 **53 
-}
-
-static void FPU_FLD_F80(PhysPt addr) {
-	fpu.regs[TOP].d = FPU_FLD80(addr,/*&*/fpu.regs_80[TOP]);
-	fpu.use80[TOP] = true;
-}
-
-static void FPU_FLD_I16(PhysPt addr,Bitu store_to) {
-	int16_t blah = (int16_t)mem_readw(addr);
-	fpu.regs[store_to].d = static_cast<double>(blah);
-	fpu.use80[store_to] = false;
-}
-
-static INLINE void FPU_FLD_I16_EA(PhysPt addr) {
-	FPU_FLD_I16(addr,8);
-}
-
-static void FPU_FLD_I32(PhysPt addr,Bitu store_to) {
-	int32_t blah = (int32_t)mem_readd(addr);
-	fpu.regs[store_to].d = static_cast<double>(blah);
-	fpu.use80[store_to] = false;
-}
-
-static INLINE void FPU_FLD_I32_EA(PhysPt addr) {
-	FPU_FLD_I32(addr,8);
-}
-
-static void FPU_FLD_I64(PhysPt addr,Bitu store_to) {
-	const int64_t val = mem_readq(addr);
-
-	fpu.regs[store_to].d = static_cast<double>(val);
-	fpu_regs_memcpy[store_to].ll = val;
-	fpu.use80[store_to] = false;
-}
-
-static void FPU_FLD1(void){
-	FPU_PREP_PUSH();
-	fpu.use80[TOP] = false; // we used the less precise version, drop the 80-bit precision
-	fpu.regs[TOP].d = 1.0;
-}
-
-static void FPU_FLDENV(PhysPt addr, bool op16){
-	uint16_t tag;
-	if (op16) {
-		fpu.cw = mem_readw(addr+0);
-		fpu.sw = mem_readw(addr+2);
-		tag    = mem_readw(addr+4);
-	} else { 
-		fpu.cw = static_cast<uint16_t>(mem_readd(addr+0));
-		fpu.sw = static_cast<uint16_t>(mem_readd(addr+4));
-		tag    = static_cast<uint16_t>(mem_readd(addr+8));
-	}
-	FPU_SetTag(tag);
-}
-
-static void FPU_FLDL2E(void){
-	FPU_PREP_PUSH();
-	fpu.use80[TOP] = false; // we used the less precise version, drop the 80-bit precision
-	fpu.regs[TOP].d = L2E;
-}
-
-static void FPU_FLDL2T(void){
-	FPU_PREP_PUSH();
-	fpu.use80[TOP] = false; // we used the less precise version, drop the 80-bit precision
-	fpu.regs[TOP].d = L2T;
-}
-
-static void FPU_FLDLG2(void){
-	FPU_PREP_PUSH();
-	fpu.use80[TOP] = false; // we used the less precise version, drop the 80-bit precision
-	fpu.regs[TOP].d = LG2;
-}
-
-static void FPU_FLDLN2(void){
-	FPU_PREP_PUSH();
-	fpu.use80[TOP] = false; // we used the less precise version, drop the 80-bit precision
-	fpu.regs[TOP].d = LN2;
-}
-
-static void FPU_FLDPI(void){
-	FPU_PREP_PUSH();
-	fpu.use80[TOP] = false; // we used the less precise version, drop the 80-bit precision
-	fpu.regs[TOP].d = PI;
-}
-
-static void FPU_FLDZ(void){
-	FPU_PREP_PUSH();
-	fpu.use80[TOP] = false; // we used the less precise version, drop the 80-bit precision
-	fpu.regs[TOP].d = 0.0;
-}
-
 static void FPU_FMUL(Bitu st, Bitu other){
 	//fpu.use80[st] = false; // we used the less precise version, drop the 80-bit precision
 	//fpu.regs[st].d*=fpu.regs[other].d;
@@ -555,15 +315,6 @@ static INLINE void FPU_FMUL_EA(Bitu op1){
 }
 
 static void FPU_FNOP(void){
-	return;
-}
-
-static void FPU_FPOP(void){
-	fpu.regvalid[TOP] = false;
-	fpu.use80[TOP] = false; // the value given is already 64-bit precision, it's useless to emulate 80-bit precision
-	//maybe set zero in it as well
-	TOP = ((TOP+1)&7);
-//	LOG(LOG_FPU,LOG_ERROR)("popped from %d  %g off the stack",top,fpu.regs[top].d);
 	return;
 }
 
@@ -660,16 +411,6 @@ static void FPU_FRNDINT(void){
     return;
 }
 
-static void FPU_FRSTOR(PhysPt addr, bool op16){
-	FPU_FLDENV(addr, op16);
-	uint8_t start = op16 ? 14:28;
-	for(uint8_t i = 0;i < 8;i++){
-		fpu.regs[STV(i)].d = FPU_FLD80(addr+start,/*&*/fpu.regs_80[STV(i)]);
-		fpu.use80[STV(i)] = true;
-		start += 10;
-	}
-}
-
 static void FPU_FSAVE(PhysPt addr, bool op16){
 	FPU_FSTENV(addr, op16);
 	uint8_t start = op16 ? 14:28;
@@ -728,29 +469,6 @@ static void FPU_FSQRT(void){
 	return;
 }
 
-static void FPU_FST(Bitu st, Bitu other){
-	fpu.regs_80[other] = fpu.regs_80[st];
-	fpu.use80[other] = fpu.use80[st];
-	fpu.regvalid[other] = fpu.regvalid[st];
-	fpu.regs[other] = fpu.regs[st];
-	fpu_regs_memcpy[other]  = fpu_regs_memcpy[st];
-}
-
-static void FPU_FST_F32(PhysPt addr) {
-	union {
-		float f;
-		uint32_t l;
-	}	blah;
-	//should depend on rounding method
-	blah.f = static_cast<float>(fpu.regs[TOP].d);
-	mem_writed(addr,blah.l);
-}
-
-static void FPU_FST_F64(PhysPt addr) {
-	mem_writed(addr,(uint32_t)fpu.regs[TOP].l.lower);
-	mem_writed(addr+4,(uint32_t)fpu.regs[TOP].l.upper);
-}
-
 static void FPU_ST80(PhysPt addr,Bitu reg,FPU_Reg_80 &raw,bool use80) {
 	if (use80) {
 		// we have the raw 80-bit IEEE float value. we can just store
@@ -781,33 +499,6 @@ static void FPU_ST80(PhysPt addr,Bitu reg,FPU_Reg_80 &raw,bool use80) {
 		mem_writed(addr+4,(uint32_t)test.eind.l.upper);
 		mem_writew(addr+8,(uint16_t)test.begin);
 	}
-}
-
-static void FPU_FST_F80(PhysPt addr) {
-	FPU_ST80(addr,TOP,/*&*/fpu.regs_80[TOP],fpu.use80[TOP]);
-}
-
-static void FPU_FST_I16(PhysPt addr) {
-	double val = FROUND(fpu.regs[TOP].d);
-	mem_writew(addr,(val < 32768.0 && val >= -32768.0)?static_cast<int16_t>(val):0x8000);
-}
-
-static void FPU_FST_I32(PhysPt addr) {
-	double val = FROUND(fpu.regs[TOP].d);
-	mem_writed(addr,(val < 2147483648.0 && val >= -2147483648.0)?static_cast<int32_t>(val):0x80000000);
-}
-
-static void FPU_FST_I64(PhysPt addr) {
-	auto val_i       = fpu_regs_memcpy[TOP].ll;
-	const auto val_d = fpu.regs[TOP].d;
-
-	if (val_d != static_cast<double>(val_i)) {
-		const auto rounded = FROUND(val_d);
-		val_i = (rounded < 9223372036854775808.0 && rounded >= -9223372036854775808.0)
-			? static_cast<int64_t>(rounded)
-			: 0x8000000000000000LL;
-	}
-	mem_writeq(addr, val_i);
 }
 
 static void FPU_FSTENV(PhysPt addr, bool op16){
@@ -925,18 +616,15 @@ static void FPU_FXCH(Bitu st, Bitu other)
     std::swap(fpu.regvalid[st], fpu.regvalid[other]);
 	FPU_Reg_80 reg80 = fpu.regs_80[other];
 	FPU_Reg reg = fpu.regs[other];
-	auto reg_memcpy = fpu_regs_memcpy[other];
 	bool use80 = fpu.use80[other];
 
 	fpu.regs_80[other] = fpu.regs_80[st];
 	fpu.use80[other] = fpu.use80[st];
 	fpu.regs[other] = fpu.regs[st];
-	fpu_regs_memcpy[other]  = fpu_regs_memcpy[st];
 
 	fpu.regs_80[st] = reg80;
 	fpu.use80[st] = use80;
 	fpu.regs[st] = reg;
-	fpu_regs_memcpy[st] = reg_memcpy;
 }
 
 
