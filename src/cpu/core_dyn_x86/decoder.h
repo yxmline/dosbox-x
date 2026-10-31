@@ -454,8 +454,9 @@ static void dyn_check_bool_normal_al(void) {
 	used_save_info++;
 }
 
-static void dyn_dh_fpu_post_instruction(void) {
-	gen_call_function((void *)&dh_fpu_update_mode, "");
+static void dyn_dh_fpu_post_instruction(uint16_t opcode = 0) {
+	gen_call_function((void *)&dh_fpu_update_mode, "%Id%Id",
+	                  decode.op_start - decode.code_start, opcode);
 	gen_call_function((void *)&dh_fpu_take_numeric_exception, "");
 	dyn_check_bool_exception_al();
 	gen_call_function((void *)&dh_fpu_mode_change_pending, "");
@@ -479,12 +480,19 @@ static void dyn_check_irqrequest(void) {
 	used_save_info++;
 }
 
-static void dyn_fpu_post_instruction(void) {
-	gen_call_function((void *)&FPU_NumericException, "");
+static void dyn_fpu_post_instruction(uint16_t opcode) {
+	gen_call_function((void *)&FPU_NumericExceptionWithContext, "%Id%Id",
+	                  decode.op_start - decode.code_start, opcode);
 	dyn_check_bool_exception_al();
 #ifdef X86_DYNFPU_DH_ENABLED
-	if (dyn_dh_fpu.dh_fpu_allowed) dyn_dh_fpu_post_instruction();
+	if (dyn_dh_fpu.dh_fpu_allowed) dyn_dh_fpu_post_instruction(opcode);
 #endif
+	dyn_check_irqrequest();
+}
+
+static void dyn_fpu_post_wait() {
+	gen_call_function((void *)&FPU_NumericException, "");
+	dyn_check_bool_exception_al();
 	dyn_check_irqrequest();
 }
 
@@ -2687,26 +2695,32 @@ restart_prefix:
 			case 0xed:case 0xef:case 0xf1:case 0xf2:case 0xf3:case 0xf5:
 			case 0xf8:case 0xf9:case 0xfa:case 0xfc:case 0xfd:case 0xfe:
 				if (CPU_ArchitectureType<CPU_ARCHTYPE_PMMXSLOW) goto illegalopcode;
+				if (decode.rep != REP_NONE || decode.big_op != cpu.code.big) goto illegalopcode;	/* 66/F2/F3 0F xx is SSE2, let the normal core raise #UD */
 				dyn_mmx_check(); dyn_mmx_op(dual_code); break;
 			/* SHIFT mm, imm8*/
 			case 0x71:case 0x72:case 0x73:
 				if (CPU_ArchitectureType<CPU_ARCHTYPE_PMMXSLOW) goto illegalopcode;
+				if (decode.rep != REP_NONE || decode.big_op != cpu.code.big) goto illegalopcode;	/* 66/F2/F3 0F xx is SSE2, let the normal core raise #UD */
 				dyn_mmx_check(); dyn_mmx_shift_imm8((uint8_t)dual_code); break;
 			/* MOVD mm, r/m32 */
 			case 0x6e:
 				if (CPU_ArchitectureType<CPU_ARCHTYPE_PMMXSLOW) goto illegalopcode;
+				if (decode.rep != REP_NONE || decode.big_op != cpu.code.big) goto illegalopcode;	/* 66/F2/F3 0F xx is SSE2, let the normal core raise #UD */
 				dyn_mmx_check(); dyn_mmx_movd_pqed(); break;
 			/* MOVQ mm, mm/m64 */
 			case 0x6f:
 				if (CPU_ArchitectureType<CPU_ARCHTYPE_PMMXSLOW) goto illegalopcode;
+				if (decode.rep != REP_NONE || decode.big_op != cpu.code.big) goto illegalopcode;	/* 66/F2/F3 0F xx is SSE2, let the normal core raise #UD */
 				dyn_mmx_check(); dyn_mmx_movq_pqqq(); break;
 			/* MOVD r/m32, mm */
 			case 0x7e:
 				if (CPU_ArchitectureType<CPU_ARCHTYPE_PMMXSLOW) goto illegalopcode;
+				if (decode.rep != REP_NONE || decode.big_op != cpu.code.big) goto illegalopcode;	/* 66/F2/F3 0F xx is SSE2, let the normal core raise #UD */
 				dyn_mmx_check(); dyn_mmx_movd_edpq(); break;
 			/* MOVQ mm/m64, mm */
 			case 0x7f:
 				if (CPU_ArchitectureType<CPU_ARCHTYPE_PMMXSLOW) goto illegalopcode;
+				if (decode.rep != REP_NONE || decode.big_op != cpu.code.big) goto illegalopcode;	/* 66/F2/F3 0F xx is SSE2, let the normal core raise #UD */
 				dyn_mmx_check(); dyn_mmx_movq_qqpq(); break;
 			/* EMMS */
 			case 0x77:
@@ -2879,7 +2893,7 @@ restart_prefix:
 #ifdef X86_DYNFPU_DH_ENABLED
 			if (!dyn_dh_fpu.dh_fpu_enabled)
 #endif
-				dyn_fpu_post_instruction();
+				dyn_fpu_post_wait();
 #endif
 			break;
 		//XCHG ax,reg
@@ -3037,7 +3051,8 @@ restart_prefix:
 #endif
 			{
 				dyn_fpu_esc0();
-				dyn_fpu_post_instruction();
+				dyn_fpu_post_instruction((0 << 8) | (decode.modrm.mod << 6) |
+				                         (decode.modrm.reg << 3) | decode.modrm.rm);
 			}
 			break;
 		case 0xd9:
@@ -3054,7 +3069,8 @@ restart_prefix:
 #endif
 			{
 				dyn_fpu_esc1();
-				dyn_fpu_post_instruction();
+				dyn_fpu_post_instruction((1 << 8) | (decode.modrm.mod << 6) |
+				                         (decode.modrm.reg << 3) | decode.modrm.rm);
 			}
 			break;
 		case 0xda:
@@ -3071,7 +3087,8 @@ restart_prefix:
 #endif
 			{
 				dyn_fpu_esc2();
-				dyn_fpu_post_instruction();
+				dyn_fpu_post_instruction((2 << 8) | (decode.modrm.mod << 6) |
+				                         (decode.modrm.reg << 3) | decode.modrm.rm);
 			}
 			break;
 		case 0xdb:
@@ -3088,7 +3105,8 @@ restart_prefix:
 #endif
 			{
 				dyn_fpu_esc3();
-				dyn_fpu_post_instruction();
+				dyn_fpu_post_instruction((3 << 8) | (decode.modrm.mod << 6) |
+				                         (decode.modrm.reg << 3) | decode.modrm.rm);
 			}
 			break;
 		case 0xdc:
@@ -3105,7 +3123,8 @@ restart_prefix:
 #endif
 			{
 				dyn_fpu_esc4();
-				dyn_fpu_post_instruction();
+				dyn_fpu_post_instruction((4 << 8) | (decode.modrm.mod << 6) |
+				                         (decode.modrm.reg << 3) | decode.modrm.rm);
 			}
 			break;
 		case 0xdd:
@@ -3122,7 +3141,8 @@ restart_prefix:
 #endif
 			{
 				dyn_fpu_esc5();
-				dyn_fpu_post_instruction();
+				dyn_fpu_post_instruction((5 << 8) | (decode.modrm.mod << 6) |
+				                         (decode.modrm.reg << 3) | decode.modrm.rm);
 			}
 			break;
 		case 0xde:
@@ -3139,7 +3159,8 @@ restart_prefix:
 #endif
 			{
 				dyn_fpu_esc6();
-				dyn_fpu_post_instruction();
+				dyn_fpu_post_instruction((6 << 8) | (decode.modrm.mod << 6) |
+				                         (decode.modrm.reg << 3) | decode.modrm.rm);
 			}
 			break;
 		case 0xdf:
@@ -3156,7 +3177,8 @@ restart_prefix:
 #endif
 			{
 				dyn_fpu_esc7();
-				dyn_fpu_post_instruction();
+				dyn_fpu_post_instruction((7 << 8) | (decode.modrm.mod << 6) |
+				                         (decode.modrm.reg << 3) | decode.modrm.rm);
 			}
 			break;
 #endif
