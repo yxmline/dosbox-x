@@ -21,9 +21,36 @@
 
 #if C_MONITOR
 
+#include "control.h"
+#include "programs.h"
+#include "drives.h"
+#include "bios_disk.h"
+
 Monitor *Monitor::ptr_monitor= nullptr;
 
-#include "control.h"
+extern void runImgmount( const char * );
+extern bool wpcolon;
+extern void MSCDEX_SetCDInterface( int,int );
+extern const char* MSG_GetUTF8(const char* msg);
+extern char lastmount;
+
+/* Media driver adapted from ../dos/dos_programs.cpp */
+#if defined(MACOSX)
+extern const char* MSG_GetUTF8(const char* msg);
+constexpr auto MSGX=MSG_GetUTF8;
+#else
+constexpr auto MSGX=MSG_Get;
+#endif
+constexpr int MEDIA_ID=0xF8;
+
+extern bool wpcolon;
+void MSCDEX_SetCDInterface( int,int );
+extern char lastmount;
+void ResetSystem( bool );
+void RebootGuest( bool );
+extern bool bootvm;
+
+std::atomic< void(*)() > Monitor_RunProgram{nullptr};
 
 // Monitor::Configurator {{{ 
 static std::string CONFIG_USAGE_MONITOR= { // {{{
@@ -31,7 +58,7 @@ static std::string CONFIG_USAGE_MONITOR= { // {{{
 "**Warning this feature is mostly untested and may cause the program to crash.**\n"\
 "**                           PROCEED WITH CAUTION                            **\n"\
 "-get \"section property\" returns the value of the property (also to %%CONFIG%%).\n"\
-"-set (-setf for force) \"section property=value\" sets the value of the property.\n"\
+"-set \"section property=value\" sets the value of the property.\n"\
 };// }}}
 
 void Monitor::Configurator::run( Monitor &tM,const cmd_tokens_t& tUser ) { /* {{{ */
@@ -59,7 +86,7 @@ void Monitor::Configurator::run( Monitor &tM,const cmd_tokens_t& tUser ) { /* {{
 	}
 	else if( ( this->*( p->execute ) )( tM,tUser ) )
 		m.messageClient( m._client,"( config ) Unable to process commandline options.\n" );
-};/* }}} */
+}/* }}} */
 
 bool Monitor::Configurator::getProperty( Monitor &tM,const cmd_tokens_t& tUser ) {/* {{{ */
 	Monitor& m= tM;
@@ -86,7 +113,10 @@ bool Monitor::Configurator::getProperty( Monitor &tM,const cmd_tokens_t& tUser )
 	m.messageClient( m._client,property->GetValue().ToString()+"\n" );
 
 	return EXIT_SUCCESS;
-};/* }}} */
+}/* }}} */
+
+#include "control.h"
+#include "../misc/programs.cpp"
 
 bool Monitor::Configurator::setProperty( Monitor &tM,const cmd_tokens_t& tUser ) {/* {{{ */
 	Monitor& m= tM;
@@ -102,23 +132,31 @@ bool Monitor::Configurator::setProperty( Monitor &tM,const cmd_tokens_t& tUser )
 	Property *property= config_section->Get_prop( tUser.at( 3 ) );
 	if( nullptr ==property ) {
 		m.messageClient( m._client,std::string( MSG_Get( "PROGRAM_CONFIG_PROPERTY_ERROR" ) ) );
-	}
-	if( EXIT_SUCCESS ==tUser.at( 2 ).compare( "sdl" ) ) {
-		/* Changes the SDL must be done on main thread.  */
-		m.messageClient( m._client,std::string( "Changes to sdl section not permitted.\n" ) );
 		return EXIT_FAILURE;
 	}
 
 	std::string inputline= tUser.at( 3 )+"="+tUser.at( 4 );
+
 	config_section->HandleInputline( inputline );
+	ApplySetting( tUser.at( 2 ),inputline,false );
+
 	return EXIT_SUCCESS;
-};/* }}} */ /* }}} */
+}/* }}} */ /* }}} */
 
 // Monitor::Programs {{{
-bool Monitor::Programs::quitMainInstance( Monitor &tM,const cmd_tokens_t& ){/* {{{ */
-	tM._isRunning= false;
-	DoKillSwitch();
-	return EXIT_SUCCESS;
+bool Monitor::Programs::dosboxXManagement( Monitor &tM,const cmd_tokens_t &tCommands ){/* {{{ */
+
+	if( !tCommands.at( 0 ).compare( "system_reboot" ) ) {
+		RebootGuest( true );
+	}
+	if( !tCommands.at( 0 ).compare( "kill" ) ) {
+		tM._isRunning= false;
+		DoKillSwitch();
+	}
+	if( !tCommands.at( 0 ).compare( "system_restart" ) ) {
+		ResetSystem( true );
+	}
+	return EXIT_FAILURE;
 }/* }}} */
 
 bool	Monitor::Programs::displayInfo( Monitor &tM,const cmd_tokens_t& ) {/* {{{ */
@@ -140,77 +178,202 @@ bool	Monitor::Programs::displayInfo( Monitor &tM,const cmd_tokens_t& ) {/* {{{ *
 	messageClient( m._client,"\nDrive(s):\n" );
 	ddesc_t drive_list= {};
 	std::string sstr_token;
+/* Lambda functions for getting Drive Info {{{*/
+	auto getDOSDriveInfo= [ & ]( int tIt ) {
+		dinfo_t drive= {};
+		drive.push_back( std::string( 1,char( 'A'+tIt ) ) );
 
-	for( int i= 0; i <26; ++i )
-		if( Drives[ i ] ) {
-			dinfo_t drive= {};
-			drive.push_back( std::string( 1,char( 'A'+i ) ) );
+		std::string drive_info( Drives[ tIt ]->GetInfo() );
+		std::size_t dir_pos= drive_info.find_first_of( "/\\" );
 
-			std::string drive_info( Drives[ i ]->GetInfo() );
-			std::size_t dir_pos= drive_info.find_first_of( "/\\" );
-				
-			if( dir_pos !=std::string::npos ) {
-				drive.push_back( drive_info.substr( 0,dir_pos ) );
-				drive.push_back( drive_info.substr( dir_pos ) );
-			}
-			drive.push_back( drive_info );					
+		if( dir_pos !=std::string::npos ) {
+			drive.push_back( drive_info.substr( 0,dir_pos ) );
+			drive.push_back( drive_info.substr( dir_pos ) );
+		}
+		drive.push_back( drive_info );
+		return drive;
+	};
+	
+	auto getImageDiskInfo= [ & ]( int tIt ) {
+		dinfo_t drive= {};
+		drive.push_back( std::string( 1,char( 'A'+tIt ) ) );
+
+		std::string drive_info( imageDiskList[ tIt ]->diskname );
+		drive.push_back( "empty"  );
+
+		if( !drive_info.empty() ) drive.push_back( drive_info );
+		return drive;
+	};
+/* }}} */
+	for( int i= 0; i <2; ++i )
+		if ( imageDiskList[ i ] && Drives[ i ] ) {
+			dinfo_t drive= getDOSDriveInfo( i );
+			drive_list.push_back( drive );
+		}
+		else if( imageDiskList[ i ] ) {
+			dinfo_t drive= getImageDiskInfo( i );
 			drive_list.push_back( drive );
 		}
 
-	std::string message= {};
+	for( int i= 2; i <26; ++i )
+		if( Drives[ i ] ) {
+			dinfo_t drive= getDOSDriveInfo( i );
+			drive_list.push_back( drive );
+		}
+
 	for( auto drv:drive_list ) {
-		messageClient( m._client, drv.at( 0 )+":\\\t" );
-		if( drv.size() >2 ) message+= drv.at( 2 )+"\t\t";
-		message+= "("+drv.at( 1 )+")\n";
+		std::string message= {};
+		message+=drv.at( 0 )+":\\\t";
+		if( drv.size() >1 ) { if( drv.at( 1 ).at( drv.at( 1 ).size()-1 ) ==  ' ' ) drv.at( 1 ).erase( ( drv.at( 1 ).size()-1 ) );
+		message+= "("+drv.at( 1 )+")"; 
+		/* 32 columns is enough for any drive type divided by the size of a tab in spaces (8.)  */
+		int tabwise= ( 32-drv.at( 1 ).size() )/8,i= 0;
+		do {
+			message+="\t";
+		} while ( ++i <tabwise ); }
+		if( drv.at( 1 ).size()<8 ) message+="\t";
+		if( drv.size() >2 ) message+= drv.at( 2 );
+		message+="\n";
 		messageClient( m._client,message );
 	}
-	messageClient( m._client,"\n" );
 	return EXIT_SUCCESS;
 }	/* }}} */
 
-bool	Monitor::Programs::changeRemovableMedia( Monitor &tM,const cmd_tokens_t &tUser ) {/* {{{ */
-		Monitor& m= tM;
-		bool is_mount= true;
-		if( tUser.size() <3 ) {
-			return EXIT_FAILURE;
-		} else if ( tUser.size()>3 ) is_mount= false;
+int	createISODrives( const char tDriveLetter,const std::vector< std::string > tPaths,std::vector< DOS_Drive * > &tISOs ) { /* {{{ */
+	MSCDEX_SetCDInterface( CDROM_USE_SDL, -1 );
+	std::vector<std::string> options= { "readonly" };
+	for( auto drive:tPaths ) {
+		int error= -1;
+		DOS_Drive* newDrive = new isoDrive( tDriveLetter,
+			wpcolon&&drive.length() >1&&drive.c_str()[0]==':'?
+				drive.c_str()+1 : drive.c_str(),
+				MEDIA_ID,error,options );
+		tISOs.push_back( newDrive );
+		if( error ) {
+			for( DOS_Drive *drive: tISOs ) 
+				delete drive;
 
-		std::vector< int > availableDrives= {};
-		Get_IDECD_drives( availableDrives );
+			return error;
+		}
+	}
+	return EXIT_SUCCESS;
+}/* }}} */
 
-		if( availableDrives.empty() ) {
-			Monitor::messageClient( m._client,"No available drives.\n" );
+#if (defined(WIN32) || defined(LINUX) || defined(BSD)) && !defined(OSFREE)
+int	createFloppyDrives( const unsigned int tDriveLetter,const std::vector< std::string >tPaths,std::vector< fatDrive *> &tDisks ) {/* {{{ */
+	int index= 0;
+	std::vector<std::string> fd_options= { "readonly" };
+	for( auto drive:tPaths ) {
+		fatDrive *newDrive = new fatDrive( drive.c_str(),0,0,0,0,fd_options );
+
+		if( !newDrive->created_successfully ) {
+			for( fatDrive *drive: tDisks ) 
+				delete drive;
+
 			return EXIT_FAILURE;
 		}
-					
-		char drive_letter= tUser.at( 1 ).at( 0 );
-		drive_letter= std::toupper( drive_letter );
-		bool drive_check= false;
-		for( int drive_no:availableDrives )
-			if ( char( 'A'+drive_no ) ==drive_letter ) drive_check =true;
 
-		if ( false ==drive_check ) {
-			Monitor::messageClient( m._client,"Drive letter not recognized.\n" );
-			return EXIT_FAILURE;
-		}
+		if( dos_kernel_disabled ) {	
+			if( 0 ==index ) {
+				if( imageDiskList[ tDriveLetter ]  )
+					imageDiskList[ tDriveLetter ]->Release();
+				imageDiskList[ tDriveLetter ]= newDrive->loadedDisk;
+				imageDiskList[ tDriveLetter ]->Addref();
+				imageDiskChange[ tDriveLetter ]= true;
+			} else {
 
-		std::vector< std::string > image_list= { tUser.at( 2 ) };
-
-		if( tUser.size() > 3 )
-			for( size_t i{ 3 }; i <tUser.size(); ++i ) { 
-				image_list.push_back( tUser.at( i ) );
+				if( diskSwap[ index-1 ] ) {
+					diskSwap[ index-1 ]->Release();
+				}
+				diskSwap[ index-1 ]= newDrive->loadedDisk;
+				diskSwap[ index-1 ]->Addref();
 			}
+			index++;
+		}
+		else {
+		tDisks.push_back( newDrive );
+			DriveManager::AppendDisk( tDriveLetter,newDrive );
+		}
+	}
 
-		runImgmountISO( drive_letter,image_list,is_mount );
+	if( !dos_kernel_disabled )
+		DriveManager::InitializeDrive( tDriveLetter );
+	return EXIT_SUCCESS;
+}/* }}} */
+#endif
 
-		return EXIT_SUCCESS;
+std::string	handleError( int tErrorCode ) { /* {{{ */
+	switch( tErrorCode ) {
+		case 0: return  "";
+		case 1: return  MSGX("MSCDEX_ERROR_MULTIPLE_CDROMS");
+		case 2: return  MSGX("MSCDEX_ERROR_NOT_SUPPORTED");
+		case 3: return  MSGX("MSCDEX_ERROR_OPEN");
+		case 4: return  MSGX("MSCDEX_TOO_MANY_DRIVES");
+		case 5: return  MSGX("MSCDEX_LIMITED_SUPPORT");
+		case 6: return  MSGX("MSCDEX_INVALID_FILEFORMAT");
+	}
+	return MSGX("MSCDEX_UNKNOWN_ERROR");
+}/* }}} */
+
+bool	Monitor::Programs::changeRemovableMedia( Monitor &tM,const cmd_tokens_t &tUser ) {/* {{{ */
+	Monitor& m= tM;
+
+	char drive_letter= tUser.at( 1 ).at( 0 );
+	drive_letter= std::toupper( drive_letter );
+
+	std::vector< std::string > paths= { };
+	for( size_t i{ 2 }; i <tUser.size(); ++i ) 
+		paths.emplace_back( tUser.at( i ) );
+	if( paths.empty() ) {
+		Monitor::messageClient( m._client,MSGX( "ERROR" ) );
+		return EXIT_FAILURE;
+	}
+	/* Unlike the IMGMOUNT program we can only replace existing drives. */
+	int entry= static_cast< int >( drive_letter-'A' );
+	if( entry <2 ) {
+	#if (defined(WIN32) || defined(LINUX) || defined(BSD)) && !defined(OSFREE)
+		std::vector< fatDrive* > fatDisks= {};
+		if( int retval= createFloppyDrives( entry,paths,fatDisks ) ) {
+			m.messageClient( m._client,"MONITOR Drive(s) not avilable." );
+			return EXIT_FAILURE;
+		}
+		#else
+		m.messageClient( m._client,"MONITOR Drive(s) not avilable." );
+		return EXIT_FAILURE;
+		#endif
+	}
+	else {
+
+		std::vector<DOS_Drive*> isoDisks= {};
+		if( int code= createISODrives( drive_letter,paths,isoDisks ) ) {
+			m.messageClient( m._client,handleError( code ) );
+			return EXIT_FAILURE;
+		}
+		DriveManager::ClearDrive( entry );
+
+		for( auto media:isoDisks )
+			DriveManager::AppendDisk( entry,media );
+		DriveManager::InitializeDrive( entry );
+
+		if (!dos_kernel_disabled)
+			mem_writeb( Real2Phys( dos.tables.mediaid ) + entry * dos.tables.dpb_size,MEDIA_ID );
+
+		Drives[ entry ]->Activate();
+		if( !dos_kernel_disabled )
+			static_cast< isoDrive*>( Drives[ entry ] )->MediaChangeImmediate();
+		else
+			Drives[ entry ]->MediaChange();
+
+		lastmount = entry;
+	}
+	return EXIT_SUCCESS;
 }/* }}} */
 
 bool	Monitor::Programs::configure( Monitor &tM,const cmd_tokens_t &tUser ) {/* {{{ */
 	Monitor::Configurator configure;
 	configure.run( tM,tUser );
 	return EXIT_SUCCESS;
-};/* }}} */
+}/* }}} */
 
 bool Monitor::Programs::helpMe( Monitor &tM,const cmd_tokens_t& cmdline ){/* {{{ */
 		Monitor& m= tM;
@@ -235,13 +398,27 @@ bool Monitor::Programs::helpMe( Monitor &tM,const cmd_tokens_t& cmdline ){/* {{{
 }/* }}} */ // }}}
 
 // Montor::CommandLine {{{
-cmd_tokens_t Monitor::CommandLine::processCommandLine( std::string tBuffer ) { /* {{{ */
-	cmd_tokens_t	command_line= {};
-	std::istringstream	buffer( tBuffer );
-	std::string	token;
+const int Monitor::UserRequest::handleUser( const std::string &tBuffer ) { /* {{{ */
+	cmd_tokens_t					command_line= {};
+	std::istringstream				buffer( tBuffer );
+	std::string						token;
 
 	while( buffer >>std::quoted( token )) command_line.push_back( token );
-	return command_line;
-};// }}} }}}
+
+	if( tBuffer.empty() ){
+		return USER_REQ_EMPTY;
+	}
+	auto processCommand= std::find_if( commands->begin(),commands->end(),
+		[ & ]( const CommandExec& item ){	
+			return item.command == command_line.at( 0 );});
+
+	if( processCommand ==commands->end() ) {
+		return USER_REQ_UNKNOWN;
+	}
+	ptr_monitor->setUserInput( processCommand->exec,command_line );
+	Monitor_RunProgram= Monitor::RunProgram;
+
+	return USER_REQ_SUCCESS;
+}// }}} }}}
 
 #endif // C_MONITOR 
